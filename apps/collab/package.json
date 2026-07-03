@@ -1,0 +1,23 @@
+{
+  "name": "@atlas/collab",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test dist/*.test.js"
+  },
+  "dependencies": {
+    "@hocuspocus/extension-database": "4.3.0",
+    "@hocuspocus/extension-redis": "4.3.0",
+    "@hocuspocus/server": "4.3.0",
+    "@prisma/client": "6.19.3",
+    "jose": "6.1.2"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.1",
+    "typescript": "5.9.3"
+  }
+}

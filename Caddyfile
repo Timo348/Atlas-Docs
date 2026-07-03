@@ -1,0 +1,20 @@
+{$SITE_ADDRESS:localhost} {
+	encode zstd gzip
+
+	@collaboration path /collaboration*
+	handle @collaboration {
+		uri strip_prefix /collaboration
+		reverse_proxy collab:1234
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+
+	header {
+		-Server
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+	}
+}
