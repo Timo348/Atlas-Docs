@@ -1,24 +1,6 @@
 name: atlas-docs
 
 services:
-  proxy:
-    image: caddy:2.10-alpine
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    environment:
-      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      web:
-        condition: service_healthy
-      collab:
-        condition: service_healthy
-
   web:
     image: timo348/atlas-docs-web:${ATLAS_VERSION:-latest}
     build:
@@ -26,6 +8,8 @@ services:
       dockerfile: Dockerfile
       target: web
     restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-30002}:3000"
     environment:
       NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL}
@@ -37,6 +21,7 @@ services:
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
       COLLAB_SECRET: ${AUTH_SECRET}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      PUBLIC_COLLAB_URL: ${COLLAB_PUBLIC_URL:-ws://localhost:30003}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
       interval: 10s
@@ -55,6 +40,8 @@ services:
       dockerfile: Dockerfile
       target: collab
     restart: unless-stopped
+    ports:
+      - "${COLLAB_PORT:-30003}:1234"
     environment:
       NODE_ENV: production
       PORT: "1234"
@@ -119,5 +106,3 @@ services:
 volumes:
   postgres_data:
   redis_data:
-  caddy_data:
-  caddy_config:

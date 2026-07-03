@@ -31,49 +31,56 @@ export function CollaborativeEditor({
 
   useEffect(() => {
     let active = true;
+    let provider: HocuspocusProvider | undefined;
     const updateText = () => active && setMarkdown(ytext.toString());
     ytext.observe(updateText);
     updateText();
 
     const color = userColor(user.id);
-    const collaborationUrl = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/collaboration`;
-    const provider = new HocuspocusProvider({
-      url: collaborationUrl,
-      name: `page:${page.id}`,
-      document: ydoc,
-      token: async () => {
-        const response = await fetch(`/api/collaboration-token?pageId=${encodeURIComponent(page.id)}`);
-        if (!response.ok) throw new Error("Collaboration token unavailable.");
-        const data = await response.json();
-        if (active) setReadOnly(data.readOnly);
-        return data.token;
-      },
-      onStatus: ({ status: nextStatus }) => {
-        if (active) setStatus(nextStatus as Connection);
-      },
-      onSynced: () => {
-        if (ytext.length === 0) {
-          ydoc.transact(() => ytext.insert(0, `# ${page.title}\n\nBeginne hier mit deiner Dokumentation …\n`), "initial-content");
-        }
-      },
-      onAwarenessUpdate: ({ states }) => {
-        const unique = new Map<string, { id: string; name: string; color: string }>();
-        for (const state of states) {
-          const person = state.user as { id?: string; name?: string; color?: string } | undefined;
-          if (person?.id && person.name && person.color) unique.set(person.id, person as { id: string; name: string; color: string });
-        }
-        if (active) setPeople(Array.from(unique.values()));
-      },
-      onAuthenticationFailed: () => {
-        if (active) setStatus("disconnected");
-      },
-    });
-    provider.setAwarenessField("user", { id: user.id, name: user.name, color });
+    async function connect() {
+      const configResponse = await fetch("/api/runtime-config");
+      if (!configResponse.ok) throw new Error("Collaboration configuration unavailable.");
+      const config = await configResponse.json() as { collaborationUrl: string };
+      if (!active) return;
+      provider = new HocuspocusProvider({
+        url: config.collaborationUrl,
+        name: `page:${page.id}`,
+        document: ydoc,
+        token: async () => {
+          const response = await fetch(`/api/collaboration-token?pageId=${encodeURIComponent(page.id)}`);
+          if (!response.ok) throw new Error("Collaboration token unavailable.");
+          const data = await response.json();
+          if (active) setReadOnly(data.readOnly);
+          return data.token;
+        },
+        onStatus: ({ status: nextStatus }) => {
+          if (active) setStatus(nextStatus as Connection);
+        },
+        onSynced: () => {
+          if (ytext.length === 0) {
+            ydoc.transact(() => ytext.insert(0, `# ${page.title}\n\nBeginne hier mit deiner Dokumentation …\n`), "initial-content");
+          }
+        },
+        onAwarenessUpdate: ({ states }) => {
+          const unique = new Map<string, { id: string; name: string; color: string }>();
+          for (const state of states) {
+            const person = state.user as { id?: string; name?: string; color?: string } | undefined;
+            if (person?.id && person.name && person.color) unique.set(person.id, person as { id: string; name: string; color: string });
+          }
+          if (active) setPeople(Array.from(unique.values()));
+        },
+        onAuthenticationFailed: () => {
+          if (active) setStatus("disconnected");
+        },
+      });
+      provider.setAwarenessField("user", { id: user.id, name: user.name, color });
+    }
+    void connect().catch(() => active && setStatus("disconnected"));
 
     return () => {
       active = false;
       ytext.unobserve(updateText);
-      provider.destroy();
+      provider?.destroy();
       ydoc.destroy();
     };
   }, [page.id, page.title, user.id, user.name, ydoc, ytext]);
