@@ -2,11 +2,13 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { canEdit, requireApiUser, spaceAccess } from "@/lib/access";
 import { db } from "@/lib/db";
+import { insertAt } from "@/lib/tree-order";
 
 const schema = z.object({
   name: z.string().trim().min(1).max(100).optional(),
   parentId: z.string().min(1).nullable().optional(),
-}).refine((value) => value.name !== undefined || value.parentId !== undefined);
+  position: z.number().int().min(0).optional(),
+}).refine((value) => value.name !== undefined || value.parentId !== undefined || value.position !== undefined);
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const user = await requireApiUser();
@@ -44,9 +46,35 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   if (duplicate) {
     return NextResponse.json({ error: "In dieser Ebene existiert bereits ein Ordner mit diesem Namen" }, { status: 409 });
   }
-  const updated = await db.folder.update({
-    where: { id },
-    data: { name: parsed.data.name, parentId: parsed.data.parentId },
+  const moving = parsed.data.parentId !== undefined || parsed.data.position !== undefined;
+  if (!moving) {
+    const updated = await db.folder.update({
+      where: { id },
+      data: { name: parsed.data.name },
+    });
+    return NextResponse.json(updated);
+  }
+  const targetParentId = parsed.data.parentId !== undefined ? parsed.data.parentId : folder.parentId;
+  const updated = await db.$transaction(async (transaction) => {
+    const siblings = await transaction.folder.findMany({
+      where: { spaceId: folder.spaceId, parentId: targetParentId, id: { not: id } },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      select: { id: true },
+    });
+    const orderedIds = insertAt(
+      siblings.map((sibling) => sibling.id),
+      id,
+      parsed.data.position ?? siblings.length,
+    );
+    await transaction.folder.update({
+      where: { id },
+      data: { name: parsed.data.name, parentId: targetParentId },
+    });
+    await Promise.all(orderedIds.map((folderId, sortOrder) => transaction.folder.update({
+      where: { id: folderId },
+      data: { sortOrder },
+    })));
+    return transaction.folder.findUniqueOrThrow({ where: { id } });
   });
   return NextResponse.json(updated);
 }

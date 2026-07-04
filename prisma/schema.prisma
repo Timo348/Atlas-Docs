@@ -39,6 +39,7 @@ model User {
   memberships     Membership[]
   teamMemberships TeamMember[]
   pagesCreated    Page[]       @relation("PageCreator")
+  pageVersions    PageVersion[]
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 }
@@ -133,21 +134,24 @@ model Membership {
 }
 
 model Page {
-  id          String     @id @default(cuid())
-  title       String
-  slug        String
-  spaceId     String
-  parentId    String?
-  folderId    String?
-  format      PageFormat @default(MARKDOWN)
-  createdById String
-  space       Space      @relation(fields: [spaceId], references: [id], onDelete: Cascade)
-  parent      Page?      @relation("PageTree", fields: [parentId], references: [id], onDelete: SetNull)
-  children    Page[]     @relation("PageTree")
-  folder      Folder?    @relation(fields: [folderId], references: [id], onDelete: SetNull)
-  createdBy   User       @relation("PageCreator", fields: [createdById], references: [id])
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id             String        @id @default(cuid())
+  title          String
+  slug           String
+  spaceId        String
+  parentId       String?
+  folderId       String?
+  format         PageFormat    @default(MARKDOWN)
+  sortOrder      Int           @default(0)
+  versionCounter Int           @default(0)
+  createdById    String
+  space          Space         @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  parent         Page?         @relation("PageTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children       Page[]        @relation("PageTree")
+  folder         Folder?       @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  createdBy      User          @relation("PageCreator", fields: [createdById], references: [id])
+  versions       PageVersion[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
   @@unique([spaceId, slug])
   @@index([spaceId, parentId])
@@ -159,6 +163,7 @@ model Folder {
   name      String
   spaceId   String
   parentId  String?
+  sortOrder Int      @default(0)
   space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
   parent    Folder?  @relation("FolderTree", fields: [parentId], references: [id], onDelete: Cascade)
   children  Folder[] @relation("FolderTree")
@@ -168,6 +173,22 @@ model Folder {
 
   @@unique([spaceId, parentId, name])
   @@index([spaceId, parentId])
+}
+
+model PageVersion {
+  id                  String   @id @default(cuid())
+  pageId              String
+  version             Int
+  title               String
+  data                Bytes
+  restoredFromVersion Int?
+  createdById         String
+  page                Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  createdBy           User     @relation(fields: [createdById], references: [id])
+  createdAt           DateTime @default(now())
+
+  @@unique([pageId, version])
+  @@index([pageId, createdAt])
 }
 
 model CollabDocument {

@@ -44,6 +44,10 @@ export async function POST(request: Request) {
     select: { id: true },
   });
   const slug = exists ? `${baseSlug}-${crypto.randomUUID().slice(0, 6)}` : baseSlug;
+  const lastPage = await db.page.aggregate({
+    where: { spaceId: parsed.data.spaceId, folderId: parsed.data.folderId || null },
+    _max: { sortOrder: true },
+  });
   const page = await db.page.create({
     data: {
       title: parsed.data.title,
@@ -52,6 +56,7 @@ export async function POST(request: Request) {
       parentId: parsed.data.parentId || null,
       folderId: parsed.data.folderId || null,
       format: parsed.data.format,
+      sortOrder: (lastPage._max.sortOrder ?? -1) + 1,
       createdById: user.id,
     },
   });

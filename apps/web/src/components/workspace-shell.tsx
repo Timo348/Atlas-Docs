@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { useState } from "react";
+import { type DragEvent, useState } from "react";
 import {
   BookOpen, ChevronDown, ChevronRight, FileCode2, FilePlus2, FileText, Folder,
-  FolderPlus, LogOut, MoreHorizontal, PanelLeftClose, PanelLeftOpen,
+  FolderPlus, GripVertical, LogOut, MoreHorizontal, PanelLeftClose, PanelLeftOpen,
   Pencil, Plus, Search, ShieldCheck, Trash2, Users, X,
 } from "lucide-react";
 import { CollaborativeEditor } from "@/components/collaborative-editor";
@@ -21,9 +21,15 @@ type PageItem = {
   parentId: string | null;
   folderId: string | null;
   format: "MARKDOWN" | "LATEX";
+  sortOrder: number;
 };
-type FolderItem = { id: string; name: string; parentId: string | null };
+type FolderItem = { id: string; name: string; parentId: string | null; sortOrder: number };
 type FlatFolder = { folder: FolderItem; depth: number };
+type DragItem = { kind: "page" | "folder"; id: string };
+type DropTarget =
+  | { kind: "root" }
+  | { kind: "folder"; id: string; edge: "before" | "inside" | "after" }
+  | { kind: "page"; id: string; edge: "before" | "after" };
 type ActionDialogState =
   | { kind: "text"; title: string; label: string; initial: string; submit: (value: string) => Promise<void> }
   | { kind: "page"; title: string; label: string; initial: string; submit: (value: string, format: "MARKDOWN" | "LATEX") => Promise<void> }
@@ -63,6 +69,8 @@ export function WorkspaceShell({
   const [notice, setNotice] = useState("");
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(() => new Set());
   const [busy, setBusy] = useState(false);
+  const [dragItem, setDragItem] = useState<DragItem | null>(null);
+  const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const activeSpace = spaces.find((space) => space.id === selectedSpaceId) || spaces[0] || null;
   const canWrite = activeSpace?.role === "OWNER" || activeSpace?.role === "EDITOR";
 
@@ -169,6 +177,71 @@ export function WorkspaceShell({
     });
   }
 
+  async function dropTreeItem(target: DropTarget) {
+    const item = dragItem;
+    if (!item || !activeSpace) return;
+    setBusy(true);
+    try {
+      if (item.kind === "page") {
+        const page = activeSpace.pages.find((candidate) => candidate.id === item.id);
+        if (!page) return;
+        let folderId: string | null;
+        let position: number;
+        if (target.kind === "root") {
+          folderId = null;
+          position = activeSpace.pages.filter((candidate) => !candidate.folderId && candidate.id !== page.id).length;
+        } else if (target.kind === "folder") {
+          folderId = target.id;
+          position = activeSpace.pages.filter((candidate) => candidate.folderId === folderId && candidate.id !== page.id).length;
+          setExpandedFolders((current) => new Set(current).add(target.id));
+        } else {
+          const targetPage = activeSpace.pages.find((candidate) => candidate.id === target.id);
+          if (!targetPage) return;
+          folderId = targetPage.folderId;
+          const siblings = activeSpace.pages.filter((candidate) => candidate.folderId === folderId && candidate.id !== page.id);
+          const targetIndex = siblings.findIndex((candidate) => candidate.id === targetPage.id);
+          position = targetIndex + (target.edge === "after" ? 1 : 0);
+        }
+        const response = await jsonRequest(`/api/pages/${page.id}`, "PATCH", { folderId, position });
+        if (!response.ok) setNotice(response.error);
+        else router.refresh();
+      } else {
+        const folder = activeSpace.folders.find((candidate) => candidate.id === item.id);
+        if (!folder || target.kind === "page") return;
+        let parentId: string | null;
+        let position: number;
+        if (target.kind === "root") {
+          parentId = null;
+          position = activeSpace.folders.filter((candidate) => !candidate.parentId && candidate.id !== folder.id).length;
+        } else if (target.edge === "inside") {
+          parentId = target.id;
+          position = activeSpace.folders.filter((candidate) => candidate.parentId === parentId && candidate.id !== folder.id).length;
+          setExpandedFolders((current) => new Set(current).add(target.id));
+        } else {
+          const targetFolder = activeSpace.folders.find((candidate) => candidate.id === target.id);
+          if (!targetFolder) return;
+          parentId = targetFolder.parentId;
+          const siblings = activeSpace.folders.filter((candidate) => candidate.parentId === parentId && candidate.id !== folder.id);
+          const targetIndex = siblings.findIndex((candidate) => candidate.id === targetFolder.id);
+          position = targetIndex + (target.edge === "after" ? 1 : 0);
+        }
+        const response = await jsonRequest(`/api/folders/${folder.id}`, "PATCH", { parentId, position });
+        if (!response.ok) setNotice(response.error);
+        else router.refresh();
+      }
+    } finally {
+      setBusy(false);
+      setDragItem(null);
+      setDropTarget(null);
+    }
+  }
+
+  function startDrag(event: DragEvent, item: DragItem) {
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", `${item.kind}:${item.id}`);
+    setDragItem(item);
+  }
+
   return (
     <main className={`workspace ${sidebar ? "" : "sidebar-closed"}`}>
       <aside className="sidebar">
@@ -236,6 +309,12 @@ export function WorkspaceShell({
                 onRenameFolder={renameFolder}
                 onDeleteFolder={deleteFolder}
                 onMovePage={movePage}
+                dragItem={dragItem}
+                dropTarget={dropTarget}
+                onDragStart={startDrag}
+                onDragEnd={() => { setDragItem(null); setDropTarget(null); }}
+                onDropTarget={(target) => void dropTreeItem(target)}
+                onDropTargetChange={setDropTarget}
               />
               <RootPages
                 pages={activeSpace.pages.filter((page) => !page.folderId)}
@@ -243,7 +322,29 @@ export function WorkspaceShell({
                 selectedPageId={selectedPage?.id || null}
                 canWrite={Boolean(canWrite)}
                 onMovePage={movePage}
+                dragItem={dragItem}
+                dropTarget={dropTarget}
+                onDragStart={startDrag}
+                onDragEnd={() => { setDragItem(null); setDropTarget(null); }}
+                onDropTarget={(target) => void dropTreeItem(target)}
+                onDropTargetChange={setDropTarget}
               />
+              {dragItem && (
+                <div
+                  className={`root-drop-zone ${dropTarget?.kind === "root" ? "active" : ""}`}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = "move";
+                    setDropTarget({ kind: "root" });
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    void dropTreeItem({ kind: "root" });
+                  }}
+                >
+                  Auf oberste Ebene verschieben
+                </div>
+              )}
               {!activeSpace.pages.length && !activeSpace.folders.length && (
                 <div className="tree-empty"><Folder size={20} /><span>Noch keine Inhalte</span></div>
               )}
@@ -309,6 +410,12 @@ function FolderTree({
   onRenameFolder,
   onDeleteFolder,
   onMovePage,
+  dragItem,
+  dropTarget,
+  onDragStart,
+  onDragEnd,
+  onDropTarget,
+  onDropTargetChange,
 }: {
   space: Space;
   parentId: string | null;
@@ -323,6 +430,12 @@ function FolderTree({
   onRenameFolder: (folder: FolderItem) => void;
   onDeleteFolder: (folder: FolderItem) => void;
   onMovePage: (page: PageItem) => void;
+  dragItem: DragItem | null;
+  dropTarget: DropTarget | null;
+  onDragStart: (event: DragEvent, item: DragItem) => void;
+  onDragEnd: () => void;
+  onDropTarget: (target: DropTarget) => void;
+  onDropTargetChange: (target: DropTarget) => void;
 }) {
   const folders = space.folders.filter((folder) => folder.parentId === parentId);
   return (
@@ -331,9 +444,37 @@ function FolderTree({
         if (query && !folderMatches(folder.id, space, query)) return null;
         const isOpen = expanded.has(folder.id) || Boolean(query);
         const pages = space.pages.filter((page) => page.folderId === folder.id);
+        const folderTarget = dropTarget?.kind === "folder" && dropTarget.id === folder.id ? dropTarget : null;
         return (
           <div className="folder-node" key={folder.id}>
-            <div className="folder-row">
+            <div
+              className={`folder-row ${folderTarget ? `drop-${folderTarget.edge}` : ""}`}
+              onDragOver={(event) => {
+                if (!dragItem || (dragItem.kind === "folder" && dragItem.id === folder.id)) return;
+                event.preventDefault();
+                event.stopPropagation();
+                event.dataTransfer.dropEffect = "move";
+                const edge = dragItem.kind === "page" ? "inside" : verticalDropEdge(event, true);
+                onDropTargetChange({ kind: "folder", id: folder.id, edge });
+              }}
+              onDrop={(event) => {
+                if (!dragItem || (dragItem.kind === "folder" && dragItem.id === folder.id)) return;
+                event.preventDefault();
+                event.stopPropagation();
+                onDropTarget(folderTarget || { kind: "folder", id: folder.id, edge: "inside" });
+              }}
+            >
+              {canWrite && !query && (
+                <span
+                  className="drag-handle"
+                  draggable
+                  onDragStart={(event) => onDragStart(event, { kind: "folder", id: folder.id })}
+                  onDragEnd={onDragEnd}
+                  title="Ordner verschieben"
+                >
+                  <GripVertical size={13} />
+                </span>
+              )}
               <button className="folder-toggle" onClick={() => onToggle(folder.id)}>
                 {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                 {isOpen ? <Folder size={15} /> : <Folder size={15} />}
@@ -364,8 +505,26 @@ function FolderTree({
                   onRenameFolder={onRenameFolder}
                   onDeleteFolder={onDeleteFolder}
                   onMovePage={onMovePage}
+                  dragItem={dragItem}
+                  dropTarget={dropTarget}
+                  onDragStart={onDragStart}
+                  onDragEnd={onDragEnd}
+                  onDropTarget={onDropTarget}
+                  onDropTargetChange={onDropTargetChange}
                 />
-                <RootPages pages={pages} query={query} selectedPageId={selectedPageId} canWrite={canWrite} onMovePage={onMovePage} />
+                <RootPages
+                  pages={pages}
+                  query={query}
+                  selectedPageId={selectedPageId}
+                  canWrite={canWrite}
+                  onMovePage={onMovePage}
+                  dragItem={dragItem}
+                  dropTarget={dropTarget}
+                  onDragStart={onDragStart}
+                  onDragEnd={onDragEnd}
+                  onDropTarget={onDropTarget}
+                  onDropTargetChange={onDropTargetChange}
+                />
               </div>
             )}
           </div>
@@ -381,24 +540,65 @@ function RootPages({
   selectedPageId,
   canWrite,
   onMovePage,
+  dragItem,
+  dropTarget,
+  onDragStart,
+  onDragEnd,
+  onDropTarget,
+  onDropTargetChange,
 }: {
   pages: PageItem[];
   query: string;
   selectedPageId: string | null;
   canWrite: boolean;
   onMovePage: (page: PageItem) => void;
+  dragItem: DragItem | null;
+  dropTarget: DropTarget | null;
+  onDragStart: (event: DragEvent, item: DragItem) => void;
+  onDragEnd: () => void;
+  onDropTarget: (target: DropTarget) => void;
+  onDropTargetChange: (target: DropTarget) => void;
 }) {
   const needle = query.trim().toLowerCase();
   return (
     <>
-      {pages.filter((page) => !needle || page.title.toLowerCase().includes(needle)).map((page) => (
-        <div className={`page-row ${selectedPageId === page.id ? "active" : ""}`} key={page.id}>
+      {pages.filter((page) => !needle || page.title.toLowerCase().includes(needle)).map((page) => {
+        const pageTarget = dropTarget?.kind === "page" && dropTarget.id === page.id ? dropTarget : null;
+        return (
+        <div
+          className={`page-row ${selectedPageId === page.id ? "active" : ""} ${pageTarget ? `drop-${pageTarget.edge}` : ""}`}
+          key={page.id}
+          onDragOver={(event) => {
+            if (dragItem?.kind !== "page" || dragItem.id === page.id) return;
+            event.preventDefault();
+            event.stopPropagation();
+            event.dataTransfer.dropEffect = "move";
+            onDropTargetChange({ kind: "page", id: page.id, edge: verticalDropEdge(event, false) });
+          }}
+          onDrop={(event) => {
+            if (dragItem?.kind !== "page" || dragItem.id === page.id) return;
+            event.preventDefault();
+            event.stopPropagation();
+            onDropTarget(pageTarget || { kind: "page", id: page.id, edge: "before" });
+          }}
+        >
+          {canWrite && !query && (
+            <span
+              className="drag-handle"
+              draggable
+              onDragStart={(event) => onDragStart(event, { kind: "page", id: page.id })}
+              onDragEnd={onDragEnd}
+              title="Seite verschieben"
+            >
+              <GripVertical size={13} />
+            </span>
+          )}
           <Link className="page-link" href={`/?space=${page.spaceId}&page=${page.id}`}>
             {page.format === "LATEX" ? <FileCode2 size={14} /> : <FileText size={14} />}<span>{page.title}</span>
           </Link>
           {canWrite && <button onClick={() => onMovePage(page)} title="Seite verschieben"><MoreHorizontal size={15} /></button>}
         </div>
-      ))}
+      )})}
     </>
   );
 }
@@ -421,6 +621,16 @@ function flattenFolders(folders: FolderItem[]) {
   }
   visit(null, 0);
   return result;
+}
+
+function verticalDropEdge(event: DragEvent, allowInside: true): "before" | "inside" | "after";
+function verticalDropEdge(event: DragEvent, allowInside: false): "before" | "after";
+function verticalDropEdge(event: DragEvent, allowInside: boolean) {
+  const bounds = event.currentTarget.getBoundingClientRect();
+  const ratio = (event.clientY - bounds.top) / bounds.height;
+  if (ratio < (allowInside ? 0.25 : 0.5)) return "before";
+  if (allowInside && ratio <= 0.75) return "inside";
+  return "after";
 }
 
 function roleLabel(role: Space["role"]) {

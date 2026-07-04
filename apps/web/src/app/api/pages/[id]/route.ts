@@ -2,11 +2,13 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { canEdit, pageAccess, requireApiUser } from "@/lib/access";
 import { db } from "@/lib/db";
+import { insertAt } from "@/lib/tree-order";
 
 const updateSchema = z.object({
   title: z.string().trim().min(1).max(160).optional(),
   folderId: z.string().min(1).nullable().optional(),
-}).refine((value) => value.title !== undefined || value.folderId !== undefined);
+  position: z.number().int().min(0).optional(),
+}).refine((value) => value.title !== undefined || value.folderId !== undefined || value.position !== undefined);
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const user = await requireApiUser();
@@ -25,9 +27,35 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     });
     if (!folder) return NextResponse.json({ error: "Ungültiger Ordner" }, { status: 400 });
   }
-  const updated = await db.page.update({
-    where: { id },
-    data: { title: parsed.data.title, folderId: parsed.data.folderId },
+  const moving = parsed.data.folderId !== undefined || parsed.data.position !== undefined;
+  if (!moving) {
+    const updated = await db.page.update({
+      where: { id },
+      data: { title: parsed.data.title },
+    });
+    return NextResponse.json(updated);
+  }
+  const targetFolderId = parsed.data.folderId !== undefined ? parsed.data.folderId : page.folderId;
+  const updated = await db.$transaction(async (transaction) => {
+    const siblings = await transaction.page.findMany({
+      where: { spaceId: page.spaceId, folderId: targetFolderId, id: { not: id } },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      select: { id: true },
+    });
+    const orderedIds = insertAt(
+      siblings.map((sibling) => sibling.id),
+      id,
+      parsed.data.position ?? siblings.length,
+    );
+    await transaction.page.update({
+      where: { id },
+      data: { title: parsed.data.title, folderId: targetFolderId },
+    });
+    await Promise.all(orderedIds.map((pageId, sortOrder) => transaction.page.update({
+      where: { id: pageId },
+      data: { sortOrder },
+    })));
+    return transaction.page.findUniqueOrThrow({ where: { id } });
   });
   return NextResponse.json(updated);
 }

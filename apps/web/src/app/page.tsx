@@ -50,12 +50,12 @@ export default async function Home(props: { searchParams: Promise<{ page?: strin
         select: { role: true },
       },
       folders: {
-        select: { id: true, name: true, parentId: true },
-        orderBy: { name: "asc" },
+        select: { id: true, name: true, parentId: true, sortOrder: true },
+        orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       },
       pages: {
-        select: { id: true, title: true, parentId: true, folderId: true, spaceId: true, slug: true, format: true },
-        orderBy: { title: "asc" },
+        select: { id: true, title: true, parentId: true, folderId: true, spaceId: true, slug: true, format: true, sortOrder: true },
+        orderBy: [{ sortOrder: "asc" }, { title: "asc" }],
       },
     },
     orderBy: { name: "asc" },

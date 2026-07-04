@@ -38,11 +38,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "In dieser Ebene existiert bereits ein Ordner mit diesem Namen" }, { status: 409 });
   }
 
+  const lastFolder = await db.folder.aggregate({
+    where: { spaceId: parsed.data.spaceId, parentId: parsed.data.parentId || null },
+    _max: { sortOrder: true },
+  });
   const folder = await db.folder.create({
     data: {
       name: parsed.data.name,
       spaceId: parsed.data.spaceId,
       parentId: parsed.data.parentId || null,
+      sortOrder: (lastFolder._max.sortOrder ?? -1) + 1,
     },
   });
   return NextResponse.json(folder, { status: 201 });

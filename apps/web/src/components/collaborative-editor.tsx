@@ -1,17 +1,29 @@
 "use client";
 
 import { HocuspocusProvider } from "@hocuspocus/provider";
-import { Download, Eye, FileText, LoaderCircle, Network, Pencil, Users } from "lucide-react";
+import {
+  Download, Eye, FileText, History, LoaderCircle, Network, Pencil, RotateCcw,
+  Save as SaveIcon, Users, X,
+} from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import * as Y from "yjs";
 import { CollaborativeCanvas } from "@/components/collaborative-canvas";
 import { LatexPreview } from "@/components/latex-preview";
+import { createVisibleSnapshot, restoreVisibleSnapshot } from "@/lib/version-snapshot";
 
 type PageItem = { id: string; title: string; slug: string; parentId: string | null; format: "MARKDOWN" | "LATEX" };
 type Tab = "write" | "preview" | "canvas";
 type Connection = "connecting" | "connected" | "disconnected";
+type PageVersion = {
+  id: string;
+  version: number;
+  title: string;
+  author: string;
+  restoredFromVersion: number | null;
+  createdAt: string;
+};
 type Person = {
   id: string;
   name: string;
@@ -44,8 +56,14 @@ export function CollaborativeEditor({
   const [scrollRevision, setScrollRevision] = useState(0);
   const [title, setTitle] = useState(page.title);
   const [readOnly, setReadOnly] = useState(true);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [versions, setVersions] = useState<PageVersion[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [versionBusy, setVersionBusy] = useState(false);
+  const [versionNotice, setVersionNotice] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const providerRef = useRef<HocuspocusProvider | null>(null);
+  const savedTitleRef = useRef(page.title);
 
   useEffect(() => {
     let active = true;
@@ -143,15 +161,93 @@ export function CollaborativeEditor({
     providerRef.current?.setAwarenessField("cursor", { index: textarea.selectionStart });
   }
 
-  async function saveTitle() {
-    const clean = title.trim();
-    if (!clean || clean === page.title || readOnly) return setTitle(page.title);
+  async function persistTitle(nextTitle = title) {
+    const clean = nextTitle.trim();
+    if (!clean || readOnly) {
+      setTitle(savedTitleRef.current);
+      return false;
+    }
+    if (clean === savedTitleRef.current) return true;
     const response = await fetch(`/api/pages/${page.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: clean }),
     });
-    if (!response.ok) setTitle(page.title);
+    if (!response.ok) {
+      setTitle(savedTitleRef.current);
+      return false;
+    }
+    savedTitleRef.current = clean;
+    setTitle(clean);
+    return true;
+  }
+
+  async function saveTitle() {
+    await persistTitle();
+  }
+
+  async function loadVersions() {
+    setHistoryLoading(true);
+    try {
+      const response = await fetch(`/api/pages/${page.id}/versions`);
+      if (!response.ok) throw new Error("Die Historie konnte nicht geladen werden.");
+      setVersions(await response.json() as PageVersion[]);
+    } catch (error) {
+      setVersionNotice(error instanceof Error ? error.message : "Die Historie konnte nicht geladen werden.");
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  async function saveVersion(restoredFromVersion?: number, snapshotTitle = title) {
+    if (readOnly || status !== "connected") return false;
+    setVersionBusy(true);
+    setVersionNotice("");
+    try {
+      if (!await persistTitle(snapshotTitle)) throw new Error("Der Seitentitel konnte nicht gespeichert werden.");
+      const snapshot = createVisibleSnapshot(ydoc);
+      const response = await fetch(`/api/pages/${page.id}/versions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: snapshotTitle.trim(),
+          snapshot: bytesToBase64(snapshot),
+          restoredFromVersion,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Die Version konnte nicht gespeichert werden.");
+      setVersionNotice(restoredFromVersion
+        ? `Version ${restoredFromVersion} wurde als neue Version ${result.version} wiederhergestellt.`
+        : `Version ${result.version} wurde gespeichert.`);
+      await loadVersions();
+      return true;
+    } catch (error) {
+      setVersionNotice(error instanceof Error ? error.message : "Die Version konnte nicht gespeichert werden.");
+      return false;
+    } finally {
+      setVersionBusy(false);
+    }
+  }
+
+  async function restoreVersion(version: PageVersion) {
+    if (readOnly || status !== "connected" || versionBusy) return;
+    if (!window.confirm(`Version ${version.version} wiederherstellen? Der aktuelle Seitenstand wird dabei ersetzt.`)) return;
+    setVersionBusy(true);
+    setVersionNotice("");
+    try {
+      const response = await fetch(`/api/pages/${page.id}/versions/${version.id}`);
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Die Version konnte nicht geladen werden.");
+      restoreVisibleSnapshot(ydoc, base64ToBytes(result.snapshot));
+      setTitle(result.title);
+      setVersionBusy(false);
+      await saveVersion(result.version, result.title);
+      setTab("write");
+    } catch (error) {
+      setVersionNotice(error instanceof Error ? error.message : "Die Version konnte nicht wiederhergestellt werden.");
+      setVersionBusy(false);
+    }
   }
 
   function downloadSource() {
@@ -195,6 +291,26 @@ export function CollaborativeEditor({
             </div>
             <small>{people.length || 1}</small>
           </div>
+          <button
+            className="button compact version-save-button"
+            disabled={readOnly || status !== "connected" || versionBusy}
+            onClick={() => void saveVersion()}
+            title={readOnly ? "Nur mit Schreibzugriff verfügbar" : "Aktuellen Stand als Version speichern"}
+          >
+            {versionBusy ? <LoaderCircle size={15} className="spin" /> : <SaveIcon size={15} />}
+            <span>Version speichern</span>
+          </button>
+          <button
+            className="button compact secondary-button version-history-button"
+            onClick={() => {
+              setVersionNotice("");
+              setHistoryOpen(true);
+              void loadVersions();
+            }}
+            title="Dokumentenhistorie öffnen"
+          >
+            <History size={15} /><span>Historie</span>
+          </button>
           <button className="icon-button bordered" onClick={downloadSource} title={page.format === "LATEX" ? "LaTeX-Datei herunterladen" : "Markdown herunterladen"}><Download size={17} /></button>
         </div>
       </header>
@@ -243,6 +359,48 @@ export function CollaborativeEditor({
           <CollaborativeCanvas ydoc={ydoc} readOnly={readOnly} />
         </div>
       </section>
+      {historyOpen && (
+        <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setHistoryOpen(false)}>
+          <section className="history-dialog" role="dialog" aria-modal="true" aria-label="Dokumentenhistorie">
+            <header className="dialog-header">
+              <div><span className="dialog-kicker">Atlas</span><h2>Dokumentenhistorie</h2></div>
+              <button className="icon-button" onClick={() => setHistoryOpen(false)} aria-label="Schließen"><X size={18} /></button>
+            </header>
+            <div className="history-intro">
+              <p>Gespeicherte Versionen enthalten den Text und den Canvas dieser Seite.</p>
+              {!readOnly && <button className="button compact version-save-button" disabled={status !== "connected" || versionBusy} onClick={() => void saveVersion()}><SaveIcon size={15} /> Neue Version</button>}
+            </div>
+            {versionNotice && <div className="version-notice">{versionNotice}</div>}
+            <div className="version-list">
+              {historyLoading && <div className="history-empty"><LoaderCircle size={18} className="spin" /> Historie wird geladen …</div>}
+              {!historyLoading && !versions.length && <div className="history-empty">Noch keine Version gespeichert.</div>}
+              {!historyLoading && versions.map((version, index) => (
+                <article className="version-row" key={version.id}>
+                  <span className="version-number">v{version.version}</span>
+                  <div>
+                    <strong>{version.title}</strong>
+                    <small>{formatVersionDate(version.createdAt)} · {version.author}</small>
+                    {version.restoredFromVersion && <small>Aus Version {version.restoredFromVersion} wiederhergestellt</small>}
+                  </div>
+                  {index === 0 && <span className="current-version">Neueste</span>}
+                  {!readOnly && (
+                    <button
+                      className="button compact secondary-button"
+                      disabled={status !== "connected" || versionBusy}
+                      onClick={() => void restoreVersion(version)}
+                    >
+                      <RotateCcw size={14} /> Wiederherstellen
+                    </button>
+                  )}
+                </article>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
+      {versionNotice && !historyOpen && (
+        <button className="atlas-toast" onClick={() => setVersionNotice("")}>{versionNotice}<X size={14} /></button>
+      )}
     </div>
   );
 }
@@ -357,4 +515,26 @@ function userColor(id: string) {
 
 function initials(name: string) {
   return name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
+}
+
+function bytesToBase64(bytes: Uint8Array) {
+  let binary = "";
+  for (let index = 0; index < bytes.length; index += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+  }
+  return btoa(binary);
+}
+
+function base64ToBytes(value: string) {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
+  return bytes;
+}
+
+function formatVersionDate(value: string) {
+  return new Intl.DateTimeFormat("de-DE", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
 }

@@ -48,11 +48,13 @@ docker compose logs -f web collab
 - Gleichzeitiges Schreiben über Yjs und Hocuspocus
 - Live-Cursor mit Name, Farbe und Profilbild der schreibenden Person
 - Gemeinsamer Excalidraw-Canvas
+- Manuelle Dokumentversionen mit Autor, Zeitpunkt und vollständiger Wiederherstellung von Text und Canvas
 
 ### Struktur und Zugriffssteuerung
 
 - Durchsuchbarer Bereichswechsler
 - Verschachtelte Ordner und darin einsortierte Seiten
+- Seiten und Ordner per Drag-and-drop verschieben und dauerhaft sortieren
 - Individuelle Bereichsbilder
 - Direkte Freigaben an Benutzer und Freigaben an Teams
 - Rollen `OWNER`, `EDITOR` und `VIEWER`
