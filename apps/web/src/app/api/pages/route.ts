@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { canEdit, requireApiUser } from "@/lib/access";
+import { canEdit, requireApiUser, spaceAccess } from "@/lib/access";
 import { db } from "@/lib/db";
 import { slugify } from "@/lib/slug";
 
@@ -8,6 +8,8 @@ const schema = z.object({
   title: z.string().trim().min(1).max(160),
   spaceId: z.string().min(1),
   parentId: z.string().min(1).nullable().optional(),
+  folderId: z.string().min(1).nullable().optional(),
+  format: z.enum(["MARKDOWN", "LATEX"]).default("MARKDOWN"),
 });
 
 export async function POST(request: Request) {
@@ -17,10 +19,8 @@ export async function POST(request: Request) {
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: "Ungültige Eingabe" }, { status: 400 });
 
-  const membership = await db.membership.findUnique({
-    where: { userId_spaceId: { userId: user.id, spaceId: parsed.data.spaceId } },
-  });
-  if (!membership || !canEdit(membership.role)) {
+  const role = await spaceAccess(user.id, parsed.data.spaceId);
+  if (!canEdit(role)) {
     return NextResponse.json({ error: "Kein Schreibzugriff" }, { status: 403 });
   }
 
@@ -29,6 +29,13 @@ export async function POST(request: Request) {
       where: { id: parsed.data.parentId, spaceId: parsed.data.spaceId },
     });
     if (!parent) return NextResponse.json({ error: "Ungültige übergeordnete Seite" }, { status: 400 });
+  }
+
+  if (parsed.data.folderId) {
+    const folder = await db.folder.findFirst({
+      where: { id: parsed.data.folderId, spaceId: parsed.data.spaceId },
+    });
+    if (!folder) return NextResponse.json({ error: "Ungültiger Ordner" }, { status: 400 });
   }
 
   const baseSlug = slugify(parsed.data.title);
@@ -43,6 +50,8 @@ export async function POST(request: Request) {
       slug,
       spaceId: parsed.data.spaceId,
       parentId: parsed.data.parentId || null,
+      folderId: parsed.data.folderId || null,
+      format: parsed.data.format,
       createdById: user.id,
     },
   });

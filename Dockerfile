@@ -29,6 +29,7 @@ ENV HOSTNAME=0.0.0.0
 RUN apk add --no-cache openssl wget
 COPY --from=build-web /app/apps/web/.next/standalone ./
 COPY --from=build-web /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=build-web /app/apps/web/public ./apps/web/public
 EXPOSE 3000
 CMD ["node", "apps/web/server.js"]
 

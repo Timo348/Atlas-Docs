@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { KeyRound, Plus, UserCheck, UserX } from "lucide-react";
+import { KeyRound, Plus, UserCheck, UserX, X } from "lucide-react";
 
 type UserRow = {
   id: string;
@@ -18,6 +18,8 @@ export function UsersAdmin({ initialUsers, currentUserId }: { initialUsers: User
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [resetUserId, setResetUserId] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState("");
 
   async function createUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -53,10 +55,11 @@ export function UsersAdmin({ initialUsers, currentUserId }: { initialUsers: User
     setUsers((current) => current.map((user) => user.id === id ? { ...user, ...data } : user));
   }
 
-  async function resetPassword(id: string) {
-    const password = window.prompt("Neues Passwort (mindestens 12 Zeichen)");
-    if (!password) return;
-    await updateUser(id, { password });
+  async function resetPassword() {
+    if (!resetUserId || newPassword.length < 12) return;
+    await updateUser(resetUserId, { password: newPassword });
+    setResetUserId(null);
+    setNewPassword("");
   }
 
   return (
@@ -90,7 +93,7 @@ export function UsersAdmin({ initialUsers, currentUserId }: { initialUsers: User
             </select>
             <span className={`status-pill ${user.active ? "enabled" : "disabled"}`}>{user.active ? "Aktiv" : "Gesperrt"}</span>
             <div className="row-actions">
-              <button className="icon-button bordered" onClick={() => resetPassword(user.id)} title="Lokales Passwort setzen"><KeyRound size={16} /></button>
+              <button className="icon-button bordered" onClick={() => setResetUserId(user.id)} title="Lokales Passwort setzen"><KeyRound size={16} /></button>
               <button
                 className="icon-button bordered"
                 disabled={user.id === currentUserId}
@@ -103,6 +106,20 @@ export function UsersAdmin({ initialUsers, currentUserId }: { initialUsers: User
           </div>
         ))}
       </div>
+      {resetUserId && (
+        <div className="modal-backdrop">
+          <section className="action-dialog" role="dialog" aria-modal="true">
+            <header className="dialog-header">
+              <div><span className="dialog-kicker">Benutzerkonto</span><h2>Passwort neu setzen</h2></div>
+              <button className="icon-button" onClick={() => setResetUserId(null)}><X size={18} /></button>
+            </header>
+            <div className="action-dialog-body">
+              <label>Neues Passwort<input autoFocus type="password" minLength={12} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></label>
+            </div>
+            <footer className="dialog-footer"><span>Mindestens 12 Zeichen</span><div><button className="button secondary-button compact" onClick={() => setResetUserId(null)}>Abbrechen</button><button className="button primary-button compact" disabled={newPassword.length < 12} onClick={resetPassword}>Speichern</button></div></footer>
+          </section>
+        </div>
+      )}
     </section>
   );
 }

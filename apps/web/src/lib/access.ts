@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { strongestSpaceRole } from "@/lib/space-role";
 
 export async function requireUser() {
   const session = await getServerSession(authOptions);
@@ -18,19 +19,38 @@ export async function requireApiUser() {
 }
 
 export async function pageAccess(userId: string, pageId: string) {
-  return db.page.findFirst({
-    where: {
-      id: pageId,
-      space: { memberships: { some: { userId } } },
-    },
-    include: {
-      space: {
-        include: { memberships: { where: { userId }, select: { role: true } } },
-      },
-    },
+  const page = await db.page.findUnique({
+    where: { id: pageId },
   });
+  if (!page) return null;
+  const role = await spaceAccess(userId, page.spaceId);
+  return role ? { ...page, accessRole: role } : null;
 }
 
-export function canEdit(role: string) {
+export async function spaceAccess(userId: string, spaceId: string) {
+  const [direct, teamGrants] = await Promise.all([
+    db.membership.findUnique({
+      where: { userId_spaceId: { userId, spaceId } },
+      select: { role: true },
+    }),
+    db.spaceTeamAccess.findMany({
+      where: {
+        spaceId,
+        team: {
+          members: {
+            some: {
+              userId,
+              OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+            },
+          },
+        },
+      },
+      select: { role: true },
+    }),
+  ]);
+  return strongestSpaceRole([direct?.role, ...teamGrants.map((grant) => grant.role)]);
+}
+
+export function canEdit(role: string | null) {
   return role === "OWNER" || role === "EDITOR";
 }

@@ -12,7 +12,6 @@ export async function GET(request: NextRequest) {
   const page = await pageAccess(user.id, pageId);
   if (!page) return NextResponse.json({ error: "Kein Zugriff" }, { status: 403 });
 
-  const membership = page.space.memberships[0];
   const secret = process.env.COLLAB_SECRET;
   if (!secret || secret.length < 32) {
     return NextResponse.json({ error: "Server nicht konfiguriert" }, { status: 500 });
@@ -21,7 +20,7 @@ export async function GET(request: NextRequest) {
   const token = await new SignJWT({
     pageId,
     name: user.name || user.email,
-    readOnly: !canEdit(membership.role),
+    readOnly: !canEdit(page.accessRole),
   })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuer("atlas-web")
@@ -33,7 +32,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     token,
-    readOnly: !canEdit(membership.role),
+    readOnly: !canEdit(page.accessRole),
     user: { id: user.id, name: user.name || user.email },
   });
 }
