@@ -108,7 +108,7 @@ export function ProfileDialog({
             </label>
             <label>{text("Interface font", "Oberflächenschrift")}
               <select value={draft.uiFont} onChange={(event) => update("uiFont", event.target.value as Preferences["uiFont"])}>
-                <option value="inter">Inter</option><option value="serif">Lora</option><option value="system">{text("System font", "Systemschrift")}</option>
+                <option value="inter">Inter</option><option value="helvetica">Helvetica / Arial</option><option value="serif">Lora</option><option value="system">{text("System font", "Systemschrift")}</option>
               </select>
             </label>
             <label>{text("Editor font", "Editorschrift")}

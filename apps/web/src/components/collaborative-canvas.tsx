@@ -1,8 +1,9 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type * as Y from "yjs";
+import { usePreferences } from "@/components/preferences-provider";
 
 const Excalidraw = dynamic(
   () => import("@excalidraw/excalidraw").then((module) => module.Excalidraw),
@@ -15,10 +16,21 @@ type ExcalidrawApi = {
 };
 
 export function CollaborativeCanvas({ ydoc, readOnly }: { ydoc: Y.Doc; readOnly: boolean }) {
+  const { preferences } = usePreferences();
+  const [systemDark, setSystemDark] = useState(false);
   const elementsMap = useMemo(() => ydoc.getMap<unknown>("canvas-elements"), [ydoc]);
   const filesMap = useMemo(() => ydoc.getMap<unknown>("canvas-files"), [ydoc]);
   const settingsMap = useMemo(() => ydoc.getMap<unknown>("canvas-settings"), [ydoc]);
   const api = useRef<ExcalidrawApi | null>(null);
+  const dark = preferences.colorTheme === "dark" || (preferences.colorTheme === "system" && systemDark);
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const update = () => setSystemDark(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
 
   useEffect(() => {
     const syncElements = (_event: unknown, transaction: Y.Transaction) => {
@@ -45,6 +57,7 @@ export function CollaborativeCanvas({ ydoc, readOnly }: { ydoc: Y.Doc; readOnly:
   return (
     <div className="canvas-wrap">
       <Excalidraw
+        theme={dark ? "dark" : "light"}
         excalidrawAPI={(nextApi) => {
           api.current = nextApi as unknown as ExcalidrawApi;
           nextApi.addFiles(Array.from(filesMap.values()) as never[]);

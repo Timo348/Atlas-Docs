@@ -3,7 +3,7 @@ import { z } from "zod";
 export const preferencesSchema = z.object({
   language: z.enum(["en", "de"]),
   colorTheme: z.enum(["system", "light", "dark"]),
-  uiFont: z.enum(["inter", "serif", "system"]),
+  uiFont: z.enum(["inter", "helvetica", "serif", "system"]),
   editorFont: z.enum(["mono", "sans"]),
   fontSize: z.enum(["small", "medium", "large"]),
   compactMode: z.boolean(),
