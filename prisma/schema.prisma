@@ -32,6 +32,12 @@ model User {
   passwordHash    String?
   avatarData      Bytes?
   avatarMime      String?
+  language        String       @default("en")
+  colorTheme      String       @default("system")
+  uiFont          String       @default("inter")
+  editorFont      String       @default("mono")
+  fontSize        String       @default("medium")
+  compactMode     Boolean      @default(false)
   role            UserRole     @default(MEMBER)
   active          Boolean      @default(true)
   accounts        Account[]
@@ -40,6 +46,7 @@ model User {
   teamMemberships TeamMember[]
   pagesCreated    Page[]       @relation("PageCreator")
   pageVersions    PageVersion[]
+  pageImages      PageImage[]
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 }
@@ -150,12 +157,27 @@ model Page {
   folder         Folder?       @relation(fields: [folderId], references: [id], onDelete: SetNull)
   createdBy      User          @relation("PageCreator", fields: [createdById], references: [id])
   versions       PageVersion[]
+  images         PageImage[]
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
   @@unique([spaceId, slug])
   @@index([spaceId, parentId])
   @@index([spaceId, folderId])
+}
+
+model PageImage {
+  id          String   @id @default(cuid())
+  pageId      String
+  createdById String
+  mime        String
+  size        Int
+  data        Bytes
+  page        Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  createdBy   User     @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@index([pageId, createdAt])
 }
 
 model Folder {

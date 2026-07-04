@@ -3,6 +3,8 @@ import { requireUser } from "@/lib/access";
 import { db } from "@/lib/db";
 import { strongestSpaceRole } from "@/lib/space-role";
 import { WorkspaceShell } from "@/components/workspace-shell";
+import { PreferencesProvider } from "@/components/preferences-provider";
+import { normalizePreferences } from "@/lib/preferences";
 
 export default async function Home(props: { searchParams: Promise<{ page?: string; space?: string }> }) {
   const user = await requireUser();
@@ -80,19 +82,30 @@ export default async function Home(props: { searchParams: Promise<{ page?: strin
     : selectedSpace?.pages[0] || null;
   if (requestedPage && !selected) redirect("/");
 
+  const preferences = normalizePreferences({
+    language: user.language,
+    colorTheme: user.colorTheme,
+    uiFont: user.uiFont,
+    editorFont: user.editorFont,
+    fontSize: user.fontSize,
+    compactMode: user.compactMode,
+  });
+
   return (
-    <WorkspaceShell
-      spaces={spaces}
-      selectedSpaceId={selectedSpace?.id || null}
-      selectedPage={selected}
-      user={{
-        id: user.id,
-        name: user.name || user.email,
-        email: user.email,
-        role: user.role,
-        avatarVersion: user.updatedAt.getTime(),
-        hasAvatar: Boolean(user.avatarMime),
-      }}
-    />
+    <PreferencesProvider initial={preferences}>
+      <WorkspaceShell
+        spaces={spaces}
+        selectedSpaceId={selectedSpace?.id || null}
+        selectedPage={selected}
+        user={{
+          id: user.id,
+          name: user.name || user.email,
+          email: user.email,
+          role: user.role,
+          avatarVersion: user.updatedAt.getTime(),
+          hasAvatar: Boolean(user.avatarMime),
+        }}
+      />
+    </PreferencesProvider>
   );
 }

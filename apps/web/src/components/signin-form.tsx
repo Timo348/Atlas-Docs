@@ -21,7 +21,7 @@ export function SignInForm({ mode }: { mode: AuthMode }) {
     });
     if (result?.ok) window.location.href = "/";
     else {
-      setError("E-Mail oder Passwort ist falsch.");
+      setError("The email address or password is incorrect.");
       setLoading(false);
     }
   }
@@ -31,30 +31,30 @@ export function SignInForm({ mode }: { mode: AuthMode }) {
       <section className="signin-story">
         <div className="brand brand-light"><BookOpen size={22} /> Atlas</div>
         <div>
-          <p className="eyebrow">Wissen, das in Bewegung bleibt</p>
-          <h1>Schreiben. Denken.<br />Gemeinsam sehen.</h1>
-          <p className="story-copy">Markdown-Dokumente und visuelle Skizzen in einem lebendigen Arbeitsraum.</p>
+          <p className="eyebrow">Knowledge that keeps moving</p>
+          <h1>Write. Think.<br />See together.</h1>
+          <p className="story-copy">Markdown documents and visual sketches in one collaborative workspace.</p>
         </div>
-        <p className="quote">„Gute Dokumentation ist ein Gespräch, das nicht verloren geht.“</p>
+        <p className="quote">“Good documentation is a conversation that does not get lost.”</p>
       </section>
       <section className="signin-panel">
         <div className="signin-card">
           <span className="signin-icon"><KeyRound size={21} /></span>
-          <p className="eyebrow dark">Willkommen zurück</p>
-          <h2>Bei Atlas anmelden</h2>
+          <p className="eyebrow dark">Welcome back</p>
+          <h2>Sign in to Atlas</h2>
           {(mode === "oidc" || mode === "both") && (
             <button className="button oidc-button" onClick={() => signIn("authentik", { callbackUrl: "/" })}>
-              Mit Authentik fortfahren
+              Continue with Authentik
             </button>
           )}
-          {mode === "both" && <div className="divider"><span>oder lokal</span></div>}
+          {mode === "both" && <div className="divider"><span>or use a local account</span></div>}
           {(mode === "local" || mode === "both") && (
             <form onSubmit={submit}>
-              <label>E-Mail<input name="email" type="email" autoComplete="email" required /></label>
-              <label>Passwort<input name="password" type="password" autoComplete="current-password" required /></label>
+              <label>Email<input name="email" type="email" autoComplete="email" required /></label>
+              <label>Password<input name="password" type="password" autoComplete="current-password" required /></label>
               {error && <p className="form-error">{error}</p>}
               <button className="button primary-button" disabled={loading}>
-                {loading ? "Anmeldung läuft …" : "Anmelden"}
+                {loading ? "Signing in…" : "Sign in"}
               </button>
             </form>
           )}

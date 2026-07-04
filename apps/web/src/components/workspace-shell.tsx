@@ -10,6 +10,7 @@ import {
   Pencil, Plus, Search, ShieldCheck, Trash2, Users, X,
 } from "lucide-react";
 import { CollaborativeEditor } from "@/components/collaborative-editor";
+import { usePreferences } from "@/components/preferences-provider";
 import { ProfileDialog } from "@/components/profile-dialog";
 import { SpacePermissionsDialog } from "@/components/space-permissions-dialog";
 
@@ -58,6 +59,7 @@ export function WorkspaceShell({
   selectedPage: PageItem | null;
   user: { id: string; name: string; email: string; role: "ADMIN" | "MEMBER"; hasAvatar: boolean; avatarVersion: number };
 }) {
+  const { preferences, text } = usePreferences();
   const router = useRouter();
   const [sidebar, setSidebar] = useState(true);
   const [switcherOpen, setSwitcherOpen] = useState(false);
@@ -82,7 +84,7 @@ export function WorkspaceShell({
 
   function createPage(spaceId: string, folderId: string | null = null) {
     setDialog({
-      kind: "page", title: "Neue Seite", label: "Seitentitel", initial: "",
+      kind: "page", title: text("New page", "Neue Seite"), label: text("Page title", "Seitentitel"), initial: "",
       submit: async (title, format) => {
         const response = await jsonRequest("/api/pages", "POST", { title, spaceId, folderId, format });
         if (!response.ok) return setNotice(response.error);
@@ -95,7 +97,7 @@ export function WorkspaceShell({
 
   function createFolder(spaceId: string, parentId: string | null = null) {
     setDialog({
-      kind: "text", title: parentId ? "Neuer Unterordner" : "Neuer Ordner", label: "Ordnername", initial: "",
+      kind: "text", title: parentId ? text("New subfolder", "Neuer Unterordner") : text("New folder", "Neuer Ordner"), label: text("Folder name", "Ordnername"), initial: "",
       submit: async (name) => {
         const response = await jsonRequest("/api/folders", "POST", { name, spaceId, parentId });
         if (!response.ok) return setNotice(response.error);
@@ -108,7 +110,7 @@ export function WorkspaceShell({
 
   function renameFolder(folder: FolderItem) {
     setDialog({
-      kind: "text", title: "Ordner umbenennen", label: "Ordnername", initial: folder.name,
+      kind: "text", title: text("Rename folder", "Ordner umbenennen"), label: text("Folder name", "Ordnername"), initial: folder.name,
       submit: async (name) => {
         const response = await jsonRequest(`/api/folders/${folder.id}`, "PATCH", { name });
         if (!response.ok) return setNotice(response.error);
@@ -120,13 +122,16 @@ export function WorkspaceShell({
 
   function deleteFolder(folder: FolderItem) {
     setDialog({
-      kind: "confirm", title: "Ordner löschen",
-      message: `Der Ordner „${folder.name}“ und seine Unterordner werden gelöscht. Enthaltene Seiten wechseln auf die oberste Ebene.`,
+      kind: "confirm", title: text("Delete folder", "Ordner löschen"),
+      message: text(
+        `The folder “${folder.name}” and its subfolders will be deleted. Contained pages move to the top level.`,
+        `Der Ordner „${folder.name}“ und seine Unterordner werden gelöscht. Enthaltene Seiten wechseln auf die oberste Ebene.`,
+      ),
       submit: async () => {
         const response = await fetch(`/api/folders/${folder.id}`, { method: "DELETE" });
         if (!response.ok) {
           const result = await response.json();
-          return setNotice(result.error || "Ordner konnte nicht gelöscht werden.");
+          return setNotice(result.error || text("Folder could not be deleted.", "Ordner konnte nicht gelöscht werden."));
         }
         setDialog(null);
         router.refresh();
@@ -137,7 +142,7 @@ export function WorkspaceShell({
   function movePage(page: PageItem) {
     if (!activeSpace) return;
     setDialog({
-      kind: "move", title: `„${page.title}“ verschieben`, folders: flattenFolders(activeSpace.folders), currentFolderId: page.folderId,
+      kind: "move", title: text(`Move “${page.title}”`, `„${page.title}“ verschieben`), folders: flattenFolders(activeSpace.folders), currentFolderId: page.folderId,
       submit: async (folderId) => {
         const response = await jsonRequest(`/api/pages/${page.id}`, "PATCH", { folderId });
         if (!response.ok) return setNotice(response.error);
@@ -149,7 +154,7 @@ export function WorkspaceShell({
 
   function createSpace() {
     setDialog({
-      kind: "text", title: "Neuer Bereich", label: "Bereichsname", initial: "",
+      kind: "text", title: text("New space", "Neuer Bereich"), label: text("Space name", "Bereichsname"), initial: "",
       submit: async (name) => {
         const response = await jsonRequest("/api/spaces", "POST", { name });
         if (!response.ok) return setNotice(response.error);
@@ -251,28 +256,28 @@ export function WorkspaceShell({
               <span className="space-mark">
                 {activeSpace?.hasImage ? <img src={`/api/spaces/${activeSpace.id}/image?v=${activeSpace.imageVersion}`} alt="" /> : <BookOpen size={17} />}
               </span>
-              <span><small>Bereich</small><strong>{activeSpace?.name || "Atlas"}</strong></span>
+              <span><small>{text("Space", "Bereich")}</small><strong>{activeSpace?.name || "Atlas"}</strong></span>
               <ChevronDown size={15} />
             </button>
             {switcherOpen && (
               <div className="space-popover">
-                <div className="popover-title"><strong>Bereich wechseln</strong><button className="icon-button tiny" onClick={() => setSwitcherOpen(false)}><X size={15} /></button></div>
-                <div className="popover-search"><Search size={15} /><input autoFocus value={spaceQuery} onChange={(event) => setSpaceQuery(event.target.value)} placeholder="Bereiche durchsuchen …" /></div>
+                <div className="popover-title"><strong>{text("Switch space", "Bereich wechseln")}</strong><button className="icon-button tiny" onClick={() => setSwitcherOpen(false)}><X size={15} /></button></div>
+                <div className="popover-search"><Search size={15} /><input autoFocus value={spaceQuery} onChange={(event) => setSpaceQuery(event.target.value)} placeholder={text("Search spaces…", "Bereiche durchsuchen…")} /></div>
                 <div className="space-options">
                   {matchingSpaces.map((space) => (
                     <button className={space.id === activeSpace?.id ? "active" : ""} key={space.id} onClick={() => selectSpace(space)}>
                       <span>{space.hasImage ? <img src={`/api/spaces/${space.id}/image?v=${space.imageVersion}`} alt="" /> : space.name.slice(0, 1).toUpperCase()}</span>
-                      <div><strong>{space.name}</strong><small>{space.description || roleLabel(space.role)}</small></div>
+                      <div><strong>{space.name}</strong><small>{space.description || roleLabel(space.role, preferences.language)}</small></div>
                       {space.id === activeSpace?.id && <span className="selected-dot" />}
                     </button>
                   ))}
-                  {!matchingSpaces.length && <p>Kein Bereich gefunden.</p>}
+                  {!matchingSpaces.length && <p>{text("No space found.", "Kein Bereich gefunden.")}</p>}
                 </div>
-                <button className="create-space-button" disabled={busy} onClick={createSpace}><Plus size={15} /> Neuen Bereich anlegen</button>
+                <button className="create-space-button" disabled={busy} onClick={createSpace}><Plus size={15} /> {text("Create space", "Neuen Bereich anlegen")}</button>
               </div>
             )}
           </div>
-          <button className="icon-button" onClick={() => setSidebar(false)} title="Navigation schließen">
+          <button className="icon-button" onClick={() => setSidebar(false)} title={text("Close navigation", "Navigation schließen")}>
             <PanelLeftClose size={19} />
           </button>
         </div>
@@ -280,19 +285,19 @@ export function WorkspaceShell({
         {activeSpace && (
           <>
             <div className="space-toolbar">
-              <span>{roleLabel(activeSpace.role)}</span>
+              <span>{roleLabel(activeSpace.role, preferences.language)}</span>
               {(activeSpace.role === "OWNER" || user.role === "ADMIN") && (
-                <button className="icon-button tiny" onClick={() => setPermissionsOpen(true)} title="Bereichsrechte">
+                <button className="icon-button tiny" onClick={() => setPermissionsOpen(true)} title={text("Space permissions", "Bereichsrechte")}>
                   <Users size={16} />
                 </button>
               )}
             </div>
-            <div className="search-box"><Search size={16} /><input value={pageQuery} onChange={(event) => setPageQuery(event.target.value)} placeholder="In diesem Bereich suchen …" /></div>
+            <div className="search-box"><Search size={16} /><input value={pageQuery} onChange={(event) => setPageQuery(event.target.value)} placeholder={text("Search this space…", "In diesem Bereich suchen…")} /></div>
             <nav className="page-tree">
               {canWrite && (
                 <div className="tree-actions">
-                  <button disabled={busy} onClick={() => createPage(activeSpace.id)}><FilePlus2 size={15} /> Seite</button>
-                  <button disabled={busy} onClick={() => createFolder(activeSpace.id)}><FolderPlus size={15} /> Ordner</button>
+                  <button disabled={busy} onClick={() => createPage(activeSpace.id)}><FilePlus2 size={15} /> {text("Page", "Seite")}</button>
+                  <button disabled={busy} onClick={() => createFolder(activeSpace.id)}><FolderPlus size={15} /> {text("Folder", "Ordner")}</button>
                 </div>
               )}
               <FolderTree
@@ -342,20 +347,20 @@ export function WorkspaceShell({
                     void dropTreeItem({ kind: "root" });
                   }}
                 >
-                  Auf oberste Ebene verschieben
+                  {text("Move to top level", "Auf oberste Ebene verschieben")}
                 </div>
               )}
               {!activeSpace.pages.length && !activeSpace.folders.length && (
-                <div className="tree-empty"><Folder size={20} /><span>Noch keine Inhalte</span></div>
+                <div className="tree-empty"><Folder size={20} /><span>{text("No content yet", "Noch keine Inhalte")}</span></div>
               )}
             </nav>
           </>
         )}
 
         <div className="sidebar-footer">
-          {user.role === "ADMIN" && <Link className="footer-link" href="/admin/users"><ShieldCheck size={17} /> Benutzerverwaltung</Link>}
-          {user.role === "ADMIN" && <Link className="footer-link" href="/admin/teams"><Users size={17} /> Teamverwaltung</Link>}
-          <button className="footer-link" onClick={() => signOut({ callbackUrl: "/signin" })}><LogOut size={17} /> Abmelden</button>
+          {user.role === "ADMIN" && <Link className="footer-link" href="/admin/users"><ShieldCheck size={17} /> {text("User management", "Benutzerverwaltung")}</Link>}
+          {user.role === "ADMIN" && <Link className="footer-link" href="/admin/teams"><Users size={17} /> {text("Team management", "Teamverwaltung")}</Link>}
+          <button className="footer-link" onClick={() => signOut({ callbackUrl: "/signin" })}><LogOut size={17} /> {text("Sign out", "Abmelden")}</button>
           <button className="user-chip user-chip-button" onClick={() => setProfileOpen(true)}>
             <span>{user.hasAvatar ? <img src={`/api/users/${user.id}/avatar?v=${user.avatarVersion}`} alt="" /> : initials(user.name)}</span>
             <div><strong>{user.name}</strong><small>{user.email}</small></div>
@@ -369,12 +374,12 @@ export function WorkspaceShell({
         ) : (
           <div className="empty-state">
             <span>{activeSpace ? <Folder size={28} /> : <BookOpen size={28} />}</span>
-            <h1>{activeSpace ? activeSpace.name : "Dein Wissensraum wartet."}</h1>
-            <p>{activeSpace ? "Lege eine Seite oder einen Ordner an." : "Lege deinen ersten Bereich an."}</p>
+            <h1>{activeSpace ? activeSpace.name : text("Your knowledge space is ready.", "Dein Wissensraum wartet.")}</h1>
+            <p>{activeSpace ? text("Create a page or folder.", "Lege eine Seite oder einen Ordner an.") : text("Create your first space.", "Lege deinen ersten Bereich an.")}</p>
             {activeSpace && canWrite ? (
-              <button className="button primary-button compact" onClick={() => createPage(activeSpace.id)}><Plus size={17} /> Erste Seite</button>
+              <button className="button primary-button compact" onClick={() => createPage(activeSpace.id)}><Plus size={17} /> {text("First page", "Erste Seite")}</button>
             ) : !activeSpace ? (
-              <button className="button primary-button compact" onClick={createSpace}><Plus size={17} /> Bereich anlegen</button>
+              <button className="button primary-button compact" onClick={createSpace}><Plus size={17} /> {text("Create space", "Bereich anlegen")}</button>
             ) : null}
           </div>
         )}
@@ -437,6 +442,7 @@ function FolderTree({
   onDropTarget: (target: DropTarget) => void;
   onDropTargetChange: (target: DropTarget) => void;
 }) {
+  const { text } = usePreferences();
   const folders = space.folders.filter((folder) => folder.parentId === parentId);
   return (
     <>
@@ -470,7 +476,7 @@ function FolderTree({
                   draggable
                   onDragStart={(event) => onDragStart(event, { kind: "folder", id: folder.id })}
                   onDragEnd={onDragEnd}
-                  title="Ordner verschieben"
+                  title={text("Move folder", "Ordner verschieben")}
                 >
                   <GripVertical size={13} />
                 </span>
@@ -482,10 +488,10 @@ function FolderTree({
               </button>
               {canWrite && (
                 <div className="node-actions">
-                  <button disabled={busy} onClick={() => onCreatePage(space.id, folder.id)} title="Seite im Ordner"><FilePlus2 size={14} /></button>
-                  <button disabled={busy} onClick={() => onCreateFolder(space.id, folder.id)} title="Unterordner"><FolderPlus size={14} /></button>
-                  <button disabled={busy} onClick={() => onRenameFolder(folder)} title="Umbenennen"><Pencil size={13} /></button>
-                  <button disabled={busy} onClick={() => onDeleteFolder(folder)} title="Löschen"><Trash2 size={13} /></button>
+                  <button disabled={busy} onClick={() => onCreatePage(space.id, folder.id)} title={text("Page in folder", "Seite im Ordner")}><FilePlus2 size={14} /></button>
+                  <button disabled={busy} onClick={() => onCreateFolder(space.id, folder.id)} title={text("Subfolder", "Unterordner")}><FolderPlus size={14} /></button>
+                  <button disabled={busy} onClick={() => onRenameFolder(folder)} title={text("Rename", "Umbenennen")}><Pencil size={13} /></button>
+                  <button disabled={busy} onClick={() => onDeleteFolder(folder)} title={text("Delete", "Löschen")}><Trash2 size={13} /></button>
                 </div>
               )}
             </div>
@@ -559,6 +565,7 @@ function RootPages({
   onDropTarget: (target: DropTarget) => void;
   onDropTargetChange: (target: DropTarget) => void;
 }) {
+  const { text } = usePreferences();
   const needle = query.trim().toLowerCase();
   return (
     <>
@@ -588,7 +595,7 @@ function RootPages({
               draggable
               onDragStart={(event) => onDragStart(event, { kind: "page", id: page.id })}
               onDragEnd={onDragEnd}
-              title="Seite verschieben"
+              title={text("Move page", "Seite verschieben")}
             >
               <GripVertical size={13} />
             </span>
@@ -596,7 +603,7 @@ function RootPages({
           <Link className="page-link" href={`/?space=${page.spaceId}&page=${page.id}`}>
             {page.format === "LATEX" ? <FileCode2 size={14} /> : <FileText size={14} />}<span>{page.title}</span>
           </Link>
-          {canWrite && <button onClick={() => onMovePage(page)} title="Seite verschieben"><MoreHorizontal size={15} /></button>}
+          {canWrite && <button onClick={() => onMovePage(page)} title={text("Move page", "Seite verschieben")}><MoreHorizontal size={15} /></button>}
         </div>
       )})}
     </>
@@ -633,8 +640,9 @@ function verticalDropEdge(event: DragEvent, allowInside: boolean) {
   return "after";
 }
 
-function roleLabel(role: Space["role"]) {
-  return role === "OWNER" ? "Eigentümer" : role === "EDITOR" ? "Bearbeiten" : "Nur lesen";
+function roleLabel(role: Space["role"], language: "en" | "de") {
+  if (language === "de") return role === "OWNER" ? "Eigentümer" : role === "EDITOR" ? "Bearbeiten" : "Nur lesen";
+  return role === "OWNER" ? "Owner" : role === "EDITOR" ? "Can edit" : "Read only";
 }
 
 function initials(name: string) {
@@ -652,6 +660,7 @@ function ActionDialog({
   onBusy: (busy: boolean) => void;
   onClose: () => void;
 }) {
+  const { text } = usePreferences();
   const [value, setValue] = useState(dialog.kind === "text" || dialog.kind === "page" ? dialog.initial : dialog.kind === "move" ? dialog.currentFolderId || "" : "");
   const [format, setFormat] = useState<"MARKDOWN" | "LATEX">("MARKDOWN");
   async function submit() {
@@ -670,21 +679,21 @@ function ActionDialog({
       <section className="action-dialog" role="dialog" aria-modal="true">
         <header className="dialog-header">
           <div><span className="dialog-kicker">Atlas</span><h2>{dialog.title}</h2></div>
-          <button className="icon-button" onClick={onClose} aria-label="Schließen"><X size={18} /></button>
+          <button className="icon-button" onClick={onClose} aria-label={text("Close", "Schließen")}><X size={18} /></button>
         </header>
         <div className="action-dialog-body">
           {(dialog.kind === "text" || dialog.kind === "page") && <label>{dialog.label}<input autoFocus value={value} onChange={(event) => setValue(event.target.value)} onKeyDown={(event) => event.key === "Enter" && value.trim() && void submit()} /></label>}
           {dialog.kind === "page" && (
             <div className="format-picker">
-              <button className={format === "MARKDOWN" ? "active" : ""} onClick={() => setFormat("MARKDOWN")}><FileText size={20} /><span><strong>Markdown</strong><small>Flexible Dokumentation mit Vorschau</small></span></button>
-              <button className={format === "LATEX" ? "active" : ""} onClick={() => setFormat("LATEX")}><FileCode2 size={20} /><span><strong>LaTeX</strong><small>Wissenschaftliche Dokumente und Formeln</small></span></button>
+              <button className={format === "MARKDOWN" ? "active" : ""} onClick={() => setFormat("MARKDOWN")}><FileText size={20} /><span><strong>Markdown</strong><small>{text("Flexible documentation with preview", "Flexible Dokumentation mit Vorschau")}</small></span></button>
+              <button className={format === "LATEX" ? "active" : ""} onClick={() => setFormat("LATEX")}><FileCode2 size={20} /><span><strong>LaTeX</strong><small>{text("Scientific documents and formulas", "Wissenschaftliche Dokumente und Formeln")}</small></span></button>
             </div>
           )}
           {dialog.kind === "confirm" && <p>{dialog.message}</p>}
           {dialog.kind === "move" && (
-            <label>Zielordner
+            <label>{text("Destination folder", "Zielordner")}
               <select value={value} onChange={(event) => setValue(event.target.value)}>
-                <option value="">Oberste Ebene</option>
+                <option value="">{text("Top level", "Oberste Ebene")}</option>
                 {dialog.folders.map(({ folder, depth }) => <option value={folder.id} key={folder.id}>{"— ".repeat(depth)}{folder.name}</option>)}
               </select>
             </label>
@@ -693,9 +702,9 @@ function ActionDialog({
         <footer className="dialog-footer">
           <span />
           <div>
-            <button className="button secondary-button compact" onClick={onClose}>Abbrechen</button>
+            <button className="button secondary-button compact" onClick={onClose}>{text("Cancel", "Abbrechen")}</button>
             <button className={`button compact ${dialog.kind === "confirm" ? "danger-button" : "primary-button"}`} disabled={busy || ((dialog.kind === "text" || dialog.kind === "page") && !value.trim())} onClick={() => void submit()}>
-              {busy ? "Bitte warten …" : dialog.kind === "confirm" ? "Löschen" : "Speichern"}
+              {busy ? text("Please wait…", "Bitte warten…") : dialog.kind === "confirm" ? text("Delete", "Löschen") : text("Save", "Speichern")}
             </button>
           </div>
         </footer>

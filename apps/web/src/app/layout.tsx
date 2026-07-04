@@ -8,12 +8,12 @@ const lora = Lora({ subsets: ["latin"], variable: "--font-serif" });
 
 export const metadata: Metadata = {
   title: "Atlas Docs",
-  description: "Kollaboratives Wissen, Markdown und visuelle Arbeitsflächen.",
+  description: "Collaborative knowledge, Markdown, and visual workspaces.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="de">
+    <html lang="en" suppressHydrationWarning>
       <body className={`${inter.variable} ${lora.variable}`}>{children}</body>
     </html>
   );
