@@ -1,15 +1,21 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { resolveCollaborationUrl } from "@/lib/runtime-config";
 
-export async function GET() {
-  const collaborationUrl = process.env.PUBLIC_COLLAB_URL || "ws://localhost:30003";
-  let parsed: URL;
+export async function GET(request: NextRequest) {
   try {
-    parsed = new URL(collaborationUrl);
-  } catch {
-    return NextResponse.json({ error: "PUBLIC_COLLAB_URL ist ungültig" }, { status: 500 });
+    const collaborationUrl = resolveCollaborationUrl({
+      configuredUrl: process.env.PUBLIC_COLLAB_URL,
+      forwardedHost: request.headers.get("x-forwarded-host"),
+      host: request.headers.get("host"),
+      forwardedProtocol: request.headers.get("x-forwarded-proto"),
+      requestProtocol: request.nextUrl.protocol,
+      publicPort: process.env.PUBLIC_COLLAB_PORT,
+    });
+    return NextResponse.json({ collaborationUrl });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Collaboration configuration is invalid." },
+      { status: 500 },
+    );
   }
-  if (parsed.protocol !== "ws:" && parsed.protocol !== "wss:") {
-    return NextResponse.json({ error: "PUBLIC_COLLAB_URL muss ws:// oder wss:// verwenden" }, { status: 500 });
-  }
-  return NextResponse.json({ collaborationUrl: parsed.toString().replace(/\/$/, "") });
 }

@@ -21,7 +21,8 @@ services:
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
       COLLAB_SECRET: ${AUTH_SECRET}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-      PUBLIC_COLLAB_URL: ${COLLAB_PUBLIC_URL:-ws://localhost:30003}
+      PUBLIC_COLLAB_URL: ${COLLAB_PUBLIC_URL:-}
+      PUBLIC_COLLAB_PORT: ${COLLAB_PORT:-30003}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
       interval: 10s

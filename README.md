@@ -47,6 +47,11 @@ POSTGRES_PASSWORD=replace-with-a-long-random-password
 DATABASE_URL=postgresql://atlas:replace-with-a-long-random-password@postgres:5432/atlas
 ```
 
+For access from another computer, also replace `localhost` in `APP_URL` with the
+server's LAN address or DNS name. Leave `COLLAB_PUBLIC_URL` empty for a direct
+installation; Atlas then uses the hostname opened in the browser and
+`COLLAB_PORT` automatically.
+
 Start the pinned release:
 
 ```bash
@@ -56,6 +61,39 @@ docker compose ps
 ```
 
 Atlas Docs is available on `http://SERVER_IP:30002` with the default configuration. The one-shot `migrate` service applies all database migrations before the web and collaboration services start.
+
+## Offline deployment
+
+Atlas Docs does not require internet access at runtime. Prepare the images once
+on a computer with internet access, then transfer the archive, `compose.yml`, and
+your `.env` file to the offline server:
+
+```bash
+docker pull timo348/atlas-docs-web:1.2.1
+docker pull timo348/atlas-docs-collab:1.2.1
+docker pull timo348/atlas-docs-migrate:1.2.1
+docker pull postgres:17-alpine
+docker pull redis:7.4-alpine
+docker save -o atlas-docs-1.2.1-offline.tar \
+  timo348/atlas-docs-web:1.2.1 \
+  timo348/atlas-docs-collab:1.2.1 \
+  timo348/atlas-docs-migrate:1.2.1 \
+  postgres:17-alpine \
+  redis:7.4-alpine
+```
+
+On the offline server, load and start the transferred images without pulling or
+building anything:
+
+```bash
+docker load -i atlas-docs-1.2.1-offline.tar
+docker compose up -d --no-build --pull never
+docker compose ps
+```
+
+Set `APP_URL` to the server's reachable LAN URL and keep
+`COLLAB_PUBLIC_URL=` empty. Ports `WEB_PORT` and `COLLAB_PORT` must be reachable
+from the local network. No public DNS or internet connection is required.
 
 ## Services
 
@@ -75,11 +113,11 @@ The complete template is in [`.env.example`](.env.example).
 
 | Variable | Default/example | Purpose |
 | --- | --- | --- |
-| `ATLAS_VERSION` | `1.2.0` | Release tag used for all three Atlas Docs images |
+| `ATLAS_VERSION` | `1.2.1` | Release tag used for all three Atlas Docs images |
 | `APP_URL` | `http://localhost:30002` | Browser-facing web URL |
 | `WEB_PORT` | `30002` | Host port for the web service |
 | `COLLAB_PORT` | `30003` | Host port for the collaboration service |
-| `COLLAB_PUBLIC_URL` | `ws://localhost:30003` | Browser-facing collaboration WebSocket URL |
+| `COLLAB_PUBLIC_URL` | empty (automatic) | Optional browser-facing WebSocket URL override |
 | `AUTH_MODE` | `local` | `local`, `oidc`, or `both` |
 | `AUTH_SECRET` | — | Shared secret for authentication and collaboration tokens |
 | `ADMIN_NAME` | `Administrator` | Initial administrator display name |
@@ -88,7 +126,11 @@ The complete template is in [`.env.example`](.env.example).
 | `DATABASE_URL` | — | Internal PostgreSQL connection URL |
 | `REDIS_URL` | `redis://redis:6379` | Internal Redis connection URL |
 
-`APP_URL` and `COLLAB_PUBLIC_URL` must always be URLs that the user's browser can reach. Use `https://` and `wss://` values when the surrounding server infrastructure terminates TLS.
+`APP_URL` must be a URL that the user's browser can reach. With an empty
+`COLLAB_PUBLIC_URL`, Atlas derives `ws://CURRENT_HOST:COLLAB_PORT` (or `wss://`
+for HTTPS) from each request, which works with LAN IP addresses and without
+internet access. Set an explicit `COLLAB_PUBLIC_URL` when a reverse proxy exposes
+the collaboration service on a different hostname, port, or path.
 
 The initial administrator password is only used when the account does not exist yet.
 
@@ -185,3 +227,7 @@ docker compose build
 - [Atlas Docs web](https://hub.docker.com/r/timo348/atlas-docs-web)
 - [Atlas Docs collaboration](https://hub.docker.com/r/timo348/atlas-docs-collab)
 - [Atlas Docs migrations](https://hub.docker.com/r/timo348/atlas-docs-migrate)
+
+## License
+
+Atlas Docs is licensed under the [Apache License 2.0](LICENSE).
