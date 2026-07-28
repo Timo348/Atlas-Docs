@@ -1,0 +1,396 @@
+name: Publish containers
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact package.json version (for example, 1.2.1)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: release-${{ github.event_name }}-${{ github.ref_name }}-${{ inputs.version }}
+  cancel-in-progress: false
+
+env:
+  DOCKERHUB_NAMESPACE: timo348
+
+jobs:
+  validate-release:
+    name: Validate release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      major: ${{ steps.release.outputs.major }}
+      minor: ${{ steps.release.outputs.minor }}
+      owner_lc: ${{ steps.release.outputs.owner_lc }}
+      created: ${{ steps.release.outputs.created }}
+      dockerhub_enabled: ${{ steps.release.outputs.dockerhub_enabled }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Validate version and registry configuration
+        id: release
+        shell: bash
+        env:
+          DISPATCH_VERSION: ${{ inputs.version }}
+          DOCKERHUB_USERNAME_VALUE: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN_VALUE: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          package_version="$(node -p "require('./package.json').version")"
+          if [[ ! "$package_version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error file=package.json::version must be a stable SemVer value in MAJOR.MINOR.PATCH form"
+            exit 1
+          fi
+
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            expected_tag="v${package_version}"
+            if [[ "$GITHUB_REF_TYPE" != "tag" || "$GITHUB_REF_NAME" != "$expected_tag" ]]; then
+              echo "::error::Release tag '$GITHUB_REF_NAME' must exactly equal '$expected_tag'"
+              exit 1
+            fi
+          elif [[ "$DISPATCH_VERSION" != "$package_version" ]]; then
+            echo "::error::workflow_dispatch version '$DISPATCH_VERSION' must exactly equal package.json version '$package_version'"
+            exit 1
+          fi
+
+          major="${package_version%%.*}"
+          remainder="${package_version#*.}"
+          minor="${remainder%%.*}"
+          owner_lc="$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
+          created="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+
+          dockerhub_enabled=false
+          if [[ -n "$DOCKERHUB_USERNAME_VALUE" && -n "$DOCKERHUB_TOKEN_VALUE" ]]; then
+            dockerhub_enabled=true
+            echo "Docker Hub publishing is enabled." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::notice::Docker Hub publishing skipped because both DOCKERHUB_USERNAME and DOCKERHUB_TOKEN secrets are required."
+            echo "Docker Hub publishing is skipped; define both \`DOCKERHUB_USERNAME\` and \`DOCKERHUB_TOKEN\` repository secrets to enable it." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          {
+            echo "version=$package_version"
+            echo "major=$major"
+            echo "minor=$minor"
+            echo "owner_lc=$owner_lc"
+            echo "created=$created"
+            echo "dockerhub_enabled=$dockerhub_enabled"
+          } >> "$GITHUB_OUTPUT"
+
+  validate-application:
+    name: Validate application
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+  publish-immutable:
+    name: Stage ${{ matrix.service }} SHA image
+    needs:
+      - validate-release
+      - validate-application
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: web
+            target: web
+            title: Atlas Docs Web
+          - service: collab
+            target: collab
+            title: Atlas Docs Collaboration
+          - service: migrate
+            target: tools
+            title: Atlas Docs Migration Tools
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Enable multi-platform emulation
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to Docker Hub
+        if: needs.validate-release.outputs.dockerhub_enabled == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Prepare SHA tags and OCI labels
+        id: metadata
+        shell: bash
+        env:
+          SERVICE: ${{ matrix.service }}
+          IMAGE_TITLE: ${{ matrix.title }}
+          VERSION: ${{ needs.validate-release.outputs.version }}
+          OWNER_LC: ${{ needs.validate-release.outputs.owner_lc }}
+          CREATED: ${{ needs.validate-release.outputs.created }}
+          DOCKERHUB_ENABLED: ${{ needs.validate-release.outputs.dockerhub_enabled }}
+        run: |
+          set -euo pipefail
+
+          ghcr_image="ghcr.io/${OWNER_LC}/atlas-docs-${SERVICE}"
+          {
+            echo "tags<<TAGS"
+            echo "${ghcr_image}:sha-${GITHUB_SHA}"
+            if [[ "$DOCKERHUB_ENABLED" == "true" ]]; then
+              echo "${DOCKERHUB_NAMESPACE}/atlas-docs-${SERVICE}:sha-${GITHUB_SHA}"
+            fi
+            echo "TAGS"
+            echo "labels<<LABELS"
+            echo "org.opencontainers.image.created=${CREATED}"
+            echo "org.opencontainers.image.source=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"
+            echo "org.opencontainers.image.url=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"
+            echo "org.opencontainers.image.documentation=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/blob/${GITHUB_SHA}/README.md"
+            echo "org.opencontainers.image.version=${VERSION}"
+            echo "org.opencontainers.image.revision=${GITHUB_SHA}"
+            echo "org.opencontainers.image.vendor=Timo348"
+            echo "org.opencontainers.image.licenses=Apache-2.0"
+            echo "org.opencontainers.image.title=${IMAGE_TITLE}"
+            echo "org.opencontainers.image.description=Self-hosted Atlas Docs ${SERVICE} service"
+            echo "LABELS"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build and publish staged multi-platform image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: ${{ matrix.target }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha,scope=release-${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=release-${{ matrix.service }}
+
+      - name: Record staged digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          SERVICE: ${{ matrix.service }}
+        run: echo "- **${SERVICE}** staged SHA digest \`${DIGEST}\`" >> "$GITHUB_STEP_SUMMARY"
+
+  promote-floating:
+    name: Promote version, major, minor, and latest tags
+    needs:
+      - validate-release
+      - publish-immutable
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to Docker Hub
+        if: needs.validate-release.outputs.dockerhub_enabled == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Verify every staged SHA image before promotion
+        shell: bash
+        env:
+          VERSION: ${{ needs.validate-release.outputs.version }}
+          OWNER_LC: ${{ needs.validate-release.outputs.owner_lc }}
+          DOCKERHUB_ENABLED: ${{ needs.validate-release.outputs.dockerhub_enabled }}
+        run: |
+          set -euo pipefail
+
+          verify_image() {
+            local image_ref="$1"
+            local raw_manifest
+            raw_manifest="$(docker buildx imagetools inspect --raw "$image_ref")"
+            if ! jq -e '
+              [.manifests[]? | select(.platform.os == "linux") | .platform.architecture] as $architectures
+              | (($architectures | index("amd64")) != null)
+                and (($architectures | index("arm64")) != null)
+            ' <<< "$raw_manifest" > /dev/null; then
+              echo "::error::${image_ref} does not contain both linux/amd64 and linux/arm64"
+              return 1
+            fi
+          }
+
+          for service in web collab migrate; do
+            verify_image "ghcr.io/${OWNER_LC}/atlas-docs-${service}:sha-${GITHUB_SHA}"
+          done
+
+          if [[ "$DOCKERHUB_ENABLED" == "true" ]]; then
+            for service in web collab migrate; do
+              verify_image "${DOCKERHUB_NAMESPACE}/atlas-docs-${service}:sha-${GITHUB_SHA}"
+            done
+          fi
+
+      - name: Protect immutable version tags
+        shell: bash
+        env:
+          VERSION: ${{ needs.validate-release.outputs.version }}
+          OWNER_LC: ${{ needs.validate-release.outputs.owner_lc }}
+          DOCKERHUB_ENABLED: ${{ needs.validate-release.outputs.dockerhub_enabled }}
+        run: |
+          set -euo pipefail
+
+          revision_matches() {
+            local image_ref="$1"
+            local repository="${image_ref%:*}"
+            local raw_manifest
+            local platform_count=0
+            local revision
+
+            raw_manifest="$(docker buildx imagetools inspect --raw "$image_ref")"
+            while IFS= read -r manifest_digest; do
+              [[ -n "$manifest_digest" ]] || continue
+              platform_count=$((platform_count + 1))
+              revision="$(
+                docker buildx imagetools inspect \
+                  "${repository}@${manifest_digest}" \
+                  --format '{{json .Image.Config.Labels}}' \
+                  | jq -r '."org.opencontainers.image.revision" // empty'
+              )"
+              if [[ "$revision" != "$GITHUB_SHA" ]]; then
+                return 1
+              fi
+            done < <(
+              jq -r '
+                .manifests[]?
+                | select(
+                    .platform.os == "linux"
+                    and (
+                      .platform.architecture == "amd64"
+                      or .platform.architecture == "arm64"
+                    )
+                  )
+                | .digest
+              ' <<< "$raw_manifest"
+            )
+            [[ "$platform_count" -eq 2 ]]
+          }
+
+          assert_version_publishable() {
+            local image="$1"
+            local version_ref="${image}:${VERSION}"
+            if ! docker buildx imagetools inspect "$version_ref" > /dev/null 2>&1; then
+              return 0
+            fi
+            if revision_matches "$version_ref"; then
+              echo "::notice::Reusing ${version_ref}; it already belongs to commit ${GITHUB_SHA}."
+              return 0
+            fi
+            echo "::error::Immutable version tag belongs to another revision: ${version_ref}"
+            return 1
+          }
+
+          for service in web collab migrate; do
+            assert_version_publishable "ghcr.io/${OWNER_LC}/atlas-docs-${service}"
+          done
+
+          if [[ "$DOCKERHUB_ENABLED" == "true" ]]; then
+            for service in web collab migrate; do
+              assert_version_publishable "${DOCKERHUB_NAMESPACE}/atlas-docs-${service}"
+            done
+          fi
+
+      - name: Promote release tags after the all-service gate
+        shell: bash
+        env:
+          VERSION: ${{ needs.validate-release.outputs.version }}
+          MAJOR: ${{ needs.validate-release.outputs.major }}
+          MINOR: ${{ needs.validate-release.outputs.minor }}
+          OWNER_LC: ${{ needs.validate-release.outputs.owner_lc }}
+          DOCKERHUB_ENABLED: ${{ needs.validate-release.outputs.dockerhub_enabled }}
+        run: |
+          set -euo pipefail
+
+          promote_image() {
+            local image="$1"
+            docker buildx imagetools create \
+              --tag "${image}:${VERSION}" \
+              --tag "${image}:${MAJOR}" \
+              --tag "${image}:${MAJOR}.${MINOR}" \
+              --tag "${image}:latest" \
+              "${image}:sha-${GITHUB_SHA}"
+          }
+
+          for service in web collab migrate; do
+            promote_image "ghcr.io/${OWNER_LC}/atlas-docs-${service}"
+          done
+
+          if [[ "$DOCKERHUB_ENABLED" == "true" ]]; then
+            for service in web collab migrate; do
+              promote_image "${DOCKERHUB_NAMESPACE}/atlas-docs-${service}"
+            done
+          fi
+
+          {
+            echo "All three services passed the staged-image gate."
+            echo ""
+            echo "Promoted release tags: \`${VERSION}\`, \`${MAJOR}\`, \`${MAJOR}.${MINOR}\`, and \`latest\`."
+          } >> "$GITHUB_STEP_SUMMARY"

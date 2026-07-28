@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Check, ImagePlus, Users, X } from "lucide-react";
+import { Check, ImagePlus, Trash2, Users, X } from "lucide-react";
+import { usePreferences } from "@/components/preferences-provider";
 
 type Role = "OWNER" | "EDITOR" | "VIEWER";
 type UserOption = { id: string; name: string | null; email: string };
@@ -24,17 +25,21 @@ export function SpacePermissionsDialog({
   spaceId,
   currentUserId,
   onClose,
+  onDeleted,
 }: {
   spaceId: string;
   currentUserId: string;
   onClose: () => void;
+  onDeleted: () => void;
 }) {
+  const { text } = usePreferences();
   const [data, setData] = useState<PermissionsData | null>(null);
-  const [tab, setTab] = useState<"users" | "teams" | "image">("users");
+  const [tab, setTab] = useState<"users" | "teams" | "image" | "delete">("users");
   const [userRoles, setUserRoles] = useState<Record<string, Role | "NONE">>({});
   const [teamRoles, setTeamRoles] = useState<Record<string, "EDITOR" | "VIEWER" | "NONE">>({});
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imageVersion, setImageVersion] = useState(Date.now());
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -103,17 +108,41 @@ export function SpacePermissionsDialog({
     setData((current) => current ? { ...current, space: { ...current.space, imageMime: null } } : current);
   }
 
+  async function deleteSpace() {
+    if (!data || deleteConfirmation !== data.space.name) return;
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/spaces/${spaceId}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmation: deleteConfirmation }),
+      });
+      if (response.ok) {
+        onDeleted();
+        return;
+      }
+      const result = await response.json();
+      setError(result.error || text("Space could not be deleted.", "Bereich konnte nicht gelöscht werden."));
+    } catch {
+      setError(text("Space could not be deleted.", "Bereich konnte nicht gelöscht werden."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
-    <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+    <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !busy && onClose()}>
       <section className="permissions-dialog" role="dialog" aria-modal="true" aria-labelledby="permissions-title">
         <header className="dialog-header">
           <div><span className="dialog-kicker">Bereich verwalten</span><h2 id="permissions-title">{data?.space.name || "Bereich"}</h2></div>
-          <button className="icon-button" onClick={onClose} aria-label="Schließen"><X size={19} /></button>
+          <button className="icon-button" disabled={busy} onClick={onClose} aria-label={text("Close", "Schließen")}><X size={19} /></button>
         </header>
         <div className="dialog-tabs">
           <button className={tab === "users" ? "active" : ""} onClick={() => setTab("users")}>Nutzer</button>
           <button className={tab === "teams" ? "active" : ""} onClick={() => setTab("teams")}>Teams</button>
           <button className={tab === "image" ? "active" : ""} onClick={() => setTab("image")}>Bereichsbild</button>
+          <button className={tab === "delete" ? "active danger-tab" : "danger-tab"} onClick={() => setTab("delete")}>{text("Delete", "Löschen")}</button>
         </div>
         <div className="permissions-body">
           {!data && !error && <p className="muted-copy">Einstellungen werden geladen …</p>}
@@ -169,12 +198,49 @@ export function SpacePermissionsDialog({
               </div>
             </div>
           )}
+          {data && tab === "delete" && (
+            <div className="space-delete-panel">
+              <div className="space-delete-heading">
+                <span><Trash2 size={20} /></span>
+                <div>
+                  <h3>{text("Permanently delete space", "Bereich dauerhaft löschen")}</h3>
+                  <p>{text(
+                    "All pages, folders, images, versions, and permissions in this space will be permanently deleted.",
+                    "Alle Seiten, Ordner, Bilder, Versionen und Freigaben in diesem Bereich werden unwiderruflich gelöscht.",
+                  )}</p>
+                </div>
+              </div>
+              <label>
+                {text("Enter", "Gib")} <strong>{data.space.name}</strong> {text("to confirm.", "zur Bestätigung ein.")}
+                <input
+                  autoFocus
+                  value={deleteConfirmation}
+                  onChange={(event) => setDeleteConfirmation(event.target.value)}
+                  disabled={busy}
+                />
+              </label>
+              <button
+                className="button danger-button compact"
+                disabled={busy || deleteConfirmation !== data.space.name}
+                onClick={() => void deleteSpace()}
+              >
+                <Trash2 size={15} />
+                {busy
+                  ? text("Deleting space …", "Bereich wird gelöscht …")
+                  : text("Permanently delete space", "Bereich endgültig löschen")}
+              </button>
+            </div>
+          )}
         </div>
         <footer className="dialog-footer">
-          <span><Check size={14} /> Änderungen gelten für den gesamten Bereich.</span>
+          <span>
+            {tab === "delete"
+              ? <><Trash2 size={14} /> {text("Deletion cannot be undone.", "Löschen kann nicht rückgängig gemacht werden.")}</>
+              : <><Check size={14} /> Änderungen gelten für den gesamten Bereich.</>}
+          </span>
           <div>
-            <button className="button secondary-button compact" onClick={onClose}>Abbrechen</button>
-            {tab !== "image" && <button className="button primary-button compact" disabled={busy || !data} onClick={savePermissions}>{busy ? "Speichern …" : "Rechte speichern"}</button>}
+            <button className="button secondary-button compact" disabled={busy} onClick={onClose}>{text("Cancel", "Abbrechen")}</button>
+            {tab !== "image" && tab !== "delete" && <button className="button primary-button compact" disabled={busy || !data} onClick={savePermissions}>{busy ? "Speichern …" : "Rechte speichern"}</button>}
           </div>
         </footer>
       </section>

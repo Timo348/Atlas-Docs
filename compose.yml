@@ -2,11 +2,9 @@ name: atlas-docs
 
 services:
   web:
-    image: timo348/atlas-docs-web:${ATLAS_VERSION:-latest}
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: web
+    image: ${ATLAS_IMAGE_REGISTRY:-docker.io/timo348}/atlas-docs-web:${ATLAS_VERSION:-1.3.0}
+    pull_policy: missing
+    init: true
     restart: unless-stopped
     ports:
       - "${WEB_PORT:-30002}:3000"
@@ -23,8 +21,19 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       PUBLIC_COLLAB_URL: ${COLLAB_PUBLIC_URL:-}
       PUBLIC_COLLAB_PORT: ${COLLAB_PORT:-30003}
+      NODE_EXTRA_CA_CERTS: ${NODE_EXTRA_CA_CERTS:-}
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
       interval: 10s
       timeout: 3s
       retries: 12
@@ -35,11 +44,9 @@ services:
         condition: service_healthy
 
   collab:
-    image: timo348/atlas-docs-collab:${ATLAS_VERSION:-latest}
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: collab
+    image: ${ATLAS_IMAGE_REGISTRY:-docker.io/timo348}/atlas-docs-collab:${ATLAS_VERSION:-1.3.0}
+    pull_policy: missing
+    init: true
     restart: unless-stopped
     ports:
       - "${COLLAB_PORT:-30003}:1234"
@@ -49,8 +56,19 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       COLLAB_SECRET: ${AUTH_SECRET}
+      NODE_EXTRA_CA_CERTS: ${NODE_EXTRA_CA_CERTS:-}
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:1234/health"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:1234/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
       interval: 10s
       timeout: 3s
       retries: 12
@@ -61,24 +79,33 @@ services:
         condition: service_healthy
 
   migrate:
-    image: timo348/atlas-docs-migrate:${ATLAS_VERSION:-latest}
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: tools
+    image: ${ATLAS_IMAGE_REGISTRY:-docker.io/timo348}/atlas-docs-migrate:${ATLAS_VERSION:-1.3.0}
+    pull_policy: missing
+    init: true
     restart: "no"
     environment:
       DATABASE_URL: ${DATABASE_URL}
       ADMIN_NAME: ${ADMIN_NAME:-Administrator}
       ADMIN_EMAIL: ${ADMIN_EMAIL}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
-    command: ["sh", "-c", "npx prisma migrate deploy && npm run db:seed"]
+      NODE_EXTRA_CA_CERTS: ${NODE_EXTRA_CA_CERTS:-}
+    command:
+      [
+        "sh",
+        "-c",
+        "./node_modules/.bin/prisma migrate deploy && ./node_modules/.bin/tsx prisma/seed.ts",
+      ]
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       postgres:
         condition: service_healthy
 
   postgres:
-    image: postgres:17-alpine
+    image: ${POSTGRES_IMAGE:-docker.io/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193}
+    pull_policy: missing
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-atlas}
@@ -93,7 +120,8 @@ services:
       retries: 20
 
   redis:
-    image: redis:7.4-alpine
+    image: ${REDIS_IMAGE:-docker.io/library/redis:7.4-alpine@sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2}
+    pull_policy: missing
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
     volumes:

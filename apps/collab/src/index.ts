@@ -3,6 +3,7 @@ import { Database } from "@hocuspocus/extension-database";
 import { Redis } from "@hocuspocus/extension-redis";
 import { Server } from "@hocuspocus/server";
 import { verifyCollaborationToken } from "./auth.js";
+import { pageIdFromDocumentName } from "./document-name.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 const secret = process.env.COLLAB_SECRET;
@@ -34,10 +35,18 @@ const server = new Server({
         return document ? new Uint8Array(document.data) : null;
       },
       store: async ({ documentName, state }) => {
-        await prisma.collabDocument.upsert({
-          where: { name: documentName },
-          update: { data: Buffer.from(state) },
-          create: { name: documentName, data: Buffer.from(state) },
+        const pageId = pageIdFromDocumentName(documentName);
+        if (!pageId) return;
+        await prisma.$transaction(async (transaction) => {
+          const pages = await transaction.$queryRaw<{ id: string }[]>`
+            SELECT "id" FROM "Page" WHERE "id" = ${pageId} FOR KEY SHARE
+          `;
+          if (pages.length === 0) return;
+          await transaction.collabDocument.upsert({
+            where: { name: documentName },
+            update: { data: Buffer.from(state) },
+            create: { name: documentName, data: Buffer.from(state) },
+          });
         });
       },
     }),

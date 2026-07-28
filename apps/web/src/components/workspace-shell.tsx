@@ -7,7 +7,7 @@ import { type DragEvent, useState } from "react";
 import {
   BookOpen, ChevronDown, ChevronRight, FileCode2, FilePlus2, FileText, Folder,
   FolderPlus, GripVertical, LogOut, MoreHorizontal, PanelLeftClose, PanelLeftOpen,
-  Pencil, Plus, Search, ShieldCheck, Trash2, Users, X,
+  Pencil, Plus, Search, Settings2, ShieldCheck, Trash2, Users, X,
 } from "lucide-react";
 import { CollaborativeEditor } from "@/components/collaborative-editor";
 import { usePreferences } from "@/components/preferences-provider";
@@ -287,8 +287,14 @@ export function WorkspaceShell({
             <div className="space-toolbar">
               <span>{roleLabel(activeSpace.role, preferences.language)}</span>
               {(activeSpace.role === "OWNER" || user.role === "ADMIN") && (
-                <button className="icon-button tiny" onClick={() => setPermissionsOpen(true)} title={text("Space permissions", "Bereichsrechte")}>
-                  <Users size={16} />
+                <button
+                  className="space-manage-button"
+                  onClick={() => setPermissionsOpen(true)}
+                  title={text("Manage space", "Bereich verwalten")}
+                  aria-label={text("Manage space", "Bereich verwalten")}
+                >
+                  <Settings2 size={14} />
+                  <span>{text("Manage", "Verwalten")}</span>
                 </button>
               )}
             </div>
@@ -390,6 +396,11 @@ export function WorkspaceShell({
           currentUserId={user.id}
           onClose={() => {
             setPermissionsOpen(false);
+            router.refresh();
+          }}
+          onDeleted={() => {
+            setPermissionsOpen(false);
+            router.replace("/");
             router.refresh();
           }}
         />

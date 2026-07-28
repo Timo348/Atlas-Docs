@@ -5,3 +5,4 @@ node_modules
 .git
 .env
 coverage
+apps/web/public/excalidraw-assets

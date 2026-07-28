@@ -1,5 +1,6 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
+import type { Prisma } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { strongestSpaceRole } from "@/lib/space-role";
@@ -27,13 +28,19 @@ export async function pageAccess(userId: string, pageId: string) {
   return role ? { ...page, accessRole: role } : null;
 }
 
-export async function spaceAccess(userId: string, spaceId: string) {
+type SpaceAccessClient = Pick<Prisma.TransactionClient, "membership" | "spaceTeamAccess">;
+
+export async function spaceAccess(
+  userId: string,
+  spaceId: string,
+  client: SpaceAccessClient = db,
+) {
   const [direct, teamGrants] = await Promise.all([
-    db.membership.findUnique({
+    client.membership.findUnique({
       where: { userId_spaceId: { userId, spaceId } },
       select: { role: true },
     }),
-    db.spaceTeamAccess.findMany({
+    client.spaceTeamAccess.findMany({
       where: {
         spaceId,
         team: {

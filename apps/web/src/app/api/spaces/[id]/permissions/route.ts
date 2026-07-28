@@ -77,7 +77,23 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
     return NextResponse.json({ error: "Benutzer oder Team nicht gefunden" }, { status: 400 });
   }
 
-  await db.$transaction(async (tx) => {
+  const outcome = await db.$transaction(async (tx) => {
+    const spaces = await tx.$queryRaw<{ id: string }[]>`
+      SELECT "id"
+      FROM "Space"
+      WHERE "id" = ${id}
+      FOR UPDATE
+    `;
+    if (!spaces.length) return "not-found" as const;
+
+    const current = await tx.user.findFirst({
+      where: { id: user.id, active: true },
+      select: { id: true, role: true },
+    });
+    if (!current || (current.role !== "ADMIN" && await spaceAccess(current.id, id, tx) !== "OWNER")) {
+      return "forbidden" as const;
+    }
+
     await tx.membership.deleteMany({ where: { spaceId: id, userId: { not: user.id } } });
     await tx.membership.upsert({
       where: { userId_spaceId: { userId: user.id, spaceId: id } },
@@ -95,6 +111,16 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
         data: parsed.data.teams.map((grant) => ({ teamId: grant.id, spaceId: id, role: grant.role })),
       });
     }
+    return "updated" as const;
   });
+  if (outcome === "not-found") {
+    return NextResponse.json({ error: "Bereich nicht gefunden" }, { status: 404 });
+  }
+  if (outcome === "forbidden") {
+    return NextResponse.json(
+      { error: "Nur Bereichseigentümer dürfen Rechte verwalten" },
+      { status: 403 },
+    );
+  }
   return NextResponse.json({ ok: true });
 }

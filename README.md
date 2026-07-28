@@ -12,6 +12,7 @@ Atlas Docs is a self-hosted collaborative knowledge platform for Markdown, LaTeX
 - Shared Excalidraw canvases and live collaborator cursors
 - Manual document versions with full text and canvas restoration
 - Nested folders, persistent drag-and-drop ordering, spaces, teams, and role-based access
+- Owner/admin space deletion with exact-name confirmation and complete content cleanup
 - Local accounts, generic OpenID Connect/Authentik, or both sign-in methods
 - Per-user language, color theme, interface font, editor font, text size, compact navigation, and profile image
 - English interface by default with an optional German interface
@@ -52,7 +53,8 @@ server's LAN address or DNS name. Leave `COLLAB_PUBLIC_URL` empty for a direct
 installation; Atlas then uses the hostname opened in the browser and
 `COLLAB_PORT` automatically.
 
-Start the pinned release:
+Start the pinned release. The production Compose file is image-only and never
+builds source code on the target host:
 
 ```bash
 docker compose pull
@@ -62,32 +64,51 @@ docker compose ps
 
 Atlas Docs is available on `http://SERVER_IP:30002` with the default configuration. The one-shot `migrate` service applies all database migrations before the web and collaboration services start.
 
-## Offline deployment
+## Registry-only and offline deployment
 
-Atlas Docs does not require internet access at runtime. Prepare the images once
-on a computer with internet access, then transfer the archive, `compose.yml`, and
-your `.env` file to the offline server:
+Atlas Docs does not require public internet access at runtime. All browser assets,
+including the complete Excalidraw and LaTeX font sets, are served by the web
+container. The application only talks to PostgreSQL, Redis, the collaboration
+service, and, when enabled, your configured internal OIDC provider.
+
+The default image source is Docker Hub. To use the identical GHCR release, set:
 
 ```bash
-docker pull timo348/atlas-docs-web:1.2.1
-docker pull timo348/atlas-docs-collab:1.2.1
-docker pull timo348/atlas-docs-migrate:1.2.1
-docker pull postgres:17-alpine
-docker pull redis:7.4-alpine
-docker save -o atlas-docs-1.2.1-offline.tar \
-  timo348/atlas-docs-web:1.2.1 \
-  timo348/atlas-docs-collab:1.2.1 \
-  timo348/atlas-docs-migrate:1.2.1 \
-  postgres:17-alpine \
-  redis:7.4-alpine
+ATLAS_IMAGE_REGISTRY=ghcr.io/timo348
 ```
 
-On the offline server, load and start the transferred images without pulling or
-building anything:
+An internal registry or pull-through cache can be selected without editing
+Compose. Set `ATLAS_IMAGE_REGISTRY`, `POSTGRES_IMAGE`, and `REDIS_IMAGE` to the
+paths used by that registry. The defaults only reference Docker Hub; the Atlas
+application images are also published to GHCR.
+
+For a registry-connected server, pull while registry access is available and
+then start with pulls and builds disabled:
 
 ```bash
-docker load -i atlas-docs-1.2.1-offline.tar
-docker compose up -d --no-build --pull never
+docker compose pull
+docker compose -f compose.yml -f compose.airgap.yml up -d --no-build
+docker compose ps
+```
+
+For a physically disconnected server, prepare a bundle on a connected machine:
+
+```bash
+cp .env.example .env
+# Edit .env before resolving the exact image list.
+docker compose config --images > atlas-docs-1.3.0-images.txt
+xargs -a atlas-docs-1.3.0-images.txt -n 1 docker pull
+docker save -o atlas-docs-1.3.0-offline.tar $(cat atlas-docs-1.3.0-images.txt)
+sha256sum atlas-docs-1.3.0-offline.tar > atlas-docs-1.3.0-offline.tar.sha256
+```
+
+Transfer the archive, checksum, `compose.yml`, `compose.airgap.yml`, and `.env`.
+Then load and start without any network access:
+
+```bash
+sha256sum -c atlas-docs-1.3.0-offline.tar.sha256
+docker load -i atlas-docs-1.3.0-offline.tar
+docker compose -f compose.yml -f compose.airgap.yml up -d --no-build
 docker compose ps
 ```
 
@@ -99,11 +120,11 @@ from the local network. No public DNS or internet connection is required.
 
 | Service | Purpose | Image |
 | --- | --- | --- |
-| `web` | Next.js interface, API, authentication, and editors | `timo348/atlas-docs-web` |
-| `collab` | Hocuspocus/Yjs collaboration service | `timo348/atlas-docs-collab` |
-| `migrate` | Database migrations and initial administrator seed | `timo348/atlas-docs-migrate` |
-| `postgres` | Durable application and document data | `postgres:17-alpine` |
-| `redis` | Collaboration synchronization and shared runtime state | `redis:7.4-alpine` |
+| `web` | Next.js interface, API, authentication, and editors | `${ATLAS_IMAGE_REGISTRY}/atlas-docs-web` |
+| `collab` | Hocuspocus/Yjs collaboration service | `${ATLAS_IMAGE_REGISTRY}/atlas-docs-collab` |
+| `migrate` | Database migrations and initial administrator seed | `${ATLAS_IMAGE_REGISTRY}/atlas-docs-migrate` |
+| `postgres` | Durable application and document data | `${POSTGRES_IMAGE}` |
+| `redis` | Collaboration synchronization and shared runtime state | `${REDIS_IMAGE}` |
 
 The Compose stack exposes the application services directly. TLS, DNS, firewalls, load balancing, and any edge routing belong to the server administrator's infrastructure and are intentionally not included in this project.
 
@@ -113,7 +134,10 @@ The complete template is in [`.env.example`](.env.example).
 
 | Variable | Default/example | Purpose |
 | --- | --- | --- |
-| `ATLAS_VERSION` | `1.2.1` | Release tag used for all three Atlas Docs images |
+| `ATLAS_IMAGE_REGISTRY` | `docker.io/timo348` | Atlas image prefix; use `ghcr.io/timo348` or an internal mirror |
+| `ATLAS_VERSION` | `1.3.0` | Exact release tag used for all three Atlas Docs images |
+| `POSTGRES_IMAGE` | pinned Docker Hub digest | PostgreSQL image, overridable for an internal registry |
+| `REDIS_IMAGE` | pinned Docker Hub digest | Redis image, overridable for an internal registry |
 | `APP_URL` | `http://localhost:30002` | Browser-facing web URL |
 | `WEB_PORT` | `30002` | Host port for the web service |
 | `COLLAB_PORT` | `30003` | Host port for the collaboration service |
@@ -125,6 +149,7 @@ The complete template is in [`.env.example`](.env.example).
 | `ADMIN_PASSWORD` | — | Initial administrator password |
 | `DATABASE_URL` | — | Internal PostgreSQL connection URL |
 | `REDIS_URL` | `redis://redis:6379` | Internal Redis connection URL |
+| `NODE_EXTRA_CA_CERTS` | empty | Optional in-container path to a mounted corporate CA bundle |
 
 `APP_URL` must be a URL that the user's browser can reach. With an empty
 `COLLAB_PUBLIC_URL`, Atlas derives `ws://CURRENT_HOST:COLLAB_PORT` (or `wss://`
@@ -161,6 +186,9 @@ OIDC_CLIENT_SECRET=...
 ```
 
 `AUTH_MODE=both` keeps local sign-in available. `AUTH_MODE=oidc` only exposes OpenID Connect sign-in.
+The issuer, discovery, JWKS, and token endpoints must be reachable inside the
+company network. For a private CA, mount the CA bundle with a small Compose
+override and set `NODE_EXTRA_CA_CERTS` to its in-container path.
 
 ## Operations
 
@@ -216,10 +244,12 @@ npm test
 npm run build
 ```
 
-Build the production images locally:
+Build the production images locally. This developer path downloads npm packages
+and build-time assets and is intentionally separate from the image-only
+production deployment:
 
 ```bash
-docker compose build
+docker compose -f compose.yml -f compose.build.yml build
 ```
 
 ## Published images
@@ -227,6 +257,9 @@ docker compose build
 - [Atlas Docs web](https://hub.docker.com/r/timo348/atlas-docs-web)
 - [Atlas Docs collaboration](https://hub.docker.com/r/timo348/atlas-docs-collab)
 - [Atlas Docs migrations](https://hub.docker.com/r/timo348/atlas-docs-migrate)
+- `ghcr.io/timo348/atlas-docs-web`
+- `ghcr.io/timo348/atlas-docs-collab`
+- `ghcr.io/timo348/atlas-docs-migrate`
 
 ## License
 

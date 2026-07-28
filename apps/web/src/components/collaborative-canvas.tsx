@@ -4,9 +4,13 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type * as Y from "yjs";
 import { usePreferences } from "@/components/preferences-provider";
+import { configureExcalidrawAssets } from "@/lib/excalidraw-assets";
 
 const Excalidraw = dynamic(
-  () => import("@excalidraw/excalidraw").then((module) => module.Excalidraw),
+  async () => {
+    configureExcalidrawAssets(window);
+    return (await import("@excalidraw/excalidraw")).Excalidraw;
+  },
   { ssr: false, loading: () => <div className="canvas-loading">Canvas wird geladen …</div> },
 );
 

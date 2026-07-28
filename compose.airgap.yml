@@ -1,0 +1,15 @@
+services:
+  web:
+    pull_policy: never
+
+  collab:
+    pull_policy: never
+
+  migrate:
+    pull_policy: never
+
+  postgres:
+    pull_policy: never
+
+  redis:
+    pull_policy: never

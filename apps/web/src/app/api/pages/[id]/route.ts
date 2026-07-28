@@ -69,8 +69,8 @@ export async function DELETE(_: Request, context: { params: Promise<{ id: string
     return NextResponse.json({ error: "Kein Schreibzugriff" }, { status: 403 });
   }
   await db.$transaction([
-    db.collabDocument.deleteMany({ where: { name: `page:${id}` } }),
     db.page.delete({ where: { id } }),
+    db.collabDocument.deleteMany({ where: { name: `page:${id}` } }),
   ]);
   return new NextResponse(null, { status: 204 });
 }

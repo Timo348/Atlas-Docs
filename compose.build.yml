@@ -1,0 +1,36 @@
+services:
+  web:
+    image: atlas-docs-web:local
+    pull_policy: never
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: web
+      args:
+        ATLAS_VERSION: ${ATLAS_VERSION:-dev}
+        ATLAS_REVISION: ${ATLAS_REVISION:-local}
+        ATLAS_BUILD_DATE: ${ATLAS_BUILD_DATE:-unknown}
+
+  collab:
+    image: atlas-docs-collab:local
+    pull_policy: never
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: collab
+      args:
+        ATLAS_VERSION: ${ATLAS_VERSION:-dev}
+        ATLAS_REVISION: ${ATLAS_REVISION:-local}
+        ATLAS_BUILD_DATE: ${ATLAS_BUILD_DATE:-unknown}
+
+  migrate:
+    image: atlas-docs-migrate:local
+    pull_policy: never
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: tools
+      args:
+        ATLAS_VERSION: ${ATLAS_VERSION:-dev}
+        ATLAS_REVISION: ${ATLAS_REVISION:-local}
+        ATLAS_BUILD_DATE: ${ATLAS_BUILD_DATE:-unknown}
