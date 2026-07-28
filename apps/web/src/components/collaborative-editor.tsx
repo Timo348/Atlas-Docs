@@ -5,16 +5,22 @@ import {
   Code2, Download, Eye, FileText, History, ImagePlus, LoaderCircle, Minus,
   Network, Pencil, Plus, RotateCcw, Save as SaveIcon, Table2, Users, X,
 } from "lucide-react";
-import { type ClipboardEvent, type KeyboardEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  type ClipboardEvent, type KeyboardEvent, type ReactNode, type RefObject,
+  useEffect, useLayoutEffect, useMemo, useRef, useState,
+} from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import * as Y from "yjs";
 import { CollaborativeCanvas } from "@/components/collaborative-canvas";
+import { HybridMarkdownDocument, HybridModeToggle } from "@/components/hybrid-markdown-document";
 import { LatexPreview } from "@/components/latex-preview";
 import { usePreferences } from "@/components/preferences-provider";
 import {
-  applySlashCommand, editTable, slashMatchAt, tableAt,
-  type SlashCommandId, type SlashMatch, type TableAction, type TextEdit,
+  applySlashCommand, continueMarkdownList, editableTableAt, editTable, markdownDocumentSegments,
+  slashMatchAt, tableCellCursor, updateTableCell,
+  type EditableMarkdownTable, type MarkdownDocumentSegment, type SlashCommandId, type SlashMatch,
+  type TableAction, type TextEdit,
 } from "@/lib/markdown-editor";
 import { createVisibleSnapshot, restoreVisibleSnapshot } from "@/lib/version-snapshot";
 
@@ -56,8 +62,10 @@ const SLASH_COMMANDS: { id: SlashCommandId; title: [string, string]; description
 export function CollaborativeEditor({
   page,
   user,
+  headerCenter,
 }: {
   page: PageItem;
+  headerCenter?: ReactNode;
   user: {
     id: string;
     name: string;
@@ -85,11 +93,15 @@ export function CollaborativeEditor({
   const [cursorIndex, setCursorIndex] = useState(0);
   const [imageBusy, setImageBusy] = useState(false);
   const [editorNotice, setEditorNotice] = useState("");
+  const [tableSourceMode, setTableSourceMode] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const editorStageRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const pendingImageMatchRef = useRef<SlashMatch | null>(null);
   const providerRef = useRef<HocuspocusProvider | null>(null);
   const savedTitleRef = useRef(page.title);
+
+  useEffect(() => setTableSourceMode(false), [page.id]);
 
   useEffect(() => {
     let active = true;
@@ -184,9 +196,10 @@ export function CollaborativeEditor({
     providerRef.current?.setAwarenessField("cursor", { index: cursorIndex });
   }
 
-  function publishCursor(textarea: HTMLTextAreaElement) {
-    setCursorIndex(textarea.selectionStart);
-    providerRef.current?.setAwarenessField("cursor", { index: textarea.selectionStart });
+  function publishCursor(textarea: HTMLTextAreaElement, offset = 0) {
+    const nextCursor = offset + textarea.selectionStart;
+    setCursorIndex(nextCursor);
+    providerRef.current?.setAwarenessField("cursor", { index: nextCursor });
   }
 
   const activeSlash = page.format === "MARKDOWN" && !readOnly ? slashMatchAt(markdown, cursorIndex) : null;
@@ -195,17 +208,48 @@ export function CollaborativeEditor({
       || command.title[0].toLowerCase().includes(activeSlash.query)
       || command.title[1].toLowerCase().includes(activeSlash.query))
     : [];
-  const activeTable = page.format === "MARKDOWN" ? tableAt(markdown, cursorIndex) : null;
+  const documentSegments = useMemo(
+    () => page.format === "MARKDOWN" ? markdownDocumentSegments(markdown) : [],
+    [markdown, page.format],
+  );
+  const visualTables = documentSegments.filter(
+    (segment): segment is Extract<MarkdownDocumentSegment, { type: "table" }> => segment.type === "table",
+  );
+  const activeTable = page.format === "MARKDOWN" ? editableTableAt(markdown, cursorIndex) : null;
+  const showHybridTables = visualTables.length > 0 && !tableSourceMode;
 
   function applyEdit(edit: TextEdit) {
     changeMarkdown(edit.text, edit.cursor);
-    requestAnimationFrame(() => {
-      const textarea = textareaRef.current;
+    focusMarkdownCursor(edit.text, edit.cursor);
+  }
+
+  function focusMarkdownCursor(nextMarkdown: string, nextCursor: number) {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const table = editableTableAt(nextMarkdown, nextCursor);
+      if (table && !tableSourceMode) {
+        const cell = editorStageRef.current?.querySelector<HTMLInputElement>(
+          `[data-markdown-table-start="${table.start}"] [data-table-row="${table.rowIndex}"][data-table-column="${table.columnIndex}"]`,
+        );
+        if (cell) {
+          cell.focus();
+          cell.setSelectionRange(cell.value.length, cell.value.length);
+          return;
+        }
+      }
+
+      const textareas = editorStageRef.current?.querySelectorAll<HTMLTextAreaElement>("textarea[data-markdown-start]");
+      const textarea = Array.from(textareas || []).find((candidate) => {
+        const start = Number(candidate.dataset.markdownStart || 0);
+        const end = Number(candidate.dataset.markdownEnd || 0);
+        return nextCursor >= start && nextCursor <= end;
+      }) || textareaRef.current;
       if (!textarea) return;
+      const offset = Number(textarea.dataset.markdownStart || 0);
+      const localCursor = Math.max(0, Math.min(textarea.value.length, nextCursor - offset));
       textarea.focus();
-      textarea.setSelectionRange(edit.cursor, edit.cursor);
-      publishCursor(textarea);
-    });
+      textarea.setSelectionRange(localCursor, localCursor);
+      publishCursor(textarea, offset);
+    }));
   }
 
   function executeSlashCommand(command: SlashCommandId, match = activeSlash) {
@@ -218,25 +262,81 @@ export function CollaborativeEditor({
     applyEdit(applySlashCommand(markdown, match, command, preferences.language));
   }
 
-  function handleEditorKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (!activeSlash || !matchingCommands.length || !["Enter", "Tab"].includes(event.key)) return;
-    const exact = matchingCommands.find((command) => command.id === activeSlash.query);
-    if (!exact && activeSlash.query.length === 0) return;
+  function handleEditorKeyDown(event: KeyboardEvent<HTMLTextAreaElement>, offset = 0) {
+    if (event.altKey || event.ctrlKey || event.metaKey || event.nativeEvent.isComposing) return;
+    const selectionStart = offset + event.currentTarget.selectionStart;
+    const selectionEnd = offset + event.currentTarget.selectionEnd;
+    const slash = page.format === "MARKDOWN" && !readOnly ? slashMatchAt(markdown, selectionStart) : null;
+    const commands = slash
+      ? SLASH_COMMANDS.filter((command) => command.id.includes(slash.query)
+        || command.title[0].toLowerCase().includes(slash.query)
+        || command.title[1].toLowerCase().includes(slash.query))
+      : [];
+
+    if (slash && commands.length && ["Enter", "Tab"].includes(event.key)) {
+      const exact = commands.find((command) => command.id === slash.query);
+      if (exact || slash.query.length > 0) {
+        event.preventDefault();
+        executeSlashCommand((exact || commands[0]).id, slash);
+        return;
+      }
+    }
+
+    if (page.format !== "MARKDOWN" || event.key !== "Enter" || event.shiftKey) return;
+    const edit = continueMarkdownList(markdown, selectionStart, selectionEnd);
+    if (!edit) return;
     event.preventDefault();
-    executeSlashCommand((exact || matchingCommands[0]).id, activeSlash);
+    applyEdit(edit);
   }
 
-  function handleTableAction(action: TableAction) {
-    const edit = editTable(markdown, cursorIndex, action);
+  function handleTableAction(action: TableAction, table = activeTable) {
+    if (!table) return;
+    const tableCursor = activeTable?.start === table.start ? cursorIndex : table.start;
+    const edit = editTable(markdown, tableCursor, action);
     if (edit) applyEdit(edit);
   }
 
-  async function uploadImage(file: File, match: SlashMatch | null = null) {
+  function changeHybridText(
+    segment: Extract<MarkdownDocumentSegment, { type: "text" }>,
+    value: string,
+    cursor: number,
+  ) {
+    let replacement = value;
+    let nextCursor = cursor;
+    if (segment.value.length === 0 && value.length > 0) {
+      const previousIsTable = visualTables.some((entry) => entry.end === segment.start);
+      const nextIsTable = visualTables.some((entry) => entry.start === segment.end);
+      if (previousIsTable && markdown[segment.start - 1] !== "\n") {
+        replacement = `\n${replacement}`;
+        nextCursor += 1;
+      }
+      if (nextIsTable && markdown[segment.end] !== "\n") replacement += "\n";
+    }
+    changeMarkdown(markdown.slice(0, segment.start) + replacement + markdown.slice(segment.end), nextCursor);
+  }
+
+  function changeTableCell(table: EditableMarkdownTable, row: number, column: number, value: string) {
+    const edit = updateTableCell(markdown, table.start, row, column, value);
+    if (edit) changeMarkdown(edit.text, edit.cursor);
+  }
+
+  function focusTableCell(table: EditableMarkdownTable, row: number, column: number) {
+    const nextCursor = tableCellCursor(markdown, table.start, row, column);
+    if (nextCursor === null) return;
+    setCursorIndex(nextCursor);
+    providerRef.current?.setAwarenessField("cursor", { index: nextCursor });
+  }
+
+  async function uploadImage(
+    file: File,
+    match: SlashMatch | null = null,
+    selection: { start: number; end: number } | null = null,
+  ) {
     if (readOnly || page.format !== "MARKDOWN" || imageBusy) return;
     setImageBusy(true);
     setEditorNotice("");
-    const start = match?.start ?? cursorIndex;
-    const end = match?.end ?? cursorIndex;
+    const start = match?.start ?? selection?.start ?? cursorIndex;
+    const end = match?.end ?? selection?.end ?? cursorIndex;
     const relativeStart = Y.createRelativePositionFromTypeIndex(ytext, start);
     const relativeEnd = Y.createRelativePositionFromTypeIndex(ytext, end);
     try {
@@ -259,12 +359,7 @@ export function CollaborativeEditor({
         ytext.insert(absoluteStart.index, markdownImage);
       }, "image-upload");
       const nextCursor = absoluteStart.index + markdownImage.length;
-      requestAnimationFrame(() => {
-        const textarea = textareaRef.current;
-        textarea?.focus();
-        textarea?.setSelectionRange(nextCursor, nextCursor);
-        if (textarea) publishCursor(textarea);
-      });
+      focusMarkdownCursor(ytext.toString(), nextCursor);
       setEditorNotice(text("Image inserted.", "Bild eingefügt."));
     } catch (error) {
       setEditorNotice(error instanceof Error ? error.message : text("Image could not be uploaded.", "Bild konnte nicht hochgeladen werden."));
@@ -274,13 +369,16 @@ export function CollaborativeEditor({
     }
   }
 
-  function handlePaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+  function handlePaste(event: ClipboardEvent<HTMLTextAreaElement>, offset = 0) {
     const image = Array.from(event.clipboardData.items)
       .find((item) => item.kind === "file" && item.type.startsWith("image/"))
       ?.getAsFile();
     if (!image || readOnly || page.format !== "MARKDOWN") return;
     event.preventDefault();
-    void uploadImage(image);
+    void uploadImage(image, null, {
+      start: offset + event.currentTarget.selectionStart,
+      end: offset + event.currentTarget.selectionEnd,
+    });
   }
 
   async function persistTitle(nextTitle = title) {
@@ -387,8 +485,8 @@ export function CollaborativeEditor({
   }
 
   return (
-    <div className="editor-shell">
-      <header className="editor-header">
+    <div className={`editor-shell ${headerCenter ? "editor-shell-with-center" : ""}`}>
+      <header className={`editor-header ${headerCenter ? "editor-header-with-center" : ""}`}>
         <div className="title-wrap">
           <input
             className="page-title"
@@ -399,12 +497,13 @@ export function CollaborativeEditor({
             readOnly={readOnly}
             aria-label={text("Page title", "Seitentitel")}
           />
+        </div>
+        {headerCenter && <div className="editor-header-center">{headerCenter}</div>}
+        <div className="editor-actions">
           <span className={`connection ${status}`}>
             {status === "connecting" && <LoaderCircle size={13} className="spin" />}
             {status === "connected" ? "Live" : status === "connecting" ? text("Connecting", "Verbinden") : "Offline"}
           </span>
-        </div>
-        <div className="editor-actions">
           <div className="presence" title={text(`${people.length} active people`, `${people.length} aktive Personen`)}>
             <Users size={16} />
             <div className="avatars">
@@ -450,9 +549,16 @@ export function CollaborativeEditor({
             <div className="markdown-gutter">
               <FileText size={16} /><span>{page.format === "LATEX" ? "LATEX" : "MARKDOWN"}</span>
               {page.format === "MARKDOWN" && <small>{text("Type / for commands · paste images with Ctrl+V", "/ für Befehle · Bilder mit Strg+V einfügen")}</small>}
+              {page.format === "MARKDOWN" && visualTables.length > 0 && (
+                <HybridModeToggle
+                  sourceMode={tableSourceMode}
+                  text={text}
+                  onToggle={() => setTableSourceMode((value) => !value)}
+                />
+              )}
               {imageBusy && <span className="editor-uploading"><LoaderCircle size={12} className="spin" /> {text("Uploading image…", "Bild wird hochgeladen…")}</span>}
             </div>
-            <div className="textarea-stage">
+            <div className="textarea-stage" ref={editorStageRef}>
               <input
                 ref={imageInputRef}
                 className="visually-hidden"
@@ -465,22 +571,42 @@ export function CollaborativeEditor({
                   event.target.value = "";
                 }}
               />
-              <textarea
-                ref={textareaRef}
-                value={markdown}
-                onChange={(event) => changeMarkdown(event.target.value, event.target.selectionStart)}
-                onKeyDown={handleEditorKeyDown}
-                onPaste={handlePaste}
-                onSelect={(event) => publishCursor(event.currentTarget)}
-                onKeyUp={(event) => publishCursor(event.currentTarget)}
-                onClick={(event) => publishCursor(event.currentTarget)}
-                onFocus={(event) => publishCursor(event.currentTarget)}
-                onBlur={() => providerRef.current?.setAwarenessField("cursor", null)}
-                onScroll={() => setScrollRevision((value) => value + 1)}
-                readOnly={readOnly}
-                spellCheck
-                aria-label={page.format === "LATEX" ? text("LaTeX content", "LaTeX-Inhalt") : text("Markdown content", "Markdown-Inhalt")}
-              />
+              {showHybridTables ? (
+                <HybridMarkdownDocument
+                  segments={documentSegments}
+                  readOnly={readOnly}
+                  activeTableStart={activeTable?.start ?? null}
+                  text={text}
+                  onTextChange={changeHybridText}
+                  onTextKeyDown={handleEditorKeyDown}
+                  onTextPaste={handlePaste}
+                  onTextCursor={publishCursor}
+                  onTextBlur={() => providerRef.current?.setAwarenessField("cursor", null)}
+                  onCellChange={changeTableCell}
+                  onCellFocus={focusTableCell}
+                  onCellBlur={() => providerRef.current?.setAwarenessField("cursor", null)}
+                  onTableAction={(table, action) => handleTableAction(action, table)}
+                />
+              ) : (
+                <textarea
+                  ref={textareaRef}
+                  data-markdown-start={0}
+                  data-markdown-end={markdown.length}
+                  value={markdown}
+                  onChange={(event) => changeMarkdown(event.target.value, event.target.selectionStart)}
+                  onKeyDown={handleEditorKeyDown}
+                  onPaste={handlePaste}
+                  onSelect={(event) => publishCursor(event.currentTarget)}
+                  onKeyUp={(event) => publishCursor(event.currentTarget)}
+                  onClick={(event) => publishCursor(event.currentTarget)}
+                  onFocus={(event) => publishCursor(event.currentTarget)}
+                  onBlur={() => providerRef.current?.setAwarenessField("cursor", null)}
+                  onScroll={() => setScrollRevision((value) => value + 1)}
+                  readOnly={readOnly}
+                  spellCheck
+                  aria-label={page.format === "LATEX" ? text("LaTeX content", "LaTeX-Inhalt") : text("Markdown content", "Markdown-Inhalt")}
+                />
+              )}
               {activeSlash && matchingCommands.length > 0 && (
                 <div className="slash-menu" role="listbox" aria-label={text("Markdown commands", "Markdown-Befehle")}>
                   <header><strong>{text("Insert block", "Block einfügen")}</strong><span>{text("Enter to select", "Enter zum Auswählen")}</span></header>
@@ -493,24 +619,34 @@ export function CollaborativeEditor({
                   ))}
                 </div>
               )}
-              {activeTable && !readOnly && (
+              {activeTable && !readOnly && !showHybridTables && (
                 <div className="table-tools" role="toolbar" aria-label={text("Table tools", "Tabellenwerkzeuge")}>
-                  <span><Table2 size={14} /> {text("Table", "Tabelle")} · {activeTable.rows}×{activeTable.columns}</span>
-                  <button onClick={() => handleTableAction("add-row")}><Plus size={13} /> {text("Row", "Zeile")}</button>
-                  <button onClick={() => handleTableAction("add-column")}><Plus size={13} /> {text("Column", "Spalte")}</button>
-                  <button onClick={() => handleTableAction("remove-row")}><Minus size={13} /> {text("Row", "Zeile")}</button>
-                  <button onClick={() => handleTableAction("remove-column")}><Minus size={13} /> {text("Column", "Spalte")}</button>
+                  <span><Table2 size={14} /> {text("Table", "Tabelle")} · {activeTable.rows.length}×{activeTable.columns}</span>
+                  <button aria-label={text("Add row", "Zeile hinzufügen")} onClick={() => handleTableAction("add-row")}><Plus size={13} /> {text("Row", "Zeile")}</button>
+                  <button aria-label={text("Add column", "Spalte hinzufügen")} onClick={() => handleTableAction("add-column")}><Plus size={13} /> {text("Column", "Spalte")}</button>
+                  <button aria-label={text("Remove row", "Zeile entfernen")} onClick={() => handleTableAction("remove-row")}><Minus size={13} /> {text("Row", "Zeile")}</button>
+                  <button aria-label={text("Remove column", "Spalte entfernen")} onClick={() => handleTableAction("remove-column")}><Minus size={13} /> {text("Column", "Spalte")}</button>
                 </div>
               )}
               <div className="remote-cursors" aria-hidden="true">
                 {people.filter((person) => person.id !== user.id && person.cursor !== null).map((person) => (
-                  <RemoteCursor
-                    key={person.id}
-                    person={person}
-                    textareaRef={textareaRef}
-                    markdown={markdown}
-                    scrollRevision={scrollRevision}
-                  />
+                  showHybridTables ? (
+                    <HybridRemoteCursor
+                      key={person.id}
+                      person={person}
+                      editorStageRef={editorStageRef}
+                      markdown={markdown}
+                      segments={documentSegments}
+                    />
+                  ) : (
+                    <RemoteCursor
+                      key={person.id}
+                      person={person}
+                      textareaRef={textareaRef}
+                      markdown={markdown}
+                      scrollRevision={scrollRevision}
+                    />
+                  )
                 ))}
               </div>
             </div>
@@ -569,6 +705,104 @@ export function CollaborativeEditor({
         <button className="atlas-toast editor-toast" onClick={() => setEditorNotice("")}>{editorNotice}<X size={14} /></button>
       )}
     </div>
+  );
+}
+
+function HybridRemoteCursor({
+  person,
+  editorStageRef,
+  markdown,
+  segments,
+}: {
+  person: Person;
+  editorStageRef: RefObject<HTMLDivElement | null>;
+  markdown: string;
+  segments: MarkdownDocumentSegment[];
+}) {
+  const [position, setPosition] = useState<{ left: number; top: number; visible: boolean } | null>(null);
+
+  useLayoutEffect(() => {
+    const stage = editorStageRef.current;
+    if (!stage || person.cursor === null) return;
+    const scrollContainer = stage.querySelector<HTMLElement>("[data-testid='hybrid-markdown-document']");
+
+    const update = () => {
+      const cursor = Math.min(person.cursor || 0, markdown.length);
+      const stageRect = stage.getBoundingClientRect();
+      const tableSegment = segments.find(
+        (segment) => segment.type === "table" && cursor >= segment.start && cursor < segment.end,
+      );
+
+      if (tableSegment?.type === "table") {
+        const table = editableTableAt(markdown, cursor);
+        const cell = table && stage.querySelector<HTMLInputElement>(
+          `[data-markdown-table-start="${tableSegment.start}"] `
+          + `[data-table-row="${table.rowIndex}"][data-table-column="${table.columnIndex}"]`,
+        );
+        if (!cell) {
+          setPosition(null);
+          return;
+        }
+        const cellRect = cell.getBoundingClientRect();
+        setPosition({
+          left: cellRect.left - stageRect.left + 8,
+          top: cellRect.top - stageRect.top + 7,
+          visible: cellRect.bottom >= stageRect.top
+            && cellRect.top <= stageRect.bottom
+            && cellRect.right >= stageRect.left
+            && cellRect.left <= stageRect.right,
+        });
+        return;
+      }
+
+      const textSegment = segments.find(
+        (segment) => segment.type === "text" && cursor >= segment.start && cursor <= segment.end,
+      );
+      const textarea = textSegment?.type === "text"
+        ? stage.querySelector<HTMLTextAreaElement>(`textarea[data-markdown-start="${textSegment.start}"]`)
+        : null;
+      if (!textarea || textSegment?.type !== "text") {
+        setPosition(null);
+        return;
+      }
+      const caret = caretPosition(textarea, Math.max(0, cursor - textSegment.start));
+      const textareaRect = textarea.getBoundingClientRect();
+      const left = textareaRect.left - stageRect.left + caret.left;
+      const top = textareaRect.top - stageRect.top + caret.top;
+      setPosition({
+        left,
+        top,
+        visible: caret.visible
+          && top >= 0
+          && top <= stage.clientHeight
+          && left >= 0
+          && left <= stage.clientWidth,
+      });
+    };
+
+    update();
+    window.addEventListener("resize", update);
+    scrollContainer?.addEventListener("scroll", update, { passive: true });
+    return () => {
+      window.removeEventListener("resize", update);
+      scrollContainer?.removeEventListener("scroll", update);
+    };
+  }, [editorStageRef, markdown, person.cursor, segments]);
+
+  if (!position?.visible) return null;
+  return (
+    <span
+      className="remote-cursor"
+      style={{ left: position.left, top: position.top, "--cursor-color": person.color } as React.CSSProperties}
+      title={`${person.name} schreibt hier`}
+    >
+      <span className="remote-cursor-avatar">
+        {person.hasAvatar
+          ? <img src={`/api/users/${person.id}/avatar?v=${person.avatarVersion}`} alt="" />
+          : initials(person.name)}
+      </span>
+      <span className="remote-cursor-line" />
+    </span>
   );
 }
 

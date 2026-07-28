@@ -1,0 +1,176 @@
+.document {
+  display: block;
+  height: 100%;
+  overflow-y: auto;
+  padding: 24px 0 80px;
+}
+
+.modeToggle {
+  align-items: center;
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  cursor: pointer;
+  display: flex;
+  font-size: 9px;
+  font-weight: 650;
+  gap: 5px;
+  margin-left: auto;
+  min-height: 26px;
+  padding: 0 8px;
+}
+
+.modeToggle:hover,
+.modeToggle:focus-visible {
+  border-color: var(--accent);
+  outline: 0;
+}
+
+.document textarea.markdownText {
+  box-sizing: border-box;
+  height: auto;
+  min-height: 34px;
+  overflow: hidden;
+  padding: 0;
+}
+
+.document textarea.markdownText:focus {
+  outline: none;
+}
+
+.tableBlock {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  box-shadow: 0 4px 18px var(--shadow);
+  display: grid;
+  margin: 10px 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.activeTable {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent), 0 7px 24px var(--shadow);
+}
+
+.tableHeading {
+  align-items: center;
+  background: var(--paper-2);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-height: 37px;
+  padding: 0 11px;
+}
+
+.tableHeading span {
+  align-items: center;
+  color: var(--ink);
+  display: flex;
+  font-size: 10px;
+  font-weight: 750;
+  gap: 6px;
+}
+
+.tableHeading small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.tableScroller {
+  overflow-x: auto;
+}
+
+.tableScroller table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+}
+
+.tableScroller th,
+.tableScroller td {
+  border-bottom: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  min-width: 150px;
+  padding: 0;
+}
+
+.tableScroller th:last-child,
+.tableScroller td:last-child {
+  border-right: 0;
+}
+
+.tableScroller tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.cellInput,
+.headerInput {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-sizing: border-box;
+  color: var(--ink);
+  display: block;
+  font-family: var(--font-sans), sans-serif;
+  font-size: 12px;
+  min-height: 42px;
+  outline: 0;
+  padding: 9px 11px;
+  width: 100%;
+}
+
+.headerInput {
+  background: var(--paper-2);
+  font-weight: 750;
+}
+
+.cellInput:focus,
+.headerInput:focus {
+  background: var(--control-bg);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.tableActions {
+  align-items: center;
+  background: var(--paper-2);
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 6px 8px;
+}
+
+.tableActions button {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  cursor: pointer;
+  display: flex;
+  font-size: 9px;
+  gap: 4px;
+  min-height: 28px;
+  padding: 0 8px;
+}
+
+.tableActions button:hover,
+.tableActions button:focus-visible {
+  background: var(--control-bg);
+  border-color: var(--accent);
+  outline: 0;
+}
+
+@media (max-width: 700px) {
+  .tableHeading small {
+    display: none;
+  }
+
+  .tableScroller table {
+    min-width: 520px;
+  }
+}

@@ -7,6 +7,9 @@ Atlas Docs is a self-hosted collaborative knowledge platform for Markdown, LaTeX
 - Real-time Markdown and LaTeX editing with Yjs and Hocuspocus
 - Paste images directly from the clipboard with `Ctrl+V`
 - Slash commands such as `/table`, `/codeblock`, `/image`, headings, lists, quotes, and links
+- Hybrid Markdown editing with visual GFM tables that remain stored as portable Markdown
+- Automatic continuation for bullet, numbered, and task lists
+- Searchable, keyboard-accessible space picker in the editor header
 - Table controls for adding or removing rows and columns
 - Markdown and LaTeX previews plus source-file exports
 - Shared Excalidraw canvases and live collaborator cursors
@@ -96,18 +99,18 @@ For a physically disconnected server, prepare a bundle on a connected machine:
 ```bash
 cp .env.example .env
 # Edit .env before resolving the exact image list.
-docker compose config --images > atlas-docs-1.3.0-images.txt
-xargs -a atlas-docs-1.3.0-images.txt -n 1 docker pull
-docker save -o atlas-docs-1.3.0-offline.tar $(cat atlas-docs-1.3.0-images.txt)
-sha256sum atlas-docs-1.3.0-offline.tar > atlas-docs-1.3.0-offline.tar.sha256
+docker compose config --images > atlas-docs-1.4.0-images.txt
+xargs -a atlas-docs-1.4.0-images.txt -n 1 docker pull
+docker save -o atlas-docs-1.4.0-offline.tar $(cat atlas-docs-1.4.0-images.txt)
+sha256sum atlas-docs-1.4.0-offline.tar > atlas-docs-1.4.0-offline.tar.sha256
 ```
 
 Transfer the archive, checksum, `compose.yml`, `compose.airgap.yml`, and `.env`.
 Then load and start without any network access:
 
 ```bash
-sha256sum -c atlas-docs-1.3.0-offline.tar.sha256
-docker load -i atlas-docs-1.3.0-offline.tar
+sha256sum -c atlas-docs-1.4.0-offline.tar.sha256
+docker load -i atlas-docs-1.4.0-offline.tar
 docker compose -f compose.yml -f compose.airgap.yml up -d --no-build
 docker compose ps
 ```
@@ -135,7 +138,7 @@ The complete template is in [`.env.example`](.env.example).
 | Variable | Default/example | Purpose |
 | --- | --- | --- |
 | `ATLAS_IMAGE_REGISTRY` | `docker.io/timo348` | Atlas image prefix; use `ghcr.io/timo348` or an internal mirror |
-| `ATLAS_VERSION` | `1.3.0` | Exact release tag used for all three Atlas Docs images |
+| `ATLAS_VERSION` | `1.4.0` | Exact release tag used for all three Atlas Docs images |
 | `POSTGRES_IMAGE` | pinned Docker Hub digest | PostgreSQL image, overridable for an internal registry |
 | `REDIS_IMAGE` | pinned Docker Hub digest | Redis image, overridable for an internal registry |
 | `APP_URL` | `http://localhost:30002` | Browser-facing web URL |

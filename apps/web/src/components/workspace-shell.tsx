@@ -13,6 +13,7 @@ import { CollaborativeEditor } from "@/components/collaborative-editor";
 import { usePreferences } from "@/components/preferences-provider";
 import { ProfileDialog } from "@/components/profile-dialog";
 import { SpacePermissionsDialog } from "@/components/space-permissions-dialog";
+import { SidebarSpaceIdentity, SpacePicker } from "@/components/space-picker";
 
 type PageItem = {
   id: string;
@@ -62,8 +63,7 @@ export function WorkspaceShell({
   const { preferences, text } = usePreferences();
   const router = useRouter();
   const [sidebar, setSidebar] = useState(true);
-  const [switcherOpen, setSwitcherOpen] = useState(false);
-  const [spaceQuery, setSpaceQuery] = useState("");
+  const [spacePickerOpen, setSpacePickerOpen] = useState(false);
   const [pageQuery, setPageQuery] = useState("");
   const [permissionsOpen, setPermissionsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -75,12 +75,6 @@ export function WorkspaceShell({
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const activeSpace = spaces.find((space) => space.id === selectedSpaceId) || spaces[0] || null;
   const canWrite = activeSpace?.role === "OWNER" || activeSpace?.role === "EDITOR";
-
-  const matchingSpaces = spaces.filter((space) => {
-    const needle = spaceQuery.trim().toLowerCase();
-    return !needle || space.name.toLowerCase().includes(needle)
-      || space.description?.toLowerCase().includes(needle);
-  });
 
   function createPage(spaceId: string, folderId: string | null = null) {
     setDialog({
@@ -158,7 +152,6 @@ export function WorkspaceShell({
       submit: async (name) => {
         const response = await jsonRequest("/api/spaces", "POST", { name });
         if (!response.ok) return setNotice(response.error);
-        setSwitcherOpen(false);
         setDialog(null);
         router.push(`/?space=${response.data.id}`);
         router.refresh();
@@ -167,8 +160,7 @@ export function WorkspaceShell({
   }
 
   function selectSpace(space: Space) {
-    setSwitcherOpen(false);
-    setSpaceQuery("");
+    setSpacePickerOpen(false);
     router.push(space.pages[0]
       ? `/?space=${space.id}&page=${space.pages[0].id}`
       : `/?space=${space.id}`);
@@ -247,35 +239,28 @@ export function WorkspaceShell({
     setDragItem(item);
   }
 
+  const spacePicker = (
+    <SpacePicker
+      spaces={spaces}
+      activeSpace={activeSpace}
+      open={spacePickerOpen}
+      busy={busy}
+      onOpen={() => setSpacePickerOpen(true)}
+      onClose={() => setSpacePickerOpen(false)}
+      onSelect={(spaceId) => {
+        const space = spaces.find((candidate) => candidate.id === spaceId);
+        if (space) selectSpace(space);
+      }}
+      onCreate={createSpace}
+    />
+  );
+
   return (
     <main className={`workspace ${sidebar ? "" : "sidebar-closed"}`}>
       <aside className="sidebar">
         <div className="sidebar-top workspace-top">
           <div className="space-switcher-wrap">
-            <button className="space-switcher" onClick={() => setSwitcherOpen((value) => !value)}>
-              <span className="space-mark">
-                {activeSpace?.hasImage ? <img src={`/api/spaces/${activeSpace.id}/image?v=${activeSpace.imageVersion}`} alt="" /> : <BookOpen size={17} />}
-              </span>
-              <span><small>{text("Space", "Bereich")}</small><strong>{activeSpace?.name || "Atlas"}</strong></span>
-              <ChevronDown size={15} />
-            </button>
-            {switcherOpen && (
-              <div className="space-popover">
-                <div className="popover-title"><strong>{text("Switch space", "Bereich wechseln")}</strong><button className="icon-button tiny" onClick={() => setSwitcherOpen(false)}><X size={15} /></button></div>
-                <div className="popover-search"><Search size={15} /><input autoFocus value={spaceQuery} onChange={(event) => setSpaceQuery(event.target.value)} placeholder={text("Search spaces…", "Bereiche durchsuchen…")} /></div>
-                <div className="space-options">
-                  {matchingSpaces.map((space) => (
-                    <button className={space.id === activeSpace?.id ? "active" : ""} key={space.id} onClick={() => selectSpace(space)}>
-                      <span>{space.hasImage ? <img src={`/api/spaces/${space.id}/image?v=${space.imageVersion}`} alt="" /> : space.name.slice(0, 1).toUpperCase()}</span>
-                      <div><strong>{space.name}</strong><small>{space.description || roleLabel(space.role, preferences.language)}</small></div>
-                      {space.id === activeSpace?.id && <span className="selected-dot" />}
-                    </button>
-                  ))}
-                  {!matchingSpaces.length && <p>{text("No space found.", "Kein Bereich gefunden.")}</p>}
-                </div>
-                <button className="create-space-button" disabled={busy} onClick={createSpace}><Plus size={15} /> {text("Create space", "Neuen Bereich anlegen")}</button>
-              </div>
-            )}
+            <SidebarSpaceIdentity space={activeSpace} onOpen={() => setSpacePickerOpen(true)} />
           </div>
           <button className="icon-button" onClick={() => setSidebar(false)} title={text("Close navigation", "Navigation schließen")}>
             <PanelLeftClose size={19} />
@@ -376,17 +361,22 @@ export function WorkspaceShell({
       <section className="content">
         {!sidebar && <button className="open-sidebar icon-button" onClick={() => setSidebar(true)}><PanelLeftOpen size={20} /></button>}
         {selectedPage ? (
-          <CollaborativeEditor key={selectedPage.id} page={selectedPage} user={user} />
+          <CollaborativeEditor key={selectedPage.id} page={selectedPage} user={user} headerCenter={spacePicker} />
         ) : (
-          <div className="empty-state">
-            <span>{activeSpace ? <Folder size={28} /> : <BookOpen size={28} />}</span>
-            <h1>{activeSpace ? activeSpace.name : text("Your knowledge space is ready.", "Dein Wissensraum wartet.")}</h1>
-            <p>{activeSpace ? text("Create a page or folder.", "Lege eine Seite oder einen Ordner an.") : text("Create your first space.", "Lege deinen ersten Bereich an.")}</p>
-            {activeSpace && canWrite ? (
-              <button className="button primary-button compact" onClick={() => createPage(activeSpace.id)}><Plus size={17} /> {text("First page", "Erste Seite")}</button>
-            ) : !activeSpace ? (
-              <button className="button primary-button compact" onClick={createSpace}><Plus size={17} /> {text("Create space", "Bereich anlegen")}</button>
-            ) : null}
+          <div style={{ display: "grid", gridTemplateRows: "70px minmax(0, 1fr)", height: "100%" }}>
+            <header style={{ alignItems: "center", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "center", padding: "0 28px" }}>
+              {spacePicker}
+            </header>
+            <div className="empty-state">
+              <span>{activeSpace ? <Folder size={28} /> : <BookOpen size={28} />}</span>
+              <h1>{activeSpace ? activeSpace.name : text("Your knowledge space is ready.", "Dein Wissensraum wartet.")}</h1>
+              <p>{activeSpace ? text("Create a page or folder.", "Lege eine Seite oder einen Ordner an.") : text("Create your first space.", "Lege deinen ersten Bereich an.")}</p>
+              {activeSpace && canWrite ? (
+                <button className="button primary-button compact" onClick={() => createPage(activeSpace.id)}><Plus size={17} /> {text("First page", "Erste Seite")}</button>
+              ) : !activeSpace ? (
+                <button className="button primary-button compact" onClick={createSpace}><Plus size={17} /> {text("Create space", "Bereich anlegen")}</button>
+              ) : null}
+            </div>
           </div>
         )}
       </section>

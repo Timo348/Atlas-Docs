@@ -56,6 +56,12 @@ test("dark controls and focus indicators meet non-text contrast targets", () => 
   }
 });
 
+test("fenced code inherits the accessible block text color", () => {
+  const block = css.match(/\.markdown-preview pre code\s*\{([^}]+)\}/)?.[1];
+  assert.ok(block, "Missing fenced code style");
+  assert.match(block, /color:\s*inherit\s*;/, "Fenced code must inherit --code-text from its pre element");
+});
+
 function variablesFor(selector: string) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const block = css.match(new RegExp(`${escaped}\\s*\\{([^}]+)\\}`))?.[1];
