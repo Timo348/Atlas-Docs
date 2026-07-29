@@ -1,3 +1,5 @@
+import { CodedApiError } from "@/lib/api-errors";
+
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 export function detectImageMime(bytes: Uint8Array): "image/jpeg" | "image/png" | "image/webp" | "image/gif" | null {
@@ -29,11 +31,10 @@ export function detectImageMime(bytes: Uint8Array): "image/jpeg" | "image/png" |
 }
 
 export async function readValidatedImage(file: File) {
-  if (file.size < 1 || file.size > MAX_IMAGE_BYTES) {
-    throw new Error("Das Bild darf maximal 5 MB groß sein.");
-  }
+  if (file.size < 1) throw new CodedApiError("IMAGE_EMPTY");
+  if (file.size > MAX_IMAGE_BYTES) throw new CodedApiError("IMAGE_TOO_LARGE");
   const bytes = new Uint8Array(await file.arrayBuffer());
   const mime = detectImageMime(bytes);
-  if (!mime) throw new Error("Only valid PNG, JPEG, WebP, and GIF images are allowed.");
+  if (!mime) throw new CodedApiError("IMAGE_INVALID_TYPE");
   return { bytes, mime };
 }

@@ -22,6 +22,7 @@ import {
   type EditableMarkdownTable, type MarkdownDocumentSegment, type SlashCommandId, type SlashMatch,
   type TableAction, type TextEdit,
 } from "@/lib/markdown-editor";
+import { apiErrorMessage } from "@/lib/api-errors";
 import { createVisibleSnapshot, restoreVisibleSnapshot } from "@/lib/version-snapshot";
 
 type PageItem = { id: string; title: string; slug: string; parentId: string | null; format: "MARKDOWN" | "LATEX" };
@@ -215,6 +216,10 @@ export function CollaborativeEditor({
   const visualTables = documentSegments.filter(
     (segment): segment is Extract<MarkdownDocumentSegment, { type: "table" }> => segment.type === "table",
   );
+  const activePeople = Math.max(people.length, 1);
+  const activePeopleLabel = activePeople === 1
+    ? text("1 active person", "1 aktive Person")
+    : text(`${activePeople} active people`, `${activePeople} aktive Personen`);
   const activeTable = page.format === "MARKDOWN" ? editableTableAt(markdown, cursorIndex) : null;
   const showHybridTables = visualTables.length > 0 && !tableSourceMode;
 
@@ -344,7 +349,12 @@ export function CollaborativeEditor({
       form.set("image", file);
       const response = await fetch(`/api/pages/${page.id}/images`, { method: "POST", body: form });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error || text("Image could not be uploaded.", "Bild konnte nicht hochgeladen werden."));
+      if (!response.ok) {
+        throw new Error(apiErrorMessage(result, text, {
+          en: "The image could not be uploaded.",
+          de: "Das Bild konnte nicht hochgeladen werden.",
+        }));
+      }
       const absoluteStart = Y.createAbsolutePositionFromRelativePosition(relativeStart, ydoc);
       const absoluteEnd = Y.createAbsolutePositionFromRelativePosition(relativeEnd, ydoc);
       if (!absoluteStart || !absoluteEnd || absoluteStart.type !== ytext || absoluteEnd.type !== ytext) {
@@ -436,7 +446,12 @@ export function CollaborativeEditor({
         }),
       });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error || text("The version could not be saved.", "Die Version konnte nicht gespeichert werden."));
+      if (!response.ok) {
+        throw new Error(apiErrorMessage(result, text, {
+          en: "The version could not be saved.",
+          de: "Die Version konnte nicht gespeichert werden.",
+        }));
+      }
       setVersionNotice(restoredFromVersion
         ? text(`Version ${restoredFromVersion} was restored as new version ${result.version}.`, `Version ${restoredFromVersion} wurde als neue Version ${result.version} wiederhergestellt.`)
         : text(`Version ${result.version} was saved.`, `Version ${result.version} wurde gespeichert.`));
@@ -461,7 +476,12 @@ export function CollaborativeEditor({
     try {
       const response = await fetch(`/api/pages/${page.id}/versions/${version.id}`);
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error || text("The version could not be loaded.", "Die Version konnte nicht geladen werden."));
+      if (!response.ok) {
+        throw new Error(apiErrorMessage(result, text, {
+          en: "The version could not be loaded.",
+          de: "Die Version konnte nicht geladen werden.",
+        }));
+      }
       restoreVisibleSnapshot(ydoc, base64ToBytes(result.snapshot));
       setTitle(result.title);
       setVersionBusy(false);
@@ -502,9 +522,13 @@ export function CollaborativeEditor({
         <div className="editor-actions">
           <span className={`connection ${status}`}>
             {status === "connecting" && <LoaderCircle size={13} className="spin" />}
-            {status === "connected" ? "Live" : status === "connecting" ? text("Connecting", "Verbinden") : "Offline"}
+            {status === "connected"
+              ? text("Live", "Live")
+              : status === "connecting"
+                ? text("Connecting …", "Verbindung …")
+                : text("Offline", "Offline")}
           </span>
-          <div className="presence" title={text(`${people.length} active people`, `${people.length} aktive Personen`)}>
+          <div className="presence" title={activePeopleLabel} aria-label={activePeopleLabel}>
             <Users size={16} />
             <div className="avatars">
               {people.slice(0, 4).map((person) => (
@@ -513,7 +537,7 @@ export function CollaborativeEditor({
                 </span>
               ))}
             </div>
-            <small>{people.length || 1}</small>
+            <small>{activePeople}</small>
           </div>
           <button
             className="button compact version-save-button"
@@ -535,7 +559,14 @@ export function CollaborativeEditor({
           >
             <History size={15} /><span>{text("History", "Historie")}</span>
           </button>
-          <button className="icon-button bordered" onClick={downloadSource} title={page.format === "LATEX" ? text("Download LaTeX file", "LaTeX-Datei herunterladen") : text("Download Markdown", "Markdown herunterladen")}><Download size={17} /></button>
+          <button
+            className="icon-button bordered"
+            onClick={downloadSource}
+            title={page.format === "LATEX" ? text("Download LaTeX file", "LaTeX-Datei herunterladen") : text("Download Markdown", "Markdown herunterladen")}
+            aria-label={page.format === "LATEX" ? text("Download LaTeX file", "LaTeX-Datei herunterladen") : text("Download Markdown", "Markdown herunterladen")}
+          >
+            <Download size={17} />
+          </button>
         </div>
       </header>
       <nav className="editor-tabs">
@@ -637,6 +668,7 @@ export function CollaborativeEditor({
                       editorStageRef={editorStageRef}
                       markdown={markdown}
                       segments={documentSegments}
+                      title={text(`${person.name} is writing here`, `${person.name} schreibt hier`)}
                     />
                   ) : (
                     <RemoteCursor
@@ -645,6 +677,7 @@ export function CollaborativeEditor({
                       textareaRef={textareaRef}
                       markdown={markdown}
                       scrollRevision={scrollRevision}
+                      title={text(`${person.name} is writing here`, `${person.name} schreibt hier`)}
                     />
                   )
                 ))}
@@ -713,11 +746,13 @@ function HybridRemoteCursor({
   editorStageRef,
   markdown,
   segments,
+  title,
 }: {
   person: Person;
   editorStageRef: RefObject<HTMLDivElement | null>;
   markdown: string;
   segments: MarkdownDocumentSegment[];
+  title: string;
 }) {
   const [position, setPosition] = useState<{ left: number; top: number; visible: boolean } | null>(null);
 
@@ -794,7 +829,7 @@ function HybridRemoteCursor({
     <span
       className="remote-cursor"
       style={{ left: position.left, top: position.top, "--cursor-color": person.color } as React.CSSProperties}
-      title={`${person.name} schreibt hier`}
+      title={title}
     >
       <span className="remote-cursor-avatar">
         {person.hasAvatar
@@ -811,11 +846,13 @@ function RemoteCursor({
   textareaRef,
   markdown,
   scrollRevision,
+  title,
 }: {
   person: Person;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
   markdown: string;
   scrollRevision: number;
+  title: string;
 }) {
   const [position, setPosition] = useState<{ left: number; top: number; visible: boolean } | null>(null);
 
@@ -833,7 +870,7 @@ function RemoteCursor({
     <span
       className="remote-cursor"
       style={{ left: position.left, top: position.top, "--cursor-color": person.color } as React.CSSProperties}
-      title={`${person.name} schreibt hier`}
+      title={title}
     >
       <span className="remote-cursor-avatar">
         {person.hasAvatar

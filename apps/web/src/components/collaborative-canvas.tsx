@@ -11,8 +11,13 @@ const Excalidraw = dynamic(
     configureExcalidrawAssets(window);
     return (await import("@excalidraw/excalidraw")).Excalidraw;
   },
-  { ssr: false, loading: () => <div className="canvas-loading">Canvas wird geladen …</div> },
+  { ssr: false, loading: CanvasLoading },
 );
+
+function CanvasLoading() {
+  const { text } = usePreferences();
+  return <div className="canvas-loading">{text("Loading canvas …", "Canvas wird geladen …")}</div>;
+}
 
 type ExcalidrawApi = {
   updateScene: (scene: { elements?: readonly unknown[]; appState?: Record<string, unknown> }) => void;
@@ -62,6 +67,7 @@ export function CollaborativeCanvas({ ydoc, readOnly }: { ydoc: Y.Doc; readOnly:
     <div className="canvas-wrap">
       <Excalidraw
         theme={dark ? "dark" : "light"}
+        langCode={preferences.language === "de" ? "de-DE" : "en"}
         excalidrawAPI={(nextApi) => {
           api.current = nextApi as unknown as ExcalidrawApi;
           nextApi.addFiles(Array.from(filesMap.values()) as never[]);

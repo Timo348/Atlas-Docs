@@ -14,6 +14,8 @@ import { usePreferences } from "@/components/preferences-provider";
 import { ProfileDialog } from "@/components/profile-dialog";
 import { SpacePermissionsDialog } from "@/components/space-permissions-dialog";
 import { SidebarSpaceIdentity, SpacePicker } from "@/components/space-picker";
+import { apiErrorMessage } from "@/lib/api-errors";
+import { spaceRoleLabel } from "@/lib/space-role";
 
 type PageItem = {
   id: string;
@@ -76,11 +78,15 @@ export function WorkspaceShell({
   const activeSpace = spaces.find((space) => space.id === selectedSpaceId) || spaces[0] || null;
   const canWrite = activeSpace?.role === "OWNER" || activeSpace?.role === "EDITOR";
 
+  function request<T extends { id: string }>(url: string, method: string, body: unknown) {
+    return jsonRequest<T>(url, method, body, text);
+  }
+
   function createPage(spaceId: string, folderId: string | null = null) {
     setDialog({
       kind: "page", title: text("New page", "Neue Seite"), label: text("Page title", "Seitentitel"), initial: "",
       submit: async (title, format) => {
-        const response = await jsonRequest("/api/pages", "POST", { title, spaceId, folderId, format });
+        const response = await request("/api/pages", "POST", { title, spaceId, folderId, format });
         if (!response.ok) return setNotice(response.error);
         setDialog(null);
         router.push(`/?space=${spaceId}&page=${response.data.id}`);
@@ -93,7 +99,7 @@ export function WorkspaceShell({
     setDialog({
       kind: "text", title: parentId ? text("New subfolder", "Neuer Unterordner") : text("New folder", "Neuer Ordner"), label: text("Folder name", "Ordnername"), initial: "",
       submit: async (name) => {
-        const response = await jsonRequest("/api/folders", "POST", { name, spaceId, parentId });
+        const response = await request("/api/folders", "POST", { name, spaceId, parentId });
         if (!response.ok) return setNotice(response.error);
         setExpandedFolders((current) => new Set(current).add(parentId || response.data.id).add(response.data.id));
         setDialog(null);
@@ -106,7 +112,7 @@ export function WorkspaceShell({
     setDialog({
       kind: "text", title: text("Rename folder", "Ordner umbenennen"), label: text("Folder name", "Ordnername"), initial: folder.name,
       submit: async (name) => {
-        const response = await jsonRequest(`/api/folders/${folder.id}`, "PATCH", { name });
+        const response = await request(`/api/folders/${folder.id}`, "PATCH", { name });
         if (!response.ok) return setNotice(response.error);
         setDialog(null);
         router.refresh();
@@ -125,7 +131,10 @@ export function WorkspaceShell({
         const response = await fetch(`/api/folders/${folder.id}`, { method: "DELETE" });
         if (!response.ok) {
           const result = await response.json();
-          return setNotice(result.error || text("Folder could not be deleted.", "Ordner konnte nicht gelöscht werden."));
+          return setNotice(apiErrorMessage(result, text, {
+            en: "The folder could not be deleted.",
+            de: "Der Ordner konnte nicht gelöscht werden.",
+          }));
         }
         setDialog(null);
         router.refresh();
@@ -138,7 +147,7 @@ export function WorkspaceShell({
     setDialog({
       kind: "move", title: text(`Move “${page.title}”`, `„${page.title}“ verschieben`), folders: flattenFolders(activeSpace.folders), currentFolderId: page.folderId,
       submit: async (folderId) => {
-        const response = await jsonRequest(`/api/pages/${page.id}`, "PATCH", { folderId });
+        const response = await request(`/api/pages/${page.id}`, "PATCH", { folderId });
         if (!response.ok) return setNotice(response.error);
         setDialog(null);
         router.refresh();
@@ -150,7 +159,7 @@ export function WorkspaceShell({
     setDialog({
       kind: "text", title: text("New space", "Neuer Bereich"), label: text("Space name", "Bereichsname"), initial: "",
       submit: async (name) => {
-        const response = await jsonRequest("/api/spaces", "POST", { name });
+        const response = await request("/api/spaces", "POST", { name });
         if (!response.ok) return setNotice(response.error);
         setDialog(null);
         router.push(`/?space=${response.data.id}`);
@@ -199,7 +208,7 @@ export function WorkspaceShell({
           const targetIndex = siblings.findIndex((candidate) => candidate.id === targetPage.id);
           position = targetIndex + (target.edge === "after" ? 1 : 0);
         }
-        const response = await jsonRequest(`/api/pages/${page.id}`, "PATCH", { folderId, position });
+        const response = await request(`/api/pages/${page.id}`, "PATCH", { folderId, position });
         if (!response.ok) setNotice(response.error);
         else router.refresh();
       } else {
@@ -222,7 +231,7 @@ export function WorkspaceShell({
           const targetIndex = siblings.findIndex((candidate) => candidate.id === targetFolder.id);
           position = targetIndex + (target.edge === "after" ? 1 : 0);
         }
-        const response = await jsonRequest(`/api/folders/${folder.id}`, "PATCH", { parentId, position });
+        const response = await request(`/api/folders/${folder.id}`, "PATCH", { parentId, position });
         if (!response.ok) setNotice(response.error);
         else router.refresh();
       }
@@ -262,7 +271,12 @@ export function WorkspaceShell({
           <div className="space-switcher-wrap">
             <SidebarSpaceIdentity space={activeSpace} onOpen={() => setSpacePickerOpen(true)} />
           </div>
-          <button className="icon-button" onClick={() => setSidebar(false)} title={text("Close navigation", "Navigation schließen")}>
+          <button
+            className="icon-button"
+            onClick={() => setSidebar(false)}
+            title={text("Close navigation", "Navigation schließen")}
+            aria-label={text("Close navigation", "Navigation schließen")}
+          >
             <PanelLeftClose size={19} />
           </button>
         </div>
@@ -270,7 +284,7 @@ export function WorkspaceShell({
         {activeSpace && (
           <>
             <div className="space-toolbar">
-              <span>{roleLabel(activeSpace.role, preferences.language)}</span>
+              <span>{spaceRoleLabel(activeSpace.role, preferences.language)}</span>
               {(activeSpace.role === "OWNER" || user.role === "ADMIN") && (
                 <button
                   className="space-manage-button"
@@ -283,7 +297,15 @@ export function WorkspaceShell({
                 </button>
               )}
             </div>
-            <div className="search-box"><Search size={16} /><input value={pageQuery} onChange={(event) => setPageQuery(event.target.value)} placeholder={text("Search this space…", "In diesem Bereich suchen…")} /></div>
+            <div className="search-box">
+              <Search size={16} />
+              <input
+                value={pageQuery}
+                onChange={(event) => setPageQuery(event.target.value)}
+                placeholder={text("Search this space…", "In diesem Bereich suchen…")}
+                aria-label={text("Search this space", "Diesen Bereich durchsuchen")}
+              />
+            </div>
             <nav className="page-tree">
               {canWrite && (
                 <div className="tree-actions">
@@ -359,7 +381,16 @@ export function WorkspaceShell({
         </div>
       </aside>
       <section className="content">
-        {!sidebar && <button className="open-sidebar icon-button" onClick={() => setSidebar(true)}><PanelLeftOpen size={20} /></button>}
+        {!sidebar && (
+          <button
+            className="open-sidebar icon-button"
+            onClick={() => setSidebar(true)}
+            title={text("Open navigation", "Navigation öffnen")}
+            aria-label={text("Open navigation", "Navigation öffnen")}
+          >
+            <PanelLeftOpen size={20} />
+          </button>
+        )}
         {selectedPage ? (
           <CollaborativeEditor key={selectedPage.id} page={selectedPage} user={user} headerCenter={spacePicker} />
         ) : (
@@ -369,7 +400,7 @@ export function WorkspaceShell({
             </header>
             <div className="empty-state">
               <span>{activeSpace ? <Folder size={28} /> : <BookOpen size={28} />}</span>
-              <h1>{activeSpace ? activeSpace.name : text("Your knowledge space is ready.", "Dein Wissensraum wartet.")}</h1>
+              <h1>{activeSpace ? activeSpace.name : text("Your knowledge space is ready.", "Dein Wissensbereich ist bereit.")}</h1>
               <p>{activeSpace ? text("Create a page or folder.", "Lege eine Seite oder einen Ordner an.") : text("Create your first space.", "Lege deinen ersten Bereich an.")}</p>
               {activeSpace && canWrite ? (
                 <button className="button primary-button compact" onClick={() => createPage(activeSpace.id)}><Plus size={17} /> {text("First page", "Erste Seite")}</button>
@@ -489,10 +520,10 @@ function FolderTree({
               </button>
               {canWrite && (
                 <div className="node-actions">
-                  <button disabled={busy} onClick={() => onCreatePage(space.id, folder.id)} title={text("Page in folder", "Seite im Ordner")}><FilePlus2 size={14} /></button>
-                  <button disabled={busy} onClick={() => onCreateFolder(space.id, folder.id)} title={text("Subfolder", "Unterordner")}><FolderPlus size={14} /></button>
-                  <button disabled={busy} onClick={() => onRenameFolder(folder)} title={text("Rename", "Umbenennen")}><Pencil size={13} /></button>
-                  <button disabled={busy} onClick={() => onDeleteFolder(folder)} title={text("Delete", "Löschen")}><Trash2 size={13} /></button>
+                  <button disabled={busy} onClick={() => onCreatePage(space.id, folder.id)} title={text("Page in folder", "Seite im Ordner")} aria-label={text(`Create page in ${folder.name}`, `Seite in ${folder.name} anlegen`)}><FilePlus2 size={14} /></button>
+                  <button disabled={busy} onClick={() => onCreateFolder(space.id, folder.id)} title={text("Subfolder", "Unterordner")} aria-label={text(`Create subfolder in ${folder.name}`, `Unterordner in ${folder.name} anlegen`)}><FolderPlus size={14} /></button>
+                  <button disabled={busy} onClick={() => onRenameFolder(folder)} title={text("Rename", "Umbenennen")} aria-label={text(`Rename ${folder.name}`, `${folder.name} umbenennen`)}><Pencil size={13} /></button>
+                  <button disabled={busy} onClick={() => onDeleteFolder(folder)} title={text("Delete", "Löschen")} aria-label={text(`Delete ${folder.name}`, `${folder.name} löschen`)}><Trash2 size={13} /></button>
                 </div>
               )}
             </div>
@@ -604,7 +635,7 @@ function RootPages({
           <Link className="page-link" href={`/?space=${page.spaceId}&page=${page.id}`}>
             {page.format === "LATEX" ? <FileCode2 size={14} /> : <FileText size={14} />}<span>{page.title}</span>
           </Link>
-          {canWrite && <button onClick={() => onMovePage(page)} title={text("Move page", "Seite verschieben")}><MoreHorizontal size={15} /></button>}
+          {canWrite && <button onClick={() => onMovePage(page)} title={text("Move page", "Seite verschieben")} aria-label={text(`Move ${page.title}`, `${page.title} verschieben`)}><MoreHorizontal size={15} /></button>}
         </div>
       )})}
     </>
@@ -641,11 +672,6 @@ function verticalDropEdge(event: DragEvent, allowInside: boolean) {
   return "after";
 }
 
-function roleLabel(role: Space["role"], language: "en" | "de") {
-  if (language === "de") return role === "OWNER" ? "Eigentümer" : role === "EDITOR" ? "Bearbeiten" : "Nur lesen";
-  return role === "OWNER" ? "Owner" : role === "EDITOR" ? "Can edit" : "Read only";
-}
-
 function initials(name: string) {
   return name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
 }
@@ -677,7 +703,7 @@ function ActionDialog({
   }
   return (
     <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <section className="action-dialog" role="dialog" aria-modal="true">
+      <section className="action-dialog" role="dialog" aria-modal="true" aria-label={dialog.title}>
         <header className="dialog-header">
           <div><span className="dialog-kicker">Atlas</span><h2>{dialog.title}</h2></div>
           <button className="icon-button" onClick={onClose} aria-label={text("Close", "Schließen")}><X size={18} /></button>
@@ -714,7 +740,12 @@ function ActionDialog({
   );
 }
 
-async function jsonRequest<T extends { id: string }>(url: string, method: string, body: unknown): Promise<
+async function jsonRequest<T extends { id: string }>(
+  url: string,
+  method: string,
+  body: unknown,
+  text: (english: string, german: string) => string,
+): Promise<
   { ok: true; data: T } | { ok: false; error: string }
 > {
   const response = await fetch(url, {
@@ -723,5 +754,13 @@ async function jsonRequest<T extends { id: string }>(url: string, method: string
     body: JSON.stringify(body),
   });
   const data = await response.json();
-  return response.ok ? { ok: true, data } : { ok: false, error: data.error || "Aktion fehlgeschlagen." };
+  return response.ok
+    ? { ok: true, data }
+    : {
+        ok: false,
+        error: apiErrorMessage(data, text, {
+          en: "The action could not be completed.",
+          de: "Die Aktion konnte nicht abgeschlossen werden.",
+        }),
+      };
 }

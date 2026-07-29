@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireApiUser } from "@/lib/access";
+import { apiErrorResponse, readJsonBody } from "@/lib/api-errors";
 import { db } from "@/lib/db";
 import { slugify } from "@/lib/slug";
 
@@ -11,10 +12,10 @@ const schema = z.object({
 
 export async function POST(request: Request) {
   const user = await requireApiUser();
-  if (!user) return NextResponse.json({ error: "Nicht angemeldet" }, { status: 401 });
+  if (!user) return apiErrorResponse("AUTH_REQUIRED", 401);
 
-  const parsed = schema.safeParse(await request.json());
-  if (!parsed.success) return NextResponse.json({ error: "Ungültige Eingabe" }, { status: 400 });
+  const parsed = schema.safeParse(await readJsonBody(request));
+  if (!parsed.success) return apiErrorResponse("INVALID_INPUT", 400);
 
   const baseSlug = slugify(parsed.data.name);
   const exists = await db.space.findUnique({ where: { slug: baseSlug }, select: { id: true } });

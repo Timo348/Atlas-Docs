@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireApiUser } from "@/lib/access";
+import { apiErrorResponse, readJsonBody } from "@/lib/api-errors";
 import { db } from "@/lib/db";
 import {
   collaborationDocumentsForPages,
@@ -14,10 +15,10 @@ const deleteSchema = z.object({
 
 export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
   const user = await requireApiUser();
-  if (!user) return NextResponse.json({ error: "Nicht angemeldet" }, { status: 401 });
+  if (!user) return apiErrorResponse("AUTH_REQUIRED", 401);
 
   const { id } = await context.params;
-  const parsed = deleteSchema.safeParse(await request.json().catch(() => null));
+  const parsed = deleteSchema.safeParse(await readJsonBody(request));
   const outcome = await db.$transaction(async (transaction) => {
     const spaces = await transaction.$queryRaw<{ name: string }[]>`
       SELECT "name"
@@ -78,19 +79,13 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
   });
 
   if (outcome === "not-found") {
-    return NextResponse.json({ error: "Bereich nicht gefunden" }, { status: 404 });
+    return apiErrorResponse("SPACE_NOT_FOUND", 404);
   }
   if (outcome === "forbidden") {
-    return NextResponse.json(
-      { error: "Nur Bereichseigentümer dürfen den Bereich löschen" },
-      { status: 403 },
-    );
+    return apiErrorResponse("SPACE_DELETE_REQUIRED", 403);
   }
   if (outcome === "confirmation-mismatch") {
-    return NextResponse.json(
-      { error: "Der Bereichsname stimmt nicht mit der Bestätigung überein" },
-      { status: 400 },
-    );
+    return apiErrorResponse("SPACE_DELETE_CONFIRMATION_MISMATCH", 400);
   }
 
   return new NextResponse(null, { status: 204 });

@@ -100,7 +100,15 @@ export const authOptions: NextAuthOptions = {
       if (id) {
         const current = await db.user.findUnique({
           where: { id },
-          select: { id: true, role: true, active: true, name: true, email: true, image: true },
+          select: {
+            id: true,
+            role: true,
+            active: true,
+            name: true,
+            email: true,
+            image: true,
+            language: true,
+          },
         });
         if (current) {
           token.userId = current.id;
@@ -109,6 +117,7 @@ export const authOptions: NextAuthOptions = {
           token.name = current.name;
           token.email = current.email;
           token.picture = current.image;
+          token.language = current.language === "de" ? "de" : "en";
         }
       }
       return token;
@@ -118,6 +127,7 @@ export const authOptions: NextAuthOptions = {
         session.user.id = token.userId;
         session.user.role = token.role;
         session.user.active = token.active === true;
+        session.user.language = token.language === "de" ? "de" : "en";
       }
       return session;
     },

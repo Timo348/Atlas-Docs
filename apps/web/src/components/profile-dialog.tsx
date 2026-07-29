@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Camera, Settings2, X } from "lucide-react";
 import { usePreferences } from "@/components/preferences-provider";
+import { apiErrorMessage } from "@/lib/api-errors";
 import type { Preferences } from "@/lib/preferences";
 
 export function ProfileDialog({
@@ -34,7 +35,12 @@ export function ProfileDialog({
     const response = await fetch(`/api/users/${user.id}/avatar`, { method: "PUT", body: form });
     const result = await response.json();
     setBusy(false);
-    if (!response.ok) return setError(result.error || text("Profile image could not be saved.", "Profilbild konnte nicht gespeichert werden."));
+    if (!response.ok) {
+      return setError(apiErrorMessage(result, text, {
+        en: "The profile image could not be saved.",
+        de: "Das Profilbild konnte nicht gespeichert werden.",
+      }));
+    }
     setHasAvatar(true);
     setVersion(Date.now());
     setFile(null);
@@ -62,7 +68,12 @@ export function ProfileDialog({
     });
     const result = await response.json();
     setBusy(false);
-    if (!response.ok) return setError(result.error || text("Settings could not be saved.", "Einstellungen konnten nicht gespeichert werden."));
+    if (!response.ok) {
+      return setError(apiErrorMessage(result, text, {
+        en: "The settings could not be saved.",
+        de: "Die Einstellungen konnten nicht gespeichert werden.",
+      }));
+    }
     setPreferences(result as Preferences);
     setNotice(draft.language === "de" ? "Einstellungen gespeichert." : "Settings saved.");
   }
@@ -101,7 +112,7 @@ export function ProfileDialog({
                 <option value="en">English</option><option value="de">Deutsch</option>
               </select>
             </label>
-            <label>{text("Color theme", "Farbtheme")}
+            <label>{text("Color theme", "Farbschema")}
               <select value={draft.colorTheme} onChange={(event) => update("colorTheme", event.target.value as Preferences["colorTheme"])}>
                 <option value="system">{text("System", "System")}</option><option value="light">{text("Light", "Hell")}</option><option value="dark">{text("Dark", "Dunkel")}</option>
               </select>

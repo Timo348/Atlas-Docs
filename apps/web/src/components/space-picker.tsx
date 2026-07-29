@@ -3,6 +3,7 @@
 import { BookOpen, Check, ChevronsUpDown, Plus, Search, X } from "lucide-react";
 import { type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
 import { usePreferences } from "@/components/preferences-provider";
+import { spaceRoleLabel } from "@/lib/space-role";
 import styles from "./space-picker.module.css";
 
 export type SpacePickerSpace = {
@@ -241,9 +242,9 @@ export function SpacePicker({
                       <SpaceArtwork space={space} className={styles.resultArtwork} />
                       <span className={styles.resultCopy}>
                         <strong>{space.name}</strong>
-                        <small>{space.description || roleLabel(space.role, preferences.language)}</small>
+                        <small>{space.description || spaceRoleLabel(space.role, preferences.language)}</small>
                       </span>
-                      <span className={styles.resultRole}>{roleLabel(space.role, preferences.language)}</span>
+                      <span className={styles.resultRole}>{spaceRoleLabel(space.role, preferences.language)}</span>
                       {selected && (
                         <span className={styles.selectedMark} aria-label={text("Currently selected", "Aktuell ausgewählt")}>
                           <Check size={16} aria-hidden="true" />
@@ -284,9 +285,4 @@ function SpaceArtwork({ space, className }: { space: SpacePickerSpace | null; cl
         : <BookOpen size={18} />}
     </span>
   );
-}
-
-function roleLabel(role: SpacePickerSpace["role"], language: "en" | "de") {
-  if (language === "de") return role === "OWNER" ? "Eigentümer" : role === "EDITOR" ? "Bearbeiten" : "Nur lesen";
-  return role === "OWNER" ? "Owner" : role === "EDITOR" ? "Can edit" : "Read only";
 }

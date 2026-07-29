@@ -7,6 +7,7 @@ declare module "next-auth" {
       id: string;
       role: UserRole;
       active: boolean;
+      language: "en" | "de";
     } & DefaultSession["user"];
   }
 
@@ -17,5 +18,6 @@ declare module "next-auth/jwt" {
     userId?: string;
     role?: UserRole;
     active?: boolean;
+    language?: "en" | "de";
   }
 }

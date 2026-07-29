@@ -2,8 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, LoaderCircle } from "lucide-react";
+import { usePreferences } from "@/components/preferences-provider";
 
 export function LatexPreview({ source }: { source: string }) {
+  const { text } = usePreferences();
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState("");
   const [rendering, setRendering] = useState(true);
@@ -30,9 +32,12 @@ export function LatexPreview({ source }: { source: string }) {
         shadow.replaceChildren(...styles, page);
         document.applyLengthsAndGeometryToDom(containerRef.current);
         setError("");
-      } catch (reason) {
+      } catch {
         if (!active) return;
-        setError(reason instanceof Error ? reason.message : "Das LaTeX-Dokument konnte nicht gerendert werden.");
+        setError(text(
+          "The LaTeX document could not be rendered. Check the source for syntax errors.",
+          "Das LaTeX-Dokument konnte nicht gerendert werden. Prüfe den Quelltext auf Syntaxfehler.",
+        ));
       } finally {
         if (active) setRendering(false);
       }
@@ -41,12 +46,12 @@ export function LatexPreview({ source }: { source: string }) {
       active = false;
       window.clearTimeout(timer);
     };
-  }, [source]);
+  }, [source, text]);
 
   return (
     <div className="latex-preview-shell">
-      {rendering && <span className="latex-rendering"><LoaderCircle className="spin" size={14} /> LaTeX wird gesetzt …</span>}
-      {error && <div className="latex-error"><AlertTriangle size={17} /><div><strong>LaTeX-Fehler</strong><span>{error}</span></div></div>}
+      {rendering && <span className="latex-rendering"><LoaderCircle className="spin" size={14} /> {text("Rendering LaTeX …", "LaTeX wird gesetzt …")}</span>}
+      {error && <div className="latex-error"><AlertTriangle size={17} /><div><strong>{text("LaTeX error", "LaTeX-Fehler")}</strong><span>{error}</span></div></div>}
       <article ref={containerRef} className="latex-preview" />
     </div>
   );

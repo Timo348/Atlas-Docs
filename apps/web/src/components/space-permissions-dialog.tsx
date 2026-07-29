@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Check, ImagePlus, Trash2, Users, X } from "lucide-react";
 import { usePreferences } from "@/components/preferences-provider";
+import { apiErrorMessage } from "@/lib/api-errors";
 
 type Role = "OWNER" | "EDITOR" | "VIEWER";
 type UserOption = { id: string; name: string | null; email: string };
@@ -47,7 +48,12 @@ export function SpacePermissionsDialog({
     setError("");
     const response = await fetch(`/api/spaces/${spaceId}/permissions`);
     const result = await response.json();
-    if (!response.ok) return setError(result.error || "Rechte konnten nicht geladen werden.");
+    if (!response.ok) {
+      return setError(apiErrorMessage(result, text, {
+        en: "Permissions could not be loaded.",
+        de: "Rechte konnten nicht geladen werden.",
+      }));
+    }
     const permissions = result as PermissionsData;
     setData(permissions);
     setUserRoles(Object.fromEntries(permissions.users.map((user) => [
@@ -77,7 +83,12 @@ export function SpacePermissionsDialog({
     });
     const result = await response.json();
     setBusy(false);
-    if (!response.ok) return setError(result.error || "Rechte konnten nicht gespeichert werden.");
+    if (!response.ok) {
+      return setError(apiErrorMessage(result, text, {
+        en: "Permissions could not be saved.",
+        de: "Rechte konnten nicht gespeichert werden.",
+      }));
+    }
     onClose();
   }
 
@@ -90,7 +101,12 @@ export function SpacePermissionsDialog({
     const response = await fetch(`/api/spaces/${spaceId}/image`, { method: "PUT", body: form });
     const result = await response.json();
     setBusy(false);
-    if (!response.ok) return setError(result.error || "Bild konnte nicht gespeichert werden.");
+    if (!response.ok) {
+      return setError(apiErrorMessage(result, text, {
+        en: "Image could not be saved.",
+        de: "Bild konnte nicht gespeichert werden.",
+      }));
+    }
     setData((current) => current ? { ...current, space: { ...current.space, imageMime: imageFile.type } } : current);
     setImageFile(null);
     setImageVersion(Date.now());
@@ -103,7 +119,10 @@ export function SpacePermissionsDialog({
     setBusy(false);
     if (!response.ok) {
       const result = await response.json();
-      return setError(result.error || "Bild konnte nicht entfernt werden.");
+      return setError(apiErrorMessage(result, text, {
+        en: "Image could not be removed.",
+        de: "Bild konnte nicht entfernt werden.",
+      }));
     }
     setData((current) => current ? { ...current, space: { ...current.space, imageMime: null } } : current);
   }
@@ -123,7 +142,10 @@ export function SpacePermissionsDialog({
         return;
       }
       const result = await response.json();
-      setError(result.error || text("Space could not be deleted.", "Bereich konnte nicht gelöscht werden."));
+      setError(apiErrorMessage(result, text, {
+        en: "Space could not be deleted.",
+        de: "Bereich konnte nicht gelöscht werden.",
+      }));
     } catch {
       setError(text("Space could not be deleted.", "Bereich konnte nicht gelöscht werden."));
     } finally {
@@ -135,26 +157,31 @@ export function SpacePermissionsDialog({
     <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !busy && onClose()}>
       <section className="permissions-dialog" role="dialog" aria-modal="true" aria-labelledby="permissions-title">
         <header className="dialog-header">
-          <div><span className="dialog-kicker">Bereich verwalten</span><h2 id="permissions-title">{data?.space.name || "Bereich"}</h2></div>
+          <div><span className="dialog-kicker">{text("Manage space", "Bereich verwalten")}</span><h2 id="permissions-title">{data?.space.name || text("Space", "Bereich")}</h2></div>
           <button className="icon-button" disabled={busy} onClick={onClose} aria-label={text("Close", "Schließen")}><X size={19} /></button>
         </header>
         <div className="dialog-tabs">
-          <button className={tab === "users" ? "active" : ""} onClick={() => setTab("users")}>Nutzer</button>
-          <button className={tab === "teams" ? "active" : ""} onClick={() => setTab("teams")}>Teams</button>
-          <button className={tab === "image" ? "active" : ""} onClick={() => setTab("image")}>Bereichsbild</button>
+          <button className={tab === "users" ? "active" : ""} onClick={() => setTab("users")}>{text("Users", "Benutzer")}</button>
+          <button className={tab === "teams" ? "active" : ""} onClick={() => setTab("teams")}>{text("Teams", "Teams")}</button>
+          <button className={tab === "image" ? "active" : ""} onClick={() => setTab("image")}>{text("Space image", "Bereichsbild")}</button>
           <button className={tab === "delete" ? "active danger-tab" : "danger-tab"} onClick={() => setTab("delete")}>{text("Delete", "Löschen")}</button>
         </div>
         <div className="permissions-body">
-          {!data && !error && <p className="muted-copy">Einstellungen werden geladen …</p>}
+          {!data && !error && <p className="muted-copy">{text("Loading settings …", "Einstellungen werden geladen …")}</p>}
           {error && <p className="admin-error">{error}</p>}
           {data && tab === "users" && (
             <div className="permission-list">
               {data.users.map((user) => (
                 <div className="permission-row" key={user.id}>
                   <span className="permission-avatar">{initials(user.name || user.email)}</span>
-                  <div><strong>{user.name || "Ohne Namen"}</strong><small>{user.email}</small></div>
-                  <select value={userRoles[user.id] || "NONE"} disabled={user.id === currentUserId} onChange={(event) => setUserRoles((current) => ({ ...current, [user.id]: event.target.value as Role | "NONE" }))}>
-                    <option value="NONE">Kein Zugriff</option><option value="VIEWER">Lesen</option><option value="EDITOR">Bearbeiten</option><option value="OWNER">Eigentümer</option>
+                  <div><strong>{user.name || text("No name", "Ohne Namen")}</strong><small>{user.email}</small></div>
+                  <select
+                    value={userRoles[user.id] || "NONE"}
+                    disabled={user.id === currentUserId}
+                    onChange={(event) => setUserRoles((current) => ({ ...current, [user.id]: event.target.value as Role | "NONE" }))}
+                    aria-label={text(`Access for ${user.name || user.email}`, `Zugriff für ${user.name || user.email}`)}
+                  >
+                    <option value="NONE">{text("No access", "Kein Zugriff")}</option><option value="VIEWER">{text("Read", "Lesen")}</option><option value="EDITOR">{text("Edit", "Bearbeiten")}</option><option value="OWNER">{text("Owner", "Eigentümer")}</option>
                   </select>
                 </div>
               ))}
@@ -162,21 +189,27 @@ export function SpacePermissionsDialog({
           )}
           {data && tab === "teams" && (
             <div className="teams-panel">
-              {data.canManageTeams && <Link className="team-admin-link" href="/admin/teams"><Users size={16} /> Teams und zeitliche Mitgliedschaften verwalten</Link>}
+              {data.canManageTeams && <Link className="team-admin-link" href="/admin/teams"><Users size={16} /> {text("Manage teams and temporary memberships", "Teams und zeitlich begrenzte Mitgliedschaften verwalten")}</Link>}
               <div className="permission-list">
                 {data.teams.map((team) => {
                   const active = team.members.filter((member) => !member.expiresAt || new Date(member.expiresAt) > new Date()).length;
                   return (
                     <div className="permission-row" key={team.id}>
                       <span className="permission-avatar team"><Users size={15} /></span>
-                      <div><strong>{team.name}</strong><small>{active} aktive Mitglieder</small></div>
-                      <select value={teamRoles[team.id] || "NONE"} onChange={(event) => setTeamRoles((current) => ({ ...current, [team.id]: event.target.value as "EDITOR" | "VIEWER" | "NONE" }))}>
-                        <option value="NONE">Kein Zugriff</option><option value="VIEWER">Lesen</option><option value="EDITOR">Bearbeiten</option>
+                      <div><strong>{team.name}</strong><small>{active === 1
+                        ? text("1 active member", "1 aktives Mitglied")
+                        : text(`${active} active members`, `${active} aktive Mitglieder`)}</small></div>
+                      <select
+                        value={teamRoles[team.id] || "NONE"}
+                        onChange={(event) => setTeamRoles((current) => ({ ...current, [team.id]: event.target.value as "EDITOR" | "VIEWER" | "NONE" }))}
+                        aria-label={text(`Access for team ${team.name}`, `Zugriff für Team ${team.name}`)}
+                      >
+                        <option value="NONE">{text("No access", "Kein Zugriff")}</option><option value="VIEWER">{text("Read", "Lesen")}</option><option value="EDITOR">{text("Edit", "Bearbeiten")}</option>
                       </select>
                     </div>
                   );
                 })}
-                {!data.teams.length && <p className="muted-copy">Noch keine Teams angelegt.</p>}
+                {!data.teams.length && <p className="muted-copy">{text("No teams have been created yet.", "Noch keine Teams angelegt.")}</p>}
               </div>
             </div>
           )}
@@ -188,12 +221,20 @@ export function SpacePermissionsDialog({
                   : <ImagePlus size={32} />}
               </div>
               <div>
-                <h3>Bild für diesen Bereich</h3>
-                <p>Erlaubt sind JPG und PNG bis 5 MB. Nur Eigentümer und Administratoren können es ändern.</p>
-                <input type="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png" onChange={(event) => setImageFile(event.target.files?.[0] || null)} />
+                <h3>{text("Image for this space", "Bild für diesen Bereich")}</h3>
+                <p>{text(
+                  "JPG and PNG images up to 5 MB are allowed. Only owners and administrators can change this image.",
+                  "Erlaubt sind JPG- und PNG-Bilder bis 5 MB. Nur Eigentümer und Administratoren können dieses Bild ändern.",
+                )}</p>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,.jpg,.jpeg,.png"
+                  onChange={(event) => setImageFile(event.target.files?.[0] || null)}
+                  aria-label={text("Choose space image", "Bereichsbild auswählen")}
+                />
                 <div className="image-actions">
-                  <button className="button primary-button compact" disabled={!imageFile || busy} onClick={uploadImage}>Bild speichern</button>
-                  {data.space.imageMime && <button className="button secondary-button compact" disabled={busy} onClick={removeImage}>Bild entfernen</button>}
+                  <button className="button primary-button compact" disabled={!imageFile || busy} onClick={uploadImage}>{text("Save image", "Bild speichern")}</button>
+                  {data.space.imageMime && <button className="button secondary-button compact" disabled={busy} onClick={removeImage}>{text("Remove image", "Bild entfernen")}</button>}
                 </div>
               </div>
             </div>
@@ -236,11 +277,11 @@ export function SpacePermissionsDialog({
           <span>
             {tab === "delete"
               ? <><Trash2 size={14} /> {text("Deletion cannot be undone.", "Löschen kann nicht rückgängig gemacht werden.")}</>
-              : <><Check size={14} /> Änderungen gelten für den gesamten Bereich.</>}
+              : <><Check size={14} /> {text("Changes apply to the entire space.", "Änderungen gelten für den gesamten Bereich.")}</>}
           </span>
           <div>
             <button className="button secondary-button compact" disabled={busy} onClick={onClose}>{text("Cancel", "Abbrechen")}</button>
-            {tab !== "image" && tab !== "delete" && <button className="button primary-button compact" disabled={busy || !data} onClick={savePermissions}>{busy ? "Speichern …" : "Rechte speichern"}</button>}
+            {tab !== "image" && tab !== "delete" && <button className="button primary-button compact" disabled={busy || !data} onClick={savePermissions}>{busy ? text("Saving …", "Speichern …") : text("Save permissions", "Rechte speichern")}</button>}
           </div>
         </footer>
       </section>

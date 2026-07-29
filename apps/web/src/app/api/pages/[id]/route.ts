@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { canEdit, pageAccess, requireApiUser } from "@/lib/access";
+import { apiErrorResponse, readJsonBody } from "@/lib/api-errors";
 import { db } from "@/lib/db";
 import { insertAt } from "@/lib/tree-order";
 
@@ -12,20 +13,20 @@ const updateSchema = z.object({
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const user = await requireApiUser();
-  if (!user) return NextResponse.json({ error: "Nicht angemeldet" }, { status: 401 });
+  if (!user) return apiErrorResponse("AUTH_REQUIRED", 401);
   const { id } = await context.params;
   const page = await pageAccess(user.id, id);
   if (!page || !canEdit(page.accessRole)) {
-    return NextResponse.json({ error: "Kein Schreibzugriff" }, { status: 403 });
+    return apiErrorResponse("WRITE_ACCESS_REQUIRED", 403);
   }
-  const parsed = updateSchema.safeParse(await request.json());
-  if (!parsed.success) return NextResponse.json({ error: "Ungültige Eingabe" }, { status: 400 });
+  const parsed = updateSchema.safeParse(await readJsonBody(request));
+  if (!parsed.success) return apiErrorResponse("INVALID_INPUT", 400);
   if (parsed.data.folderId) {
     const folder = await db.folder.findFirst({
       where: { id: parsed.data.folderId, spaceId: page.spaceId },
       select: { id: true },
     });
-    if (!folder) return NextResponse.json({ error: "Ungültiger Ordner" }, { status: 400 });
+    if (!folder) return apiErrorResponse("FOLDER_INVALID", 400);
   }
   const moving = parsed.data.folderId !== undefined || parsed.data.position !== undefined;
   if (!moving) {
@@ -62,11 +63,11 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
 export async function DELETE(_: Request, context: { params: Promise<{ id: string }> }) {
   const user = await requireApiUser();
-  if (!user) return NextResponse.json({ error: "Nicht angemeldet" }, { status: 401 });
+  if (!user) return apiErrorResponse("AUTH_REQUIRED", 401);
   const { id } = await context.params;
   const page = await pageAccess(user.id, id);
   if (!page || !canEdit(page.accessRole)) {
-    return NextResponse.json({ error: "Kein Schreibzugriff" }, { status: 403 });
+    return apiErrorResponse("WRITE_ACCESS_REQUIRED", 403);
   }
   await db.$transaction([
     db.page.delete({ where: { id } }),

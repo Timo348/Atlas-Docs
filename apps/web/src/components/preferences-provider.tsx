@@ -29,6 +29,7 @@ export function PreferencesProvider({
       root.dataset.editorFont = preferences.editorFont;
       root.dataset.fontSize = preferences.fontSize;
       root.dataset.compact = String(preferences.compactMode);
+      document.cookie = `atlas-language=${preferences.language}; Path=/; Max-Age=31536000; SameSite=Lax`;
     };
     apply();
     const observer = new MutationObserver(() => {

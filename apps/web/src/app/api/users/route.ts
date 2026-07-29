@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireApiUser } from "@/lib/access";
+import { apiErrorResponse, readJsonBody } from "@/lib/api-errors";
 import { db } from "@/lib/db";
 
 const createSchema = z.object({
@@ -13,9 +14,8 @@ const createSchema = z.object({
 
 export async function GET() {
   const user = await requireApiUser();
-  if (!user || user.role !== "ADMIN") {
-    return NextResponse.json({ error: "Nur für Administratoren" }, { status: 403 });
-  }
+  if (!user) return apiErrorResponse("AUTH_REQUIRED", 401);
+  if (user.role !== "ADMIN") return apiErrorResponse("ADMIN_REQUIRED", 403);
   const users = await db.user.findMany({
     select: {
       id: true,
@@ -33,15 +33,14 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const admin = await requireApiUser();
-  if (!admin || admin.role !== "ADMIN") {
-    return NextResponse.json({ error: "Nur für Administratoren" }, { status: 403 });
-  }
-  const parsed = createSchema.safeParse(await request.json());
+  if (!admin) return apiErrorResponse("AUTH_REQUIRED", 401);
+  if (admin.role !== "ADMIN") return apiErrorResponse("ADMIN_REQUIRED", 403);
+  const parsed = createSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) {
-    return NextResponse.json({ error: "Name, gültige E-Mail und mindestens 12 Zeichen Passwort erforderlich" }, { status: 400 });
+    return apiErrorResponse("USER_CREATE_INPUT_INVALID", 400);
   }
   const existing = await db.user.findUnique({ where: { email: parsed.data.email } });
-  if (existing) return NextResponse.json({ error: "E-Mail ist bereits vergeben" }, { status: 409 });
+  if (existing) return apiErrorResponse("EMAIL_CONFLICT", 409);
   const start = await db.space.findUnique({ where: { slug: "start" } });
   const user = await db.user.create({
     data: {

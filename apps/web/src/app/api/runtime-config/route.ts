@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { apiErrorResponse } from "@/lib/api-errors";
 import { resolveCollaborationUrl } from "@/lib/runtime-config";
 
 export async function GET(request: NextRequest) {
@@ -13,9 +14,7 @@ export async function GET(request: NextRequest) {
     });
     return NextResponse.json({ collaborationUrl });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Collaboration configuration is invalid." },
-      { status: 500 },
-    );
+    console.error("[atlas-api] Collaboration configuration is invalid.", error);
+    return apiErrorResponse("COLLABORATION_CONFIG_INVALID", 500);
   }
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { canEdit, requireApiUser, spaceAccess } from "@/lib/access";
+import { apiErrorResponse, readJsonBody } from "@/lib/api-errors";
 import { db } from "@/lib/db";
 
 const schema = z.object({
@@ -11,19 +12,19 @@ const schema = z.object({
 
 export async function POST(request: Request) {
   const user = await requireApiUser();
-  if (!user) return NextResponse.json({ error: "Nicht angemeldet" }, { status: 401 });
+  if (!user) return apiErrorResponse("AUTH_REQUIRED", 401);
 
-  const parsed = schema.safeParse(await request.json());
-  if (!parsed.success) return NextResponse.json({ error: "Ungültige Eingabe" }, { status: 400 });
+  const parsed = schema.safeParse(await readJsonBody(request));
+  if (!parsed.success) return apiErrorResponse("INVALID_INPUT", 400);
   const role = await spaceAccess(user.id, parsed.data.spaceId);
-  if (!canEdit(role)) return NextResponse.json({ error: "Kein Schreibzugriff" }, { status: 403 });
+  if (!canEdit(role)) return apiErrorResponse("WRITE_ACCESS_REQUIRED", 403);
 
   if (parsed.data.parentId) {
     const parent = await db.folder.findFirst({
       where: { id: parsed.data.parentId, spaceId: parsed.data.spaceId },
       select: { id: true },
     });
-    if (!parent) return NextResponse.json({ error: "Ungültiger übergeordneter Ordner" }, { status: 400 });
+    if (!parent) return apiErrorResponse("FOLDER_PARENT_INVALID", 400);
   }
 
   const duplicate = await db.folder.findFirst({
@@ -35,7 +36,7 @@ export async function POST(request: Request) {
     select: { id: true },
   });
   if (duplicate) {
-    return NextResponse.json({ error: "In dieser Ebene existiert bereits ein Ordner mit diesem Namen" }, { status: 409 });
+    return apiErrorResponse("FOLDER_NAME_CONFLICT", 409);
   }
 
   const lastFolder = await db.folder.aggregate({

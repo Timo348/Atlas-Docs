@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { canEdit, pageAccess, requireApiUser } from "@/lib/access";
+import { apiErrorResponse } from "@/lib/api-errors";
 import { db } from "@/lib/db";
 
 type Context = { params: Promise<{ id: string; imageId: string }> };
@@ -27,11 +28,11 @@ export async function GET(_: Request, context: Context) {
 
 export async function DELETE(_: Request, context: Context) {
   const user = await requireApiUser();
-  if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  if (!user) return apiErrorResponse("AUTH_REQUIRED", 401);
   const { id: pageId, imageId } = await context.params;
   const page = await pageAccess(user.id, pageId);
   if (!page || !canEdit(page.accessRole)) {
-    return NextResponse.json({ error: "No write access" }, { status: page ? 403 : 404 });
+    return apiErrorResponse("WRITE_ACCESS_REQUIRED", page ? 403 : 404);
   }
   const deleted = await db.pageImage.deleteMany({ where: { id: imageId, pageId } });
   return new NextResponse(null, { status: deleted.count ? 204 : 404 });

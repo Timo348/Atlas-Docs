@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireApiUser } from "@/lib/access";
+import { apiErrorResponse, readJsonBody } from "@/lib/api-errors";
 import { db } from "@/lib/db";
 
 const schema = z.object({
@@ -13,25 +14,24 @@ const schema = z.object({
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const user = await requireApiUser();
-  if (!user || user.role !== "ADMIN") {
-    return NextResponse.json({ error: "Nur Administratoren dürfen Teams verwalten" }, { status: 403 });
-  }
+  if (!user) return apiErrorResponse("AUTH_REQUIRED", 401);
+  if (user.role !== "ADMIN") return apiErrorResponse("TEAM_ADMIN_REQUIRED", 403);
   const { id } = await context.params;
-  const parsed = schema.safeParse(await request.json());
-  if (!parsed.success) return NextResponse.json({ error: "Ungültige Eingabe" }, { status: 400 });
+  const parsed = schema.safeParse(await readJsonBody(request));
+  if (!parsed.success) return apiErrorResponse("INVALID_INPUT", 400);
   const userIds = [...new Set(parsed.data.members.map((member) => member.userId))];
   if (userIds.length !== parsed.data.members.length) {
-    return NextResponse.json({ error: "Benutzer darf pro Team nur einmal vorkommen" }, { status: 400 });
+    return apiErrorResponse("TEAM_MEMBER_DUPLICATE", 400);
   }
   const validUsers = await db.user.count({ where: { id: { in: userIds }, active: true } });
   if (validUsers !== userIds.length) {
-    return NextResponse.json({ error: "Mindestens ein Benutzer wurde nicht gefunden" }, { status: 400 });
+    return apiErrorResponse("TEAM_MEMBER_NOT_FOUND", 400);
   }
   const duplicate = await db.team.findFirst({
     where: { id: { not: id }, name: { equals: parsed.data.name, mode: "insensitive" } },
     select: { id: true },
   });
-  if (duplicate) return NextResponse.json({ error: "Ein Team mit diesem Namen existiert bereits" }, { status: 409 });
+  if (duplicate) return apiErrorResponse("TEAM_NAME_CONFLICT", 409);
   const team = await db.$transaction(async (tx) => {
     await tx.teamMember.deleteMany({ where: { teamId: id } });
     return tx.team.update({
@@ -53,9 +53,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
 export async function DELETE(_: Request, context: { params: Promise<{ id: string }> }) {
   const user = await requireApiUser();
-  if (!user || user.role !== "ADMIN") {
-    return NextResponse.json({ error: "Nur Administratoren dürfen Teams verwalten" }, { status: 403 });
-  }
+  if (!user) return apiErrorResponse("AUTH_REQUIRED", 401);
+  if (user.role !== "ADMIN") return apiErrorResponse("TEAM_ADMIN_REQUIRED", 403);
   const { id } = await context.params;
   await db.team.delete({ where: { id } });
   return new NextResponse(null, { status: 204 });

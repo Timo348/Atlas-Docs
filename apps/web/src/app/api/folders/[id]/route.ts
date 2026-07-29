@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { canEdit, requireApiUser, spaceAccess } from "@/lib/access";
+import { apiErrorResponse, readJsonBody } from "@/lib/api-errors";
 import { db } from "@/lib/db";
 import { insertAt } from "@/lib/tree-order";
 
@@ -12,27 +13,27 @@ const schema = z.object({
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const user = await requireApiUser();
-  if (!user) return NextResponse.json({ error: "Nicht angemeldet" }, { status: 401 });
+  if (!user) return apiErrorResponse("AUTH_REQUIRED", 401);
   const { id } = await context.params;
   const folder = await db.folder.findUnique({ where: { id } });
   if (!folder || !canEdit(await spaceAccess(user.id, folder.spaceId))) {
-    return NextResponse.json({ error: "Kein Schreibzugriff" }, { status: 403 });
+    return apiErrorResponse("WRITE_ACCESS_REQUIRED", 403);
   }
-  const parsed = schema.safeParse(await request.json());
-  if (!parsed.success) return NextResponse.json({ error: "Ungültige Eingabe" }, { status: 400 });
+  const parsed = schema.safeParse(await readJsonBody(request));
+  if (!parsed.success) return apiErrorResponse("INVALID_INPUT", 400);
   if (parsed.data.parentId === id) {
-    return NextResponse.json({ error: "Ein Ordner kann nicht in sich selbst liegen" }, { status: 400 });
+    return apiErrorResponse("FOLDER_SELF_PARENT", 400);
   }
   if (parsed.data.parentId) {
     const descendants = await collectDescendantIds(id);
     if (descendants.has(parsed.data.parentId)) {
-      return NextResponse.json({ error: "Ein Ordner kann nicht in einen Unterordner verschoben werden" }, { status: 400 });
+      return apiErrorResponse("FOLDER_DESCENDANT_PARENT", 400);
     }
     const parent = await db.folder.findFirst({
       where: { id: parsed.data.parentId, spaceId: folder.spaceId },
       select: { id: true },
     });
-    if (!parent) return NextResponse.json({ error: "Ungültiger Zielordner" }, { status: 400 });
+    if (!parent) return apiErrorResponse("FOLDER_PARENT_INVALID", 400);
   }
   const duplicate = await db.folder.findFirst({
     where: {
@@ -44,7 +45,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     select: { id: true },
   });
   if (duplicate) {
-    return NextResponse.json({ error: "In dieser Ebene existiert bereits ein Ordner mit diesem Namen" }, { status: 409 });
+    return apiErrorResponse("FOLDER_NAME_CONFLICT", 409);
   }
   const moving = parsed.data.parentId !== undefined || parsed.data.position !== undefined;
   if (!moving) {
@@ -81,11 +82,11 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
 export async function DELETE(_: Request, context: { params: Promise<{ id: string }> }) {
   const user = await requireApiUser();
-  if (!user) return NextResponse.json({ error: "Nicht angemeldet" }, { status: 401 });
+  if (!user) return apiErrorResponse("AUTH_REQUIRED", 401);
   const { id } = await context.params;
   const folder = await db.folder.findUnique({ where: { id } });
   if (!folder || !canEdit(await spaceAccess(user.id, folder.spaceId))) {
-    return NextResponse.json({ error: "Kein Schreibzugriff" }, { status: 403 });
+    return apiErrorResponse("WRITE_ACCESS_REQUIRED", 403);
   }
   await db.folder.delete({ where: { id } });
   return new NextResponse(null, { status: 204 });

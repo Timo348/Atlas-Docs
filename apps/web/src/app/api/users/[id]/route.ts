@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { requireApiUser } from "@/lib/access";
+import { apiErrorResponse, readJsonBody } from "@/lib/api-errors";
 import { db } from "@/lib/db";
 
 const schema = z.object({
@@ -12,21 +13,20 @@ const schema = z.object({
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const admin = await requireApiUser();
-  if (!admin || admin.role !== "ADMIN") {
-    return NextResponse.json({ error: "Nur für Administratoren" }, { status: 403 });
-  }
+  if (!admin) return apiErrorResponse("AUTH_REQUIRED", 401);
+  if (admin.role !== "ADMIN") return apiErrorResponse("ADMIN_REQUIRED", 403);
   const { id } = await context.params;
-  const parsed = schema.safeParse(await request.json());
-  if (!parsed.success) return NextResponse.json({ error: "Ungültige Eingabe" }, { status: 400 });
+  const parsed = schema.safeParse(await readJsonBody(request));
+  if (!parsed.success) return apiErrorResponse("INVALID_INPUT", 400);
   if (id === admin.id && (parsed.data.active === false || parsed.data.role === "MEMBER")) {
-    return NextResponse.json({ error: "Das eigene Administratorkonto kann nicht entzogen werden" }, { status: 400 });
+    return apiErrorResponse("OWN_ADMIN_ACCOUNT_REQUIRED", 400);
   }
   const target = await db.user.findUnique({ where: { id } });
-  if (!target) return NextResponse.json({ error: "Benutzer nicht gefunden" }, { status: 404 });
+  if (!target) return apiErrorResponse("USER_NOT_FOUND", 404);
   if (target.role === "ADMIN" && (parsed.data.active === false || parsed.data.role === "MEMBER")) {
     const activeAdmins = await db.user.count({ where: { role: "ADMIN", active: true } });
     if (activeAdmins <= 1) {
-      return NextResponse.json({ error: "Der letzte aktive Administrator bleibt erforderlich" }, { status: 400 });
+      return apiErrorResponse("LAST_ADMIN_REQUIRED", 400);
     }
   }
   const user = await db.user.update({

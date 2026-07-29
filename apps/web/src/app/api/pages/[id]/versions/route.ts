@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { canEdit, pageAccess, requireApiUser } from "@/lib/access";
+import { apiErrorResponse, readJsonBody } from "@/lib/api-errors";
 import { db } from "@/lib/db";
 
 const MAX_SNAPSHOT_BYTES = 25 * 1024 * 1024;
@@ -12,10 +13,10 @@ const createSchema = z.object({
 
 export async function GET(_: Request, context: { params: Promise<{ id: string }> }) {
   const user = await requireApiUser();
-  if (!user) return NextResponse.json({ error: "Nicht angemeldet" }, { status: 401 });
+  if (!user) return apiErrorResponse("AUTH_REQUIRED", 401);
   const { id } = await context.params;
   const page = await pageAccess(user.id, id);
-  if (!page) return NextResponse.json({ error: "Kein Zugriff" }, { status: 403 });
+  if (!page) return apiErrorResponse("ACCESS_DENIED", 403);
 
   const versions = await db.pageVersion.findMany({
     where: { pageId: id },
@@ -37,18 +38,18 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   const user = await requireApiUser();
-  if (!user) return NextResponse.json({ error: "Nicht angemeldet" }, { status: 401 });
+  if (!user) return apiErrorResponse("AUTH_REQUIRED", 401);
   const { id } = await context.params;
   const page = await pageAccess(user.id, id);
   if (!page || !canEdit(page.accessRole)) {
-    return NextResponse.json({ error: "Kein Schreibzugriff" }, { status: 403 });
+    return apiErrorResponse("WRITE_ACCESS_REQUIRED", 403);
   }
-  const parsed = createSchema.safeParse(await request.json());
-  if (!parsed.success) return NextResponse.json({ error: "Ungültige Version" }, { status: 400 });
+  const parsed = createSchema.safeParse(await readJsonBody(request));
+  if (!parsed.success) return apiErrorResponse("VERSION_INVALID", 400);
 
   const data = decodeSnapshot(parsed.data.snapshot);
   if (!data || data.byteLength > MAX_SNAPSHOT_BYTES) {
-    return NextResponse.json({ error: "Der Versionsstand ist ungültig oder größer als 25 MB" }, { status: 400 });
+    return apiErrorResponse("VERSION_SNAPSHOT_INVALID", 400);
   }
   const version = await db.$transaction(async (transaction) => {
     const updatedPage = await transaction.page.update({

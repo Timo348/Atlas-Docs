@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
 import { Inter, Lora } from "next/font/google";
+import { getServerSession } from "next-auth";
+import { cookies, headers } from "next/headers";
+import { authOptions } from "@/lib/auth";
+import { resolveLanguage } from "@/lib/preferences";
 import "@excalidraw/excalidraw/index.css";
 import "./globals.css";
 
@@ -11,9 +15,21 @@ export const metadata: Metadata = {
   description: "Collaborative knowledge, Markdown, and visual workspaces.",
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const [cookieStore, requestHeaders, session] = await Promise.all([
+    cookies(),
+    headers(),
+    getServerSession(authOptions),
+  ]);
+  const language = resolveLanguage(
+    session?.user?.active
+      ? session.user.language
+      : cookieStore.get("atlas-language")?.value,
+    requestHeaders.get("accept-language"),
+  );
+
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang={language} suppressHydrationWarning>
       <body className={`${inter.variable} ${lora.variable}`}>{children}</body>
     </html>
   );

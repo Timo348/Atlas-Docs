@@ -15,3 +15,10 @@ export function strongestSpaceRole(
     return strongest;
   }, null);
 }
+
+export function spaceRoleLabel(role: EffectiveSpaceRole, language: "en" | "de") {
+  if (language === "de") {
+    return role === "OWNER" ? "Eigentümer" : role === "EDITOR" ? "Kann bearbeiten" : "Nur lesen";
+  }
+  return role === "OWNER" ? "Owner" : role === "EDITOR" ? "Can edit" : "Read only";
+}

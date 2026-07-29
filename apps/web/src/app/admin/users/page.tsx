@@ -1,9 +1,9 @@
-import Link from "next/link";
-import { ArrowLeft, ShieldCheck } from "lucide-react";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/access";
 import { db } from "@/lib/db";
-import { UsersAdmin } from "@/components/users-admin";
+import { PreferencesProvider } from "@/components/preferences-provider";
+import { UsersAdminPage } from "@/components/users-admin";
+import { normalizePreferences } from "@/lib/preferences";
 
 export default async function UsersPage() {
   const current = await requireUser();
@@ -20,16 +20,21 @@ export default async function UsersPage() {
     },
     orderBy: { createdAt: "asc" },
   });
+  const preferences = normalizePreferences({
+    language: current.language,
+    colorTheme: current.colorTheme,
+    uiFont: current.uiFont,
+    editorFont: current.editorFont,
+    fontSize: current.fontSize,
+    compactMode: current.compactMode,
+  });
+
   return (
-    <main className="admin-page">
-      <header className="admin-header">
-        <div><p className="eyebrow dark"><ShieldCheck size={15} /> Administration</p><h1>Benutzerverwaltung</h1></div>
-        <Link href="/" className="button secondary-button"><ArrowLeft size={16} /> Zurück zum Workspace</Link>
-      </header>
-      <UsersAdmin
+    <PreferencesProvider initial={preferences}>
+      <UsersAdminPage
         initialUsers={users.map((user) => ({ ...user, createdAt: user.createdAt.toISOString() }))}
         currentUserId={current.id}
       />
-    </main>
+    </PreferencesProvider>
   );
 }

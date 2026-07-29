@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireApiUser, spaceAccess } from "@/lib/access";
+import { apiErrorResponse, readJsonBody } from "@/lib/api-errors";
 import { db } from "@/lib/db";
 
 const roleSchema = z.enum(["OWNER", "EDITOR", "VIEWER"]);
@@ -18,10 +19,10 @@ async function canManage(user: { id: string; role: string }, spaceId: string) {
 
 export async function GET(_: Request, context: { params: Promise<{ id: string }> }) {
   const user = await requireApiUser();
-  if (!user) return NextResponse.json({ error: "Nicht angemeldet" }, { status: 401 });
+  if (!user) return apiErrorResponse("AUTH_REQUIRED", 401);
   const { id } = await context.params;
   if (!await canManage(user, id)) {
-    return NextResponse.json({ error: "Nur Bereichseigentümer dürfen Rechte verwalten" }, { status: 403 });
+    return apiErrorResponse("SPACE_PERMISSION_MANAGE_REQUIRED", 403);
   }
 
   const [space, users, teams] = await Promise.all([
@@ -49,32 +50,32 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
       orderBy: { name: "asc" },
     }),
   ]);
-  if (!space) return NextResponse.json({ error: "Bereich nicht gefunden" }, { status: 404 });
+  if (!space) return apiErrorResponse("SPACE_NOT_FOUND", 404);
   return NextResponse.json({ space, users, teams, canManageTeams: user.role === "ADMIN" });
 }
 
 export async function PUT(request: Request, context: { params: Promise<{ id: string }> }) {
   const user = await requireApiUser();
-  if (!user) return NextResponse.json({ error: "Nicht angemeldet" }, { status: 401 });
+  if (!user) return apiErrorResponse("AUTH_REQUIRED", 401);
   const { id } = await context.params;
   if (!await canManage(user, id)) {
-    return NextResponse.json({ error: "Nur Bereichseigentümer dürfen Rechte verwalten" }, { status: 403 });
+    return apiErrorResponse("SPACE_PERMISSION_MANAGE_REQUIRED", 403);
   }
-  const parsed = updateSchema.safeParse(await request.json());
-  if (!parsed.success) return NextResponse.json({ error: "Ungültige Rechteauswahl" }, { status: 400 });
+  const parsed = updateSchema.safeParse(await readJsonBody(request));
+  if (!parsed.success) return apiErrorResponse("PERMISSIONS_INVALID", 400);
 
   const userGrants = parsed.data.users.filter((grant) => grant.id !== user.id);
   const userIds = [...new Set(userGrants.map((grant) => grant.id))];
   const teamIds = [...new Set(parsed.data.teams.map((grant) => grant.id))];
   if (userIds.length !== userGrants.length || teamIds.length !== parsed.data.teams.length) {
-    return NextResponse.json({ error: "Doppelte Freigabe" }, { status: 400 });
+    return apiErrorResponse("PERMISSION_DUPLICATE", 400);
   }
   const [validUsers, validTeams] = await Promise.all([
     db.user.count({ where: { id: { in: userIds }, active: true } }),
     db.team.count({ where: { id: { in: teamIds } } }),
   ]);
   if (validUsers !== userIds.length || validTeams !== teamIds.length) {
-    return NextResponse.json({ error: "Benutzer oder Team nicht gefunden" }, { status: 400 });
+    return apiErrorResponse("PERMISSION_SUBJECT_NOT_FOUND", 400);
   }
 
   const outcome = await db.$transaction(async (tx) => {
@@ -114,13 +115,10 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
     return "updated" as const;
   });
   if (outcome === "not-found") {
-    return NextResponse.json({ error: "Bereich nicht gefunden" }, { status: 404 });
+    return apiErrorResponse("SPACE_NOT_FOUND", 404);
   }
   if (outcome === "forbidden") {
-    return NextResponse.json(
-      { error: "Nur Bereichseigentümer dürfen Rechte verwalten" },
-      { status: 403 },
-    );
+    return apiErrorResponse("SPACE_PERMISSION_MANAGE_REQUIRED", 403);
   }
   return NextResponse.json({ ok: true });
 }
