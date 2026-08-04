@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Camera, Settings2, X } from "lucide-react";
+import { Camera, Download, Settings2, X } from "lucide-react";
 import { usePreferences } from "@/components/preferences-provider";
 import { apiErrorMessage } from "@/lib/api-errors";
 import type { Preferences } from "@/lib/preferences";
@@ -10,7 +10,7 @@ export function ProfileDialog({
   user,
   onClose,
 }: {
-  user: { id: string; name: string; email: string; hasAvatar: boolean; avatarVersion: number };
+  user: { id: string; name: string; email: string; role: "ADMIN" | "MEMBER"; hasAvatar: boolean; avatarVersion: number };
   onClose: () => void;
 }) {
   const { preferences, setPreferences, text } = usePreferences();
@@ -137,6 +137,21 @@ export function ProfileDialog({
               <span><strong>{text("Compact navigation", "Kompakte Navigation")}</strong><small>{text("Show more items in the sidebar.", "Mehr Einträge in der Seitenleiste anzeigen.")}</small></span>
             </label>
           </div>
+        </section>
+
+        <section className="preferences-section backup-section">
+          <div className="settings-heading"><Download size={17} /><div><h3>{text("Emergency export", "Notfall-Export")}</h3><p>{text("Download current documents, referenced images, and canvases as a portable ZIP.", "Aktuelle Dokumente, referenzierte Bilder und Canvas-Dateien als portables ZIP herunterladen.")}</p></div></div>
+          <div className="backup-actions">
+            <a className="button secondary-button compact" href="/api/backups/export?scope=accessible" onClick={() => setNotice(text("Portable export started.", "Portabler Export gestartet."))}>
+              <Download size={14} /> {text("Export my accessible spaces", "Meine sichtbaren Bereiche exportieren")}
+            </a>
+            {user.role === "ADMIN" && (
+              <a className="button secondary-button compact" href="/api/backups/export?scope=instance" onClick={() => setNotice(text("Complete instance export started.", "Kompletter Instanz-Export gestartet."))}>
+                <Download size={14} /> {text("Export complete instance", "Komplette Instanz exportieren")}
+              </a>
+            )}
+          </div>
+          <small>{text("The portable export omits document history, accounts, and permissions. Use the server backup for a full restore.", "Der portable Export enthält keine Dokumenthistorie, Konten oder Rechte. Für eine vollständige Wiederherstellung dient das Server-Backup.")}</small>
         </section>
 
         {error && <p className="admin-error">{error}</p>}

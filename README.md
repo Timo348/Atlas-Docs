@@ -12,6 +12,7 @@ Atlas Docs is a self-hosted collaborative knowledge platform for Markdown, LaTeX
 - Searchable, keyboard-accessible space picker in the editor header
 - Table controls for adding or removing rows and columns
 - Markdown and LaTeX previews plus source-file exports
+- Portable ZIP emergency exports for Obsidian and VS Code
 - Shared Excalidraw canvases and live collaborator cursors
 - Manual document versions with full text and canvas restoration
 - Nested folders, persistent drag-and-drop ordering, spaces, teams, and role-based access
@@ -26,6 +27,7 @@ Requirements:
 
 - A Linux host
 - Docker Engine with the Docker Compose plugin
+- Standard Linux utilities including `bash`, `flock`, `find`, and `sha256sum`
 - Two free TCP ports for the web and collaboration services
 
 ```bash
@@ -99,18 +101,18 @@ For a physically disconnected server, prepare a bundle on a connected machine:
 ```bash
 cp .env.example .env
 # Edit .env before resolving the exact image list.
-docker compose config --images > atlas-docs-1.4.0-images.txt
-xargs -a atlas-docs-1.4.0-images.txt -n 1 docker pull
-docker save -o atlas-docs-1.4.0-offline.tar $(cat atlas-docs-1.4.0-images.txt)
-sha256sum atlas-docs-1.4.0-offline.tar > atlas-docs-1.4.0-offline.tar.sha256
+docker compose config --images > atlas-docs-1.5.0-images.txt
+xargs -a atlas-docs-1.5.0-images.txt -n 1 docker pull
+docker save -o atlas-docs-1.5.0-offline.tar $(cat atlas-docs-1.5.0-images.txt)
+sha256sum atlas-docs-1.5.0-offline.tar > atlas-docs-1.5.0-offline.tar.sha256
 ```
 
 Transfer the archive, checksum, `compose.yml`, `compose.airgap.yml`, and `.env`.
 Then load and start without any network access:
 
 ```bash
-sha256sum -c atlas-docs-1.4.0-offline.tar.sha256
-docker load -i atlas-docs-1.4.0-offline.tar
+sha256sum -c atlas-docs-1.5.0-offline.tar.sha256
+docker load -i atlas-docs-1.5.0-offline.tar
 docker compose -f compose.yml -f compose.airgap.yml up -d --no-build
 docker compose ps
 ```
@@ -138,7 +140,7 @@ The complete template is in [`.env.example`](.env.example).
 | Variable | Default/example | Purpose |
 | --- | --- | --- |
 | `ATLAS_IMAGE_REGISTRY` | `docker.io/timo348` | Atlas image prefix; use `ghcr.io/timo348` or an internal mirror |
-| `ATLAS_VERSION` | `1.4.0` | Exact release tag used for all three Atlas Docs images |
+| `ATLAS_VERSION` | `1.5.0` | Exact release tag used for all three Atlas Docs images |
 | `POSTGRES_IMAGE` | pinned Docker Hub digest | PostgreSQL image, overridable for an internal registry |
 | `REDIS_IMAGE` | pinned Docker Hub digest | Redis image, overridable for an internal registry |
 | `APP_URL` | `http://localhost:30002` | Browser-facing web URL |
@@ -218,22 +220,90 @@ docker compose down
 
 ## Backup and restore
 
-Create a PostgreSQL backup:
+Atlas stores documents, page images, space images, avatars, permissions, and
+accounts in PostgreSQL. A separate image-volume backup is therefore neither
+required nor useful. Redis only contains rebuildable collaboration runtime
+state.
+
+The included script creates a compressed PostgreSQL custom-format dump. It asks
+the collaboration service to persist open documents first, validates the dump,
+writes it atomically, and creates checksum and metadata sidecars. Document
+version history and short-lived session/token rows are intentionally omitted to
+reduce storage use; current text, canvases, users, permissions, and all images
+remain restorable.
+
+Create a manual regular or permanent archive backup:
 
 ```bash
-mkdir -p backups
-docker compose exec postgres pg_dump -U atlas -d atlas -Fc -f /tmp/atlas.dump
-docker compose cp postgres:/tmp/atlas.dump ./backups/atlas.dump
+chmod +x backup.sh
+./backup.sh regular
+./backup.sh archive
 ```
 
-Restore into the configured Atlas database:
+Regular dumps are written below `backups/regular` and expire after 14 days.
+Archive dumps are written below `backups/archive` and are never deleted by the
+script. Override these defaults when required:
 
 ```bash
-docker compose cp ./backups/atlas.dump postgres:/tmp/atlas.dump
-docker compose exec postgres pg_restore -U atlas -d atlas --clean --if-exists /tmp/atlas.dump
+ATLAS_BACKUP_DIR=/mnt/atlas-backups \
+ATLAS_BACKUP_RETENTION_DAYS=14 \
+AGE_RECIPIENT=age1example... \
+./backup.sh regular
 ```
 
-Create a fresh backup before every restore.
+`AGE_RECIPIENT` is optional. When it is set, the `age` command must be installed
+and only the encrypted `.dump.age` artifact is retained. Without encryption,
+the script still uses directory mode `0700` and file mode `0600`.
+
+For backups at 21:00 Europe/Berlin time on Monday, Wednesday, Friday, and also
+on the 1st and 15th of each month, install this cron entry. The script is called
+daily but exits without writing on all other dates; the 1st and 15th always
+produce permanent archive backups, including when they fall on a regular day.
+
+```cron
+CRON_TZ=Europe/Berlin
+0 21 * * * cd /opt/Atlas-Docs && ./backup.sh scheduled >> /var/log/atlas-docs-backup.log 2>&1
+```
+
+Verify a backup from the directory containing it:
+
+```bash
+sha256sum -c atlas-docs-YYYYMMDDTHHMMSSZ-regular.dump.sha256
+```
+
+For an encrypted backup, verify it first and decrypt to a protected temporary
+file:
+
+```bash
+age --decrypt --output /tmp/atlas-restore.dump atlas-docs-YYYYMMDDTHHMMSSZ-archive.dump.age
+chmod 0600 /tmp/atlas-restore.dump
+```
+
+Restore into the configured Atlas database. Stop writers first, and create a
+fresh backup before every restore:
+
+```bash
+docker compose stop web collab
+docker compose exec -T postgres sh -ec \
+  'exec pg_restore --username="$POSTGRES_USER" --dbname="$POSTGRES_DB" --clean --if-exists --no-owner --no-privileges' \
+  < /tmp/atlas-restore.dump
+docker compose up -d --no-build
+docker compose ps
+rm -f /tmp/atlas-restore.dump
+```
+
+### Portable application export
+
+Open **Profile & settings → Emergency export** in Atlas Docs. Every user can
+download all spaces they can currently access; administrators can additionally
+download the complete instance. The streamed ZIP contains current Markdown and
+LaTeX sources, referenced page images, standard `.excalidraw` canvases, a
+manifest, and offline usage notes. Open its `spaces` directory as an Obsidian
+vault or in VS Code.
+
+Portable exports omit history, accounts, permissions, avatars, and space cover
+images. They are an emergency reading/editing format, not a replacement for the
+server backup used to restore Atlas itself.
 
 ## Development and verification
 

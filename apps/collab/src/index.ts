@@ -4,6 +4,7 @@ import { Redis } from "@hocuspocus/extension-redis";
 import { Server } from "@hocuspocus/server";
 import { verifyCollaborationToken } from "./auth.js";
 import { pageIdFromDocumentName } from "./document-name.js";
+import { flushCollaborationDocuments, isAuthorizedFlush } from "./flush.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 const secret = process.env.COLLAB_SECRET;
@@ -56,16 +57,34 @@ const server = new Server({
     connectionConfig.readOnly = claims.readOnly;
     return { user: { id: claims.sub, name: claims.name } };
   },
-  onRequest({ request, response }) {
-    return new Promise<void>((resolve, reject) => {
-      if (request.url === "/health") {
-        response.writeHead(200, { "Content-Type": "application/json" });
-        response.end(JSON.stringify({ status: "ok" }));
-        reject();
-        return;
+  async onRequest({ request, response, instance }) {
+    if (request.url === "/health") {
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({ status: "ok" }));
+      return Promise.reject();
+    }
+    if (request.url === "/internal/flush") {
+      if (request.method !== "POST") {
+        response.writeHead(405, { Allow: "POST" });
+        response.end();
+        return Promise.reject();
       }
-      resolve();
-    });
+      if (!isAuthorizedFlush(request.headers.authorization, secret)) {
+        response.writeHead(401, { "Content-Type": "application/json" });
+        response.end(JSON.stringify({ error: "Unauthorized" }));
+        return Promise.reject();
+      }
+      try {
+        const flushedDocuments = await flushCollaborationDocuments(instance);
+        response.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+        response.end(JSON.stringify({ flushedDocuments }));
+      } catch (error) {
+        console.error("[atlas-collab] Collaboration flush failed.", error);
+        response.writeHead(500, { "Content-Type": "application/json" });
+        response.end(JSON.stringify({ error: "Flush failed" }));
+      }
+      return Promise.reject();
+    }
   },
 });
 
