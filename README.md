@@ -101,18 +101,18 @@ For a physically disconnected server, prepare a bundle on a connected machine:
 ```bash
 cp .env.example .env
 # Edit .env before resolving the exact image list.
-docker compose config --images > atlas-docs-1.5.0-images.txt
-xargs -a atlas-docs-1.5.0-images.txt -n 1 docker pull
-docker save -o atlas-docs-1.5.0-offline.tar $(cat atlas-docs-1.5.0-images.txt)
-sha256sum atlas-docs-1.5.0-offline.tar > atlas-docs-1.5.0-offline.tar.sha256
+docker compose config --images > atlas-docs-1.5.1-images.txt
+xargs -a atlas-docs-1.5.1-images.txt -n 1 docker pull
+docker save -o atlas-docs-1.5.1-offline.tar $(cat atlas-docs-1.5.1-images.txt)
+sha256sum atlas-docs-1.5.1-offline.tar > atlas-docs-1.5.1-offline.tar.sha256
 ```
 
 Transfer the archive, checksum, `compose.yml`, `compose.airgap.yml`, and `.env`.
 Then load and start without any network access:
 
 ```bash
-sha256sum -c atlas-docs-1.5.0-offline.tar.sha256
-docker load -i atlas-docs-1.5.0-offline.tar
+sha256sum -c atlas-docs-1.5.1-offline.tar.sha256
+docker load -i atlas-docs-1.5.1-offline.tar
 docker compose -f compose.yml -f compose.airgap.yml up -d --no-build
 docker compose ps
 ```
@@ -140,7 +140,7 @@ The complete template is in [`.env.example`](.env.example).
 | Variable | Default/example | Purpose |
 | --- | --- | --- |
 | `ATLAS_IMAGE_REGISTRY` | `docker.io/timo348` | Atlas image prefix; use `ghcr.io/timo348` or an internal mirror |
-| `ATLAS_VERSION` | `1.5.0` | Exact release tag used for all three Atlas Docs images |
+| `ATLAS_VERSION` | `1.5.1` | Exact release tag used for all three Atlas Docs images |
 | `POSTGRES_IMAGE` | pinned Docker Hub digest | PostgreSQL image, overridable for an internal registry |
 | `REDIS_IMAGE` | pinned Docker Hub digest | Redis image, overridable for an internal registry |
 | `APP_URL` | `http://localhost:30002` | Browser-facing web URL |
@@ -313,8 +313,8 @@ Node.js 22, PostgreSQL, and Redis are required for the local Node.js workflow:
 npm ci
 npm run db:generate
 npm run lint
-npm test
 npm run build
+npm test
 ```
 
 Build the production images locally. This developer path downloads npm packages

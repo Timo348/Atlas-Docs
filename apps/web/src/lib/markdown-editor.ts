@@ -21,6 +21,13 @@ export type SlashMatch = {
 export type TextEdit = {
   text: string;
   cursor: number;
+  changes?: TextChange[];
+};
+
+export type TextChange = {
+  start: number;
+  end: number;
+  value: string;
 };
 
 export type TableAction = "add-row" | "add-column" | "remove-row" | "remove-column";
@@ -31,6 +38,8 @@ export type EditableMarkdownTable = {
   rowIndex: number;
   columnIndex: number;
   rows: string[][];
+  /** Number of cells that actually exist in Markdown for each visual content row. */
+  persistedColumns: number[];
   columns: number;
 };
 
@@ -155,22 +164,63 @@ export function updateTableCell(
   if (!table) return null;
   const contentRows = tableContentRows(table);
   if (row < 0 || row >= contentRows.length || column < 0 || column >= table.rows[0].length) return null;
+  const lineIndex = row === 0 ? 0 : row + 1;
+  const line = table.lines[lineIndex];
+  const cells = tableCellSourceRanges(line);
+  const encoded = encodeTableCell(value);
+  const existing = cells[column];
 
-  contentRows[row][column] = encodeTableCell(value);
-  const renderedLines = renderParsedTable(table, contentRows, table.rows[1]);
-  const line = row === 0 ? 0 : row + 1;
-  const cursorInTable = cellCursorOffset(renderedLines, line, column) + contentRows[row][column].length;
-  return replaceParsedTable(text, table, renderedLines, cursorInTable);
+  // Normalized placeholder cells have no stable Yjs anchor. Editing them from
+  // multiple clients would concatenate competing row suffixes. They must first
+  // be materialized as ordinary GFM delimiters in source mode.
+  if (!existing) return null;
+
+  // Replacing only the persisted value range keeps every delimiter, space and
+  // concurrently edited neighbouring cell outside this Yjs operation.
+  return replaceRange(
+    text,
+    table.lineStarts[lineIndex] + existing.start,
+    table.lineStarts[lineIndex] + existing.end,
+    encoded,
+  );
 }
 
-export function tableCellCursor(text: string, cursor: number, row: number, column: number) {
+export function isTableCellMaterialized(table: EditableMarkdownTable, row: number, column: number) {
+  return Number.isInteger(row)
+    && Number.isInteger(column)
+    && row >= 0
+    && row < table.rows.length
+    && column >= 0
+    && column < table.columns
+    && column < (table.persistedColumns[row] ?? 0);
+}
+
+export function tableCellCursor(
+  text: string,
+  cursor: number,
+  row: number,
+  column: number,
+  valueOffset = 0,
+) {
   const table = parseTableAt(text, cursor);
   if (!table) return null;
   const contentRows = tableContentRows(table);
   if (row < 0 || row >= contentRows.length || column < 0 || column >= table.rows[0].length) return null;
-  const renderedLines = renderParsedTable(table, contentRows, table.rows[1]);
-  const line = row === 0 ? 0 : row + 1;
-  return table.start + cellCursorOffset(renderedLines, line, column);
+  const cell = tableCellSource(table, row, column);
+  if (!cell) return null;
+  return cell.start + encodedOffsetAt(cell.value, valueOffset);
+}
+
+/** Maps a persisted Markdown cursor back to an offset in a decoded visual table input. */
+export function tableCellValueOffset(text: string, markdownOffset: number, row: number, column: number) {
+  const table = parseTableAt(text, markdownOffset)
+    ?? parseTables(text).find((candidate) => candidate.end === markdownOffset);
+  if (!table) return null;
+  const contentRows = tableContentRows(table);
+  if (row < 0 || row >= contentRows.length || column < 0 || column >= table.rows[0].length) return null;
+  const cell = tableCellSource(table, row, column);
+  if (!cell) return null;
+  return decodedOffsetAt(cell.value, markdownOffset - cell.start);
 }
 
 export function editTable(text: string, cursor: number, action: TableAction): TextEdit | null {
@@ -178,33 +228,64 @@ export function editTable(text: string, cursor: number, action: TableAction): Te
   if (!table) return null;
 
   const contentRows = tableContentRows(table);
-  const separator = [...table.rows[1]];
   let targetRow = table.rowIndex > 1 ? table.rowIndex - 1 : 0;
   let targetColumn = table.columnIndex;
+  let changes: TextChange[];
 
   if (action === "add-row") {
     const insertAt = Math.min(Math.max(targetRow + 1, 1), contentRows.length);
-    contentRows.splice(insertAt, 0, Array(table.rows[0].length).fill(""));
+    const sourceLine = insertAt + 1;
+    const row = table.indent + renderTableRow(Array(table.rows[0].length).fill(""));
+    changes = sourceLine < table.lines.length
+      ? [{ start: table.lineStarts[sourceLine], end: table.lineStarts[sourceLine], value: `${row}\n` }]
+      : [{ start: table.end, end: table.end, value: `\n${row}` }];
     targetRow = insertAt;
   } else if (action === "add-column") {
-    for (const row of contentRows) row.splice(targetColumn + 1, 0, "");
-    separator.splice(targetColumn + 1, 0, "---");
+    changes = table.lines.flatMap((line, lineIndex) => {
+      const cell = tableCellSourceRanges(line)[targetColumn];
+      if (!cell) return [];
+      const insertionAt = table.lineStarts[lineIndex] + cell.rawEnd;
+      return [{
+        start: insertionAt,
+        end: insertionAt,
+        value: lineIndex === 1 ? "| --- " : "|  ",
+      }];
+    });
     targetColumn += 1;
   } else if (action === "remove-row") {
     if (contentRows.length <= 2 || targetRow === 0) return null;
-    contentRows.splice(targetRow, 1);
+    const sourceLine = targetRow + 1;
+    changes = sourceLine + 1 < table.lines.length
+      ? [{ start: table.lineStarts[sourceLine], end: table.lineStarts[sourceLine + 1], value: "" }]
+      : [{ start: table.lineStarts[sourceLine] - 1, end: table.end, value: "" }];
     targetRow = Math.max(1, targetRow - 1);
   } else {
     if (contentRows[0].length <= 1) return null;
-    for (const row of contentRows) row.splice(targetColumn, 1);
-    separator.splice(targetColumn, 1);
+    changes = table.lines.flatMap((line, lineIndex) => {
+      const cells = tableCellSourceRanges(line);
+      const cell = cells[targetColumn];
+      if (!cell) return [];
+      if (cells.length === 1) {
+        return [{
+          start: table.lineStarts[lineIndex] + cell.start,
+          end: table.lineStarts[lineIndex] + cell.end,
+          value: "",
+        }];
+      }
+      const start = targetColumn === 0 ? cell.rawStart : cells[targetColumn - 1].rawEnd;
+      const end = targetColumn === 0 ? cells[1].rawStart : cell.rawEnd;
+      return [{
+        start: table.lineStarts[lineIndex] + start,
+        end: table.lineStarts[lineIndex] + end,
+        value: "",
+      }];
+    });
     targetColumn = Math.max(0, targetColumn - 1);
   }
 
-  const renderedLines = renderParsedTable(table, contentRows, separator);
-  const rowForCursor = targetRow === 0 ? 0 : Math.min(targetRow + 1, renderedLines.length - 1);
-  const relativeCursor = cellCursorOffset(renderedLines, rowForCursor, targetColumn);
-  return replaceParsedTable(text, table, renderedLines, relativeCursor);
+  const next = applyTextChanges(text, changes);
+  const nextCursor = tableCellCursor(next, table.start, targetRow, targetColumn) ?? table.start;
+  return { text: next, cursor: nextCursor, changes };
 }
 
 /**
@@ -324,12 +405,14 @@ function parseTables(text: string): ParsedTable[] {
 }
 
 function toEditableTable(table: ParsedTable): EditableMarkdownTable {
+  const contentLines = [table.lines[0], ...table.lines.slice(2)];
   return {
     start: table.start,
     end: table.end,
     rowIndex: table.rowIndex <= 1 ? 0 : table.rowIndex - 1,
     columnIndex: table.columnIndex,
     rows: tableContentRows(table).map((row) => row.map(decodeTableCell)),
+    persistedColumns: contentLines.map((line) => Math.min(table.rows[0].length, tableCellSourceRanges(line).length)),
     columns: table.rows[0].length,
   };
 }
@@ -373,6 +456,14 @@ function renderTableRow(cells: string[]) {
   return `| ${cells.join(" | ")} |`;
 }
 
+function applyTextChanges(text: string, changes: readonly TextChange[]) {
+  let next = text;
+  for (const change of [...changes].sort((left, right) => right.start - left.start)) {
+    next = next.slice(0, change.start) + change.value + next.slice(change.end);
+  }
+  return next;
+}
+
 function columnAt(line: string, cursor: number, columnCount: number) {
   const leadingPipe = line.trimStart().startsWith("|");
   let pipes = 0;
@@ -386,42 +477,95 @@ function columnAt(line: string, cursor: number, columnCount: number) {
   return Math.min(Math.max(0, pipes - (leadingPipe ? 1 : 0)), columnCount - 1);
 }
 
-function cellCursorOffset(lines: string[], row: number, column: number) {
-  let offset = lines.slice(0, row).reduce((sum, line) => sum + line.length + 1, 0);
-  const line = lines[row];
-  let seen = 0;
-  let escaped = false;
-  for (let index = 0; index < line.length; index++) {
-    if (escaped) {
-      escaped = false;
-    } else if (line[index] === "\\") {
-      escaped = true;
-    } else if (line[index] === "|") {
-      if (seen === column) return offset + index + 2;
-      seen++;
-    }
-  }
-  return offset + line.length;
-}
-
 function tableContentRows(table: ParsedTable) {
   return [table.rows[0], ...table.rows.slice(2)].map((row) => [...row]);
 }
 
-function renderParsedTable(table: ParsedTable, contentRows: string[][], separator: string[]) {
-  return [
-    contentRows[0],
-    separator,
-    ...contentRows.slice(1),
-  ].map((row) => table.indent + renderTableRow(row));
+function tableCellSource(table: ParsedTable, row: number, column: number) {
+  const lineIndex = row === 0 ? 0 : row + 1;
+  const line = table.lines[lineIndex];
+  if (line === undefined) return null;
+  const cells = tableCellSourceRanges(line);
+  const cell = cells[column];
+  if (cell) {
+    return {
+      start: table.lineStarts[lineIndex] + cell.start,
+      value: cell.value,
+    };
+  }
+
+  return null;
 }
 
-function replaceParsedTable(text: string, table: ParsedTable, lines: string[], cursorInTable: number): TextEdit {
-  const value = lines.join("\n");
-  return {
-    text: text.slice(0, table.start) + value + text.slice(table.end),
-    cursor: table.start + cursorInTable,
-  };
+function tableCellSourceRanges(line: string) {
+  const trimmedStart = line.length - line.trimStart().length;
+  const trimmedEnd = line.trimEnd().length;
+  let contentStart = trimmedStart;
+  let contentEnd = trimmedEnd;
+  if (line[contentStart] === "|") contentStart += 1;
+  if (contentEnd > contentStart && hasUnescapedTrailingPipe(line.slice(trimmedStart, contentEnd))) contentEnd -= 1;
+
+  const rawRanges: Array<{ start: number; end: number }> = [];
+  let start = contentStart;
+  let escaped = false;
+  for (let index = contentStart; index < contentEnd; index++) {
+    const character = line[index];
+    if (escaped) {
+      escaped = false;
+    } else if (character === "\\") {
+      escaped = true;
+    } else if (character === "|") {
+      rawRanges.push({ start, end: index });
+      start = index + 1;
+    }
+  }
+  rawRanges.push({ start, end: contentEnd });
+
+  return rawRanges.map((range) => {
+    const raw = line.slice(range.start, range.end);
+    const value = raw.trim();
+    if (!value) {
+      const anchor = range.start + Math.min(1, raw.length);
+      return { start: anchor, end: anchor, rawStart: range.start, rawEnd: range.end, value };
+    }
+    const leadingWhitespace = raw.length - raw.trimStart().length;
+    const start = range.start + leadingWhitespace;
+    return { start, end: start + value.length, rawStart: range.start, rawEnd: range.end, value };
+  });
+}
+
+function encodedOffsetAt(value: string, decodedOffset: number) {
+  const target = clampOffset(decodedOffset, decodeTableCell(value).length);
+  let encoded = 0;
+  let decoded = 0;
+  while (encoded < value.length && decoded < target) {
+    encoded += isTableCellEscape(value, encoded) ? 2 : 1;
+    decoded += 1;
+  }
+  return encoded;
+}
+
+function decodedOffsetAt(value: string, encodedOffset: number) {
+  const target = clampOffset(encodedOffset, value.length);
+  let encoded = 0;
+  let decoded = 0;
+  while (encoded < target) {
+    const width = isTableCellEscape(value, encoded) ? 2 : 1;
+    if (encoded + width > target) break;
+    encoded += width;
+    decoded += 1;
+  }
+  return decoded;
+}
+
+function isTableCellEscape(value: string, offset: number) {
+  return value[offset] === "\\" && (value[offset + 1] === "\\" || value[offset + 1] === "|");
+}
+
+function clampOffset(offset: number, maximum: number) {
+  if (offset === Number.POSITIVE_INFINITY) return maximum;
+  if (!Number.isFinite(offset)) return 0;
+  return Math.min(maximum, Math.max(0, Math.trunc(offset)));
 }
 
 function decodeTableCell(value: string) {

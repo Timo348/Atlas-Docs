@@ -9,14 +9,21 @@ import {
   useLayoutEffect,
   useRef,
 } from "react";
-import type {
-  EditableMarkdownTable,
-  MarkdownDocumentSegment,
-  TableAction,
+import {
+  isTableCellMaterialized,
+  type EditableMarkdownTable,
+  type MarkdownDocumentSegment,
+  type TableAction,
 } from "@/lib/markdown-editor";
 import styles from "./hybrid-markdown-document.module.css";
 
 type Translate = (english: string, german: string) => string;
+
+export type CellInputSelection = {
+  selectionStart: number;
+  selectionEnd: number;
+  selectionDirection: "forward" | "backward" | "none";
+};
 
 export function HybridModeToggle({
   sourceMode,
@@ -53,9 +60,10 @@ export function HybridMarkdownDocument({
   onTextCursor,
   onTextBlur,
   onCellChange,
-  onCellFocus,
+  onCellCursor,
   onCellBlur,
   onTableAction,
+  destructiveActionsDisabled,
 }: {
   segments: MarkdownDocumentSegment[];
   readOnly: boolean;
@@ -66,10 +74,17 @@ export function HybridMarkdownDocument({
   onTextPaste: (event: ClipboardEvent<HTMLTextAreaElement>, offset: number) => void;
   onTextCursor: (textarea: HTMLTextAreaElement, offset: number) => void;
   onTextBlur: () => void;
-  onCellChange: (table: EditableMarkdownTable, row: number, column: number, value: string) => void;
-  onCellFocus: (table: EditableMarkdownTable, row: number, column: number) => void;
+  onCellChange: (
+    table: EditableMarkdownTable,
+    row: number,
+    column: number,
+    value: string,
+    selection: CellInputSelection,
+  ) => void;
+  onCellCursor: (table: EditableMarkdownTable, row: number, column: number, input: HTMLInputElement) => void;
   onCellBlur: () => void;
   onTableAction: (table: EditableMarkdownTable, action: TableAction) => void;
+  destructiveActionsDisabled: boolean;
 }) {
   return (
     <div className={styles.document} data-testid="hybrid-markdown-document">
@@ -93,9 +108,10 @@ export function HybridMarkdownDocument({
           readOnly={readOnly}
           text={text}
           onCellChange={onCellChange}
-          onCellFocus={onCellFocus}
+          onCellCursor={onCellCursor}
           onCellBlur={onCellBlur}
           onAction={onTableAction}
+          destructiveActionsDisabled={destructiveActionsDisabled}
         />
       ))}
     </div>
@@ -159,18 +175,26 @@ function EditableTable({
   readOnly,
   text,
   onCellChange,
-  onCellFocus,
+  onCellCursor,
   onCellBlur,
   onAction,
+  destructiveActionsDisabled,
 }: {
   table: EditableMarkdownTable;
   active: boolean;
   readOnly: boolean;
   text: Translate;
-  onCellChange: (table: EditableMarkdownTable, row: number, column: number, value: string) => void;
-  onCellFocus: (table: EditableMarkdownTable, row: number, column: number) => void;
+  onCellChange: (
+    table: EditableMarkdownTable,
+    row: number,
+    column: number,
+    value: string,
+    selection: CellInputSelection,
+  ) => void;
+  onCellCursor: (table: EditableMarkdownTable, row: number, column: number, input: HTMLInputElement) => void;
   onCellBlur: () => void;
   onAction: (table: EditableMarkdownTable, action: TableAction) => void;
+  destructiveActionsDisabled: boolean;
 }) {
   return (
     <section
@@ -193,10 +217,11 @@ function EditableTable({
                     row={0}
                     column={column}
                     header
+                    materialized={isTableCellMaterialized(table, 0, column)}
                     readOnly={readOnly}
                     text={text}
-                    onChange={(value) => onCellChange(table, 0, column, value)}
-                    onFocus={() => onCellFocus(table, 0, column)}
+                    onChange={(value, selection) => onCellChange(table, 0, column, value, selection)}
+                    onCursor={(input) => onCellCursor(table, 0, column, input)}
                     onBlur={onCellBlur}
                   />
                 </th>
@@ -214,10 +239,11 @@ function EditableTable({
                         value={cell}
                         row={rowIndex}
                         column={column}
+                        materialized={isTableCellMaterialized(table, rowIndex, column)}
                         readOnly={readOnly}
                         text={text}
-                        onChange={(value) => onCellChange(table, rowIndex, column, value)}
-                        onFocus={() => onCellFocus(table, rowIndex, column)}
+                        onChange={(value, selection) => onCellChange(table, rowIndex, column, value, selection)}
+                        onCursor={(input) => onCellCursor(table, rowIndex, column, input)}
                         onBlur={onCellBlur}
                       />
                     </td>
@@ -243,11 +269,21 @@ function EditableTable({
           <button
             type="button"
             aria-label={text("Remove row", "Zeile entfernen")}
+            disabled={destructiveActionsDisabled}
+            title={destructiveActionsDisabled ? text(
+              "Remove rows by editing the Markdown source directly.",
+              "Entfernen Sie Zeilen direkt im Markdown-Quelltext.",
+            ) : undefined}
             onClick={() => onAction(table, "remove-row")}
           ><Minus size={13} /> {text("Row", "Zeile")}</button>
           <button
             type="button"
             aria-label={text("Remove column", "Spalte entfernen")}
+            disabled={destructiveActionsDisabled}
+            title={destructiveActionsDisabled ? text(
+              "Remove columns by editing the Markdown source directly.",
+              "Entfernen Sie Spalten direkt im Markdown-Quelltext.",
+            ) : undefined}
             onClick={() => onAction(table, "remove-column")}
           ><Minus size={13} /> {text("Column", "Spalte")}</button>
         </div>
@@ -261,29 +297,47 @@ function CellInput({
   row,
   column,
   header = false,
+  materialized,
   readOnly,
   text,
   onChange,
-  onFocus,
+  onCursor,
   onBlur,
 }: {
   value: string;
   row: number;
   column: number;
   header?: boolean;
+  materialized: boolean;
   readOnly: boolean;
   text: Translate;
-  onChange: (value: string) => void;
-  onFocus: () => void;
+  onChange: (value: string, selection: CellInputSelection) => void;
+  onCursor: (input: HTMLInputElement) => void;
   onBlur: () => void;
 }) {
+  const publish = (event: SyntheticEvent<HTMLInputElement>) => onCursor(event.currentTarget);
   return (
     <input
       className={header ? styles.headerInput : styles.cellInput}
       value={value}
-      readOnly={readOnly}
-      onChange={(event) => onChange(event.target.value)}
-      onFocus={onFocus}
+      disabled={!materialized}
+      readOnly={readOnly || !materialized}
+      title={!materialized ? text(
+        "This cell is missing from the Markdown source. Switch to source mode to create it.",
+        "Diese Zelle fehlt im Markdown-Quelltext. Zum Erstellen in den Quellmodus wechseln.",
+      ) : undefined}
+      onChange={(event) => {
+        const input = event.currentTarget;
+        onChange(input.value, {
+          selectionStart: input.selectionStart ?? input.value.length,
+          selectionEnd: input.selectionEnd ?? input.value.length,
+          selectionDirection: input.selectionDirection ?? "none",
+        });
+      }}
+      onSelect={publish}
+      onKeyUp={publish}
+      onClick={publish}
+      onFocus={publish}
       onBlur={onBlur}
       data-table-row={row}
       data-table-column={column}

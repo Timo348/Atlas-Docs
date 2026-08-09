@@ -2,7 +2,7 @@ name: atlas-docs
 
 services:
   web:
-    image: ${ATLAS_IMAGE_REGISTRY:-docker.io/timo348}/atlas-docs-web:${ATLAS_VERSION:-1.5.0}
+    image: ${ATLAS_IMAGE_REGISTRY:-docker.io/timo348}/atlas-docs-web:${ATLAS_VERSION:-1.5.1}
     pull_policy: missing
     init: true
     restart: unless-stopped
@@ -45,7 +45,7 @@ services:
         condition: service_healthy
 
   collab:
-    image: ${ATLAS_IMAGE_REGISTRY:-docker.io/timo348}/atlas-docs-collab:${ATLAS_VERSION:-1.5.0}
+    image: ${ATLAS_IMAGE_REGISTRY:-docker.io/timo348}/atlas-docs-collab:${ATLAS_VERSION:-1.5.1}
     pull_policy: missing
     init: true
     restart: unless-stopped
@@ -80,7 +80,7 @@ services:
         condition: service_healthy
 
   migrate:
-    image: ${ATLAS_IMAGE_REGISTRY:-docker.io/timo348}/atlas-docs-migrate:${ATLAS_VERSION:-1.5.0}
+    image: ${ATLAS_IMAGE_REGISTRY:-docker.io/timo348}/atlas-docs-migrate:${ATLAS_VERSION:-1.5.1}
     pull_policy: missing
     init: true
     restart: "no"

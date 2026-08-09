@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { canEdit, requireApiUser, spaceAccess } from "@/lib/access";
 import { apiErrorResponse, readJsonBody } from "@/lib/api-errors";
+import { collaborationDocumentName, createInitialCollaborationState, resolveCollaborationLanguage } from "@/lib/collaboration-document";
 import { db } from "@/lib/db";
 import { slugify } from "@/lib/slug";
 
@@ -49,17 +50,27 @@ export async function POST(request: Request) {
     where: { spaceId: parsed.data.spaceId, folderId: parsed.data.folderId || null },
     _max: { sortOrder: true },
   });
-  const page = await db.page.create({
-    data: {
-      title: parsed.data.title,
-      slug,
-      spaceId: parsed.data.spaceId,
-      parentId: parsed.data.parentId || null,
-      folderId: parsed.data.folderId || null,
-      format: parsed.data.format,
-      sortOrder: (lastPage._max.sortOrder ?? -1) + 1,
-      createdById: user.id,
-    },
+  const language = resolveCollaborationLanguage(user.language, undefined);
+  const page = await db.$transaction(async (transaction) => {
+    const createdPage = await transaction.page.create({
+      data: {
+        title: parsed.data.title,
+        slug,
+        spaceId: parsed.data.spaceId,
+        parentId: parsed.data.parentId || null,
+        folderId: parsed.data.folderId || null,
+        format: parsed.data.format,
+        sortOrder: (lastPage._max.sortOrder ?? -1) + 1,
+        createdById: user.id,
+      },
+    });
+    await transaction.collabDocument.create({
+      data: {
+        name: collaborationDocumentName(createdPage.id),
+        data: Buffer.from(createInitialCollaborationState(createdPage.format, language)),
+      },
+    });
+    return createdPage;
   });
   return NextResponse.json(page, { status: 201 });
 }

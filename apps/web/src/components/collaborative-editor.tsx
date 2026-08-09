@@ -13,16 +13,37 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import * as Y from "yjs";
 import { CollaborativeCanvas } from "@/components/collaborative-canvas";
-import { HybridMarkdownDocument, HybridModeToggle } from "@/components/hybrid-markdown-document";
+import {
+  HybridMarkdownDocument,
+  HybridModeToggle,
+  type CellInputSelection,
+} from "@/components/hybrid-markdown-document";
 import { LatexPreview } from "@/components/latex-preview";
 import { usePreferences } from "@/components/preferences-provider";
 import {
   applySlashCommand, continueMarkdownList, editableTableAt, editTable, markdownDocumentSegments,
-  slashMatchAt, tableCellCursor, updateTableCell,
+  slashMatchAt, tableCellCursor, tableCellValueOffset, updateTableCell,
   type EditableMarkdownTable, type MarkdownDocumentSegment, type SlashCommandId, type SlashMatch,
   type TableAction, type TextEdit,
 } from "@/lib/markdown-editor";
 import { apiErrorMessage } from "@/lib/api-errors";
+import {
+  applyCollaborationPermission,
+  collaborationIsReadOnly,
+  completeInitialCollaborationSync,
+  createCollaborationAccessState,
+} from "@/lib/collaboration-access";
+import {
+  CollaborativeTextBinding,
+  createCollaborativeCursor,
+  createCollaborativeTextCursor,
+  createCollaborativeTableCursor,
+  distinctCollaborativeUsers,
+  parseCollaborativePresenceStates,
+  resolveCollaborativeCursor,
+  type CollaborativeCursor,
+  type ResolvedCollaborativeCursorSurface,
+} from "@/lib/collaborative-text";
 import { createVisibleSnapshot, restoreVisibleSnapshot } from "@/lib/version-snapshot";
 
 type PageItem = { id: string; title: string; slug: string; parentId: string | null; format: "MARKDOWN" | "LATEX" };
@@ -36,14 +57,27 @@ type PageVersion = {
   restoredFromVersion: number | null;
   createdAt: string;
 };
-type Person = {
+type VisibleCursor = {
+  clientId: number;
   id: string;
   name: string;
   color: string;
   hasAvatar: boolean;
   avatarVersion: number;
   cursor: number | null;
+  surface?: ResolvedCollaborativeCursorSurface;
 };
+type LocalCursorSurface = { kind: "text" } | {
+  kind: "table-cell";
+  tableStart: number;
+  row: number;
+  column: number;
+};
+
+// React development mode replays effects (setup -> cleanup -> setup). A lease
+// lets the second setup cancel destruction of the same memoized documents while
+// still disposing superseded page documents deterministically after unmount.
+const collaborationResourceOwners = new WeakMap<Y.Doc, object>();
 
 const SLASH_COMMANDS: { id: SlashCommandId; title: [string, string]; description: [string, string] }[] = [
   { id: "table", title: ["Table", "Tabelle"], description: ["Insert an expandable table", "Erweiterbare Tabelle einfügen"] },
@@ -79,13 +113,20 @@ export function CollaborativeEditor({
   const { preferences, text } = usePreferences();
   const ydoc = useMemo(() => new Y.Doc(), [page.id]);
   const ytext = useMemo(() => ydoc.getText("markdown"), [ydoc]);
-  const [markdown, setMarkdown] = useState("");
+  const textBinding = useMemo(() => new CollaborativeTextBinding(ydoc, "markdown"), [ydoc]);
+  const [{ markdown, revision: documentRevision }, setDocumentState] = useState({
+    markdown: textBinding.value,
+    revision: 0,
+  });
   const [tab, setTab] = useState<Tab>("write");
   const [status, setStatus] = useState<Connection>("connecting");
-  const [people, setPeople] = useState<Person[]>([]);
+  const [awarenessStates, setAwarenessStates] = useState<unknown[]>([]);
   const [scrollRevision, setScrollRevision] = useState(0);
   const [title, setTitle] = useState(page.title);
-  const [readOnly, setReadOnly] = useState(true);
+  const [collaborationAccess, setCollaborationAccess] = useState(
+    () => createCollaborationAccessState(page.id),
+  );
+  const readOnly = collaborationIsReadOnly(collaborationAccess, page.id);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [versions, setVersions] = useState<PageVersion[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -100,6 +141,8 @@ export function CollaborativeEditor({
   const imageInputRef = useRef<HTMLInputElement>(null);
   const pendingImageMatchRef = useRef<SlashMatch | null>(null);
   const providerRef = useRef<HocuspocusProvider | null>(null);
+  const localCursorRef = useRef<CollaborativeCursor | null>(null);
+  const restoreEditorFocusRef = useRef(false);
   const savedTitleRef = useRef(page.title);
 
   useEffect(() => setTableSourceMode(false), [page.id]);
@@ -107,7 +150,22 @@ export function CollaborativeEditor({
   useEffect(() => {
     let active = true;
     let provider: HocuspocusProvider | undefined;
-    const updateText = () => active && setMarkdown(ytext.toString());
+    setCollaborationAccess(createCollaborationAccessState(page.id));
+    const updateText = () => {
+      if (!active) return;
+      textBinding.sync("rendered-collaboration-state");
+      const stage = editorStageRef.current;
+      const focused = document.activeElement;
+      if (
+        stage
+        && (focused instanceof HTMLTextAreaElement || focused instanceof HTMLInputElement)
+        && stage.contains(focused)
+      ) restoreEditorFocusRef.current = true;
+      setDocumentState((current) => ({
+        markdown: textBinding.value,
+        revision: current.revision + 1,
+      }));
+    };
     ytext.observe(updateText);
     updateText();
 
@@ -125,34 +183,26 @@ export function CollaborativeEditor({
           const response = await fetch(`/api/collaboration-token?pageId=${encodeURIComponent(page.id)}`);
           if (!response.ok) throw new Error("Collaboration token unavailable.");
           const data = await response.json();
-          if (active) setReadOnly(data.readOnly);
+          if (active) {
+            setCollaborationAccess((current) => applyCollaborationPermission(
+              current,
+              page.id,
+              data.readOnly === true,
+            ));
+          }
           return data.token;
         },
         onStatus: ({ status: nextStatus }) => {
           if (active) setStatus(nextStatus as Connection);
         },
-        onSynced: () => {
-          if (ytext.length === 0) {
-            ydoc.transact(() => ytext.insert(0, initialContent(page, preferences.language)), "initial-content");
+        onSynced: ({ state: synced }) => {
+          if (active && synced) {
+            setCollaborationAccess((current) => completeInitialCollaborationSync(current, page.id));
           }
         },
         onAwarenessUpdate: ({ states }) => {
-          const unique = new Map<string, Person>();
-          for (const state of states) {
-            const person = state.user as Partial<Person> | undefined;
-            const cursor = state.cursor as { index?: number } | null | undefined;
-            if (person?.id && person.name && person.color) {
-              unique.set(person.id, {
-                id: person.id,
-                name: person.name,
-                color: person.color,
-                hasAvatar: person.hasAvatar === true,
-                avatarVersion: typeof person.avatarVersion === "number" ? person.avatarVersion : 0,
-                cursor: typeof cursor?.index === "number" ? cursor.index : null,
-              });
-            }
-          }
-          if (active) setPeople(Array.from(unique.values()));
+          const trustedStates = provider?.awareness?.getStates();
+          if (active) setAwarenessStates(trustedStates ? Array.from(trustedStates.entries()) : states);
         },
         onAuthenticationFailed: () => {
           if (active) setStatus("disconnected");
@@ -174,33 +224,214 @@ export function CollaborativeEditor({
       ytext.unobserve(updateText);
       providerRef.current = null;
       provider?.destroy();
-      ydoc.destroy();
     };
-  }, [page.id, page.title, preferences.language, user.id, user.name, user.hasAvatar, user.avatarVersion, ydoc, ytext]);
+  }, [page.id, user.id, user.name, user.hasAvatar, user.avatarVersion, textBinding, ydoc, ytext]);
 
-  function changeMarkdown(next: string, cursorIndex: number) {
-    if (readOnly) return;
-    const previous = ytext.toString();
-    let start = 0;
-    while (start < previous.length && start < next.length && previous[start] === next[start]) start++;
-    let oldEnd = previous.length;
-    let newEnd = next.length;
-    while (oldEnd > start && newEnd > start && previous[oldEnd - 1] === next[newEnd - 1]) {
-      oldEnd--;
-      newEnd--;
+  useEffect(() => {
+    const owner = {};
+    collaborationResourceOwners.set(ydoc, owner);
+    return () => {
+      queueMicrotask(() => {
+        if (collaborationResourceOwners.get(ydoc) !== owner) return;
+        collaborationResourceOwners.delete(ydoc);
+        textBinding.destroy();
+        ydoc.destroy();
+      });
+    };
+  }, [textBinding, ydoc]);
+
+  useLayoutEffect(() => {
+    const cursor = localCursorRef.current;
+    if (!cursor) return;
+    const resolved = resolveCollaborativeCursor(cursor, textBinding.viewDocument, "markdown");
+    if (!resolved) return;
+
+    setCursorIndex(resolved.head);
+    if (cursor.index !== resolved.head) {
+      const updatedCursor = { ...cursor, index: resolved.head };
+      localCursorRef.current = updatedCursor;
+      providerRef.current?.setAwarenessField("cursor", updatedCursor);
     }
-    ydoc.transact(() => {
-      if (oldEnd > start) ytext.delete(start, oldEnd - start);
-      if (newEnd > start) ytext.insert(start, next.slice(start, newEnd));
-    }, "markdown-input");
-    setCursorIndex(cursorIndex);
-    providerRef.current?.setAwarenessField("cursor", { index: cursorIndex });
+
+    const stage = editorStageRef.current;
+    if (!stage) return;
+    const active = document.activeElement;
+    const activeEditor = (active instanceof HTMLTextAreaElement || active instanceof HTMLInputElement) && stage.contains(active)
+      ? active
+      : null;
+    const shouldRestoreFocus = activeEditor !== null || restoreEditorFocusRef.current;
+    restoreEditorFocusRef.current = false;
+    if (!shouldRestoreFocus) return;
+    const direction = resolved.anchor > resolved.head ? "backward" : "forward";
+
+    const textareas = Array.from(stage.querySelectorAll<HTMLTextAreaElement>("textarea[data-markdown-start]"));
+    if (resolved.surface?.kind === "text" || (!resolved.surface && activeEditor instanceof HTMLTextAreaElement)) {
+      const textarea = textareas.find((candidate) => {
+        const offset = Number(candidate.dataset.markdownStart || 0);
+        const end = Number(candidate.dataset.markdownEnd || textBinding.value.length);
+        return resolved.anchor >= offset && resolved.anchor <= end && resolved.head >= offset && resolved.head <= end;
+      }) ?? (activeEditor instanceof HTMLTextAreaElement ? activeEditor : null);
+      if (textarea) {
+        const offset = Number(textarea.dataset.markdownStart || 0);
+        const selectionStart = Math.min(resolved.anchor, resolved.head) - offset;
+        const selectionEnd = Math.max(resolved.anchor, resolved.head) - offset;
+        if (
+          textarea.selectionStart !== selectionStart
+          || textarea.selectionEnd !== selectionEnd
+          || textarea.selectionDirection !== direction
+        ) textarea.setSelectionRange(selectionStart, selectionEnd, direction);
+        textarea.focus({ preventScroll: true });
+        return;
+      }
+    }
+
+    const targetTable = !tableSourceMode ? editableTableAt(textBinding.value, resolved.head) : null;
+    if (targetTable) {
+      const input = stage.querySelector<HTMLInputElement>(
+        `[data-markdown-table-start="${targetTable.start}"] `
+        + `[data-table-row="${targetTable.rowIndex}"][data-table-column="${targetTable.columnIndex}"]`,
+      );
+      const anchor = tableCellValueOffset(textBinding.value, resolved.anchor, targetTable.rowIndex, targetTable.columnIndex);
+      const head = tableCellValueOffset(textBinding.value, resolved.head, targetTable.rowIndex, targetTable.columnIndex);
+      if (input && anchor !== null && head !== null) {
+        const selectionStart = Math.min(anchor, head);
+        const selectionEnd = Math.max(anchor, head);
+        if (
+          input.selectionStart !== selectionStart
+          || input.selectionEnd !== selectionEnd
+          || input.selectionDirection !== direction
+        ) input.setSelectionRange(selectionStart, selectionEnd, direction);
+        input.focus({ preventScroll: true });
+        return;
+      }
+    }
+
+    // At the exclusive end of a table there is no parseable current cell. The
+    // relative table start plus surface coordinates disambiguate that boundary.
+    if (!targetTable && resolved.surface?.kind === "table-cell") {
+      const boundaryTable = editableTableAt(
+        textBinding.value,
+        Math.max(resolved.surface.tableStart, resolved.head - 1),
+      );
+      const tableStart = resolved.surface.tableStart;
+      const row = boundaryTable?.start === tableStart ? boundaryTable.rowIndex : resolved.surface.row;
+      const column = boundaryTable?.start === tableStart ? boundaryTable.columnIndex : resolved.surface.column;
+      const input = stage.querySelector<HTMLInputElement>(
+        `[data-markdown-table-start="${tableStart}"] `
+        + `[data-table-row="${row}"][data-table-column="${column}"]`,
+      );
+      const anchor = tableCellValueOffset(textBinding.value, resolved.anchor, row, column);
+      const head = tableCellValueOffset(textBinding.value, resolved.head, row, column);
+      if (input && anchor !== null && head !== null) {
+        const selectionStart = Math.min(anchor, head);
+        const selectionEnd = Math.max(anchor, head);
+        if (
+          input.selectionStart !== selectionStart
+          || input.selectionEnd !== selectionEnd
+          || input.selectionDirection !== direction
+        ) input.setSelectionRange(selectionStart, selectionEnd, direction);
+        input.focus({ preventScroll: true });
+        return;
+      }
+    }
+
+    if (activeEditor instanceof HTMLInputElement) {
+      const row = Number(activeEditor.dataset.tableRow);
+      const column = Number(activeEditor.dataset.tableColumn);
+      const anchor = tableCellValueOffset(textBinding.value, resolved.anchor, row, column);
+      const head = tableCellValueOffset(textBinding.value, resolved.head, row, column);
+      if (Number.isInteger(row) && Number.isInteger(column) && anchor !== null && head !== null) {
+        const selectionStart = Math.min(anchor, head);
+        const selectionEnd = Math.max(anchor, head);
+        if (
+          activeEditor.selectionStart !== selectionStart
+          || activeEditor.selectionEnd !== selectionEnd
+          || activeEditor.selectionDirection !== direction
+        ) activeEditor.setSelectionRange(selectionStart, selectionEnd, direction);
+        activeEditor.focus({ preventScroll: true });
+        return;
+      }
+    }
+
+    const textarea = textareas.find((candidate) => {
+      const offset = Number(candidate.dataset.markdownStart || 0);
+      const end = Number(candidate.dataset.markdownEnd || textBinding.value.length);
+      return resolved.anchor >= offset && resolved.anchor <= end && resolved.head >= offset && resolved.head <= end;
+    }) ?? (activeEditor instanceof HTMLTextAreaElement ? activeEditor : null);
+    if (textarea) {
+      const offset = Number(textarea.dataset.markdownStart || 0);
+      const end = Number(textarea.dataset.markdownEnd || textBinding.value.length);
+      if (resolved.anchor < offset || resolved.anchor > end || resolved.head < offset || resolved.head > end) return;
+      const selectionStart = Math.min(resolved.anchor, resolved.head) - offset;
+      const selectionEnd = Math.max(resolved.anchor, resolved.head) - offset;
+      if (
+        textarea.selectionStart !== selectionStart
+        || textarea.selectionEnd !== selectionEnd
+        || textarea.selectionDirection !== direction
+      ) textarea.setSelectionRange(selectionStart, selectionEnd, direction);
+      textarea.focus({ preventScroll: true });
+    }
+  }, [documentRevision, tableSourceMode, textBinding]);
+
+  function publishAbsoluteCursor(
+    anchor: number,
+    head = anchor,
+    surface?: LocalCursorSurface,
+  ) {
+    const cursor = surface?.kind === "table-cell"
+      ? createCollaborativeTableCursor(
+        textBinding.viewDocument,
+        "markdown",
+        surface.tableStart,
+        surface.row,
+        surface.column,
+        anchor,
+        head,
+      )
+      : surface?.kind === "text"
+        ? createCollaborativeTextCursor(textBinding.viewDocument, "markdown", anchor, head)
+        : createCollaborativeCursor(textBinding.viewDocument, "markdown", anchor, head);
+    publishCursorPayload(cursor);
+  }
+
+  function publishCursorPayload(cursor: CollaborativeCursor) {
+    localCursorRef.current = cursor;
+    setCursorIndex(cursor.index);
+    providerRef.current?.setAwarenessField("cursor", cursor);
+  }
+
+  function clearLocalCursor() {
+    requestAnimationFrame(() => {
+      const stage = editorStageRef.current;
+      const active = document.activeElement;
+      if (
+        restoreEditorFocusRef.current
+        || (stage
+          && (active instanceof HTMLTextAreaElement || active instanceof HTMLInputElement)
+          && stage.contains(active))
+      ) return;
+      localCursorRef.current = null;
+      providerRef.current?.setAwarenessField("cursor", null);
+    });
+  }
+
+  function changeMarkdown(
+    next: string,
+    cursorIndex: number,
+    anchor = cursorIndex,
+    surface?: LocalCursorSurface,
+  ) {
+    if (readOnly) return;
+    textBinding.apply(next, "markdown-input");
+    publishAbsoluteCursor(anchor, cursorIndex, surface);
   }
 
   function publishCursor(textarea: HTMLTextAreaElement, offset = 0) {
-    const nextCursor = offset + textarea.selectionStart;
-    setCursorIndex(nextCursor);
-    providerRef.current?.setAwarenessField("cursor", { index: nextCursor });
+    const start = offset + textarea.selectionStart;
+    const end = offset + textarea.selectionEnd;
+    const anchor = textarea.selectionDirection === "backward" ? end : start;
+    const head = textarea.selectionDirection === "backward" ? start : end;
+    publishAbsoluteCursor(anchor, head, { kind: "text" });
   }
 
   const activeSlash = page.format === "MARKDOWN" && !readOnly ? slashMatchAt(markdown, cursorIndex) : null;
@@ -213,10 +444,28 @@ export function CollaborativeEditor({
     () => page.format === "MARKDOWN" ? markdownDocumentSegments(markdown) : [],
     [markdown, page.format],
   );
+  const presences = useMemo(
+    () => parseCollaborativePresenceStates(awarenessStates, ydoc, "markdown"),
+    [awarenessStates, documentRevision, ydoc],
+  );
+  const people = useMemo(() => distinctCollaborativeUsers(presences), [presences]);
+  const remoteCursors = useMemo<VisibleCursor[]>(() => presences.flatMap((presence) => {
+    if (presence.clientId === ydoc.clientID || !presence.cursor) return [];
+      return [{
+        clientId: presence.clientId,
+        ...presence.user,
+        cursor: presence.cursor.head,
+        surface: presence.cursor.surface,
+      }];
+  }), [presences, ydoc]);
   const visualTables = documentSegments.filter(
     (segment): segment is Extract<MarkdownDocumentSegment, { type: "table" }> => segment.type === "table",
   );
   const activePeople = Math.max(people.length, 1);
+  // Plain Markdown has no structural row/column identity. A concurrent delete
+  // can therefore re-home unseen cell text into a neighbor. Keep destructive
+  // toolbar actions disabled; users can still make an intentional source edit.
+  const destructiveTableActionsAllowed = false;
   const activePeopleLabel = activePeople === 1
     ? text("1 active person", "1 aktive Person")
     : text(`${activePeople} active people`, `${activePeople} aktive Personen`);
@@ -224,20 +473,31 @@ export function CollaborativeEditor({
   const showHybridTables = visualTables.length > 0 && !tableSourceMode;
 
   function applyEdit(edit: TextEdit) {
-    changeMarkdown(edit.text, edit.cursor);
-    focusMarkdownCursor(edit.text, edit.cursor);
+    if (readOnly) return;
+    if (edit.changes?.length) {
+      textBinding.applyChanges(edit.changes, "markdown-structural-edit");
+      publishAbsoluteCursor(edit.cursor);
+    } else {
+      changeMarkdown(edit.text, edit.cursor);
+    }
+    focusMarkdownCursor(edit.cursor);
   }
 
-  function focusMarkdownCursor(nextMarkdown: string, nextCursor: number) {
+  function focusMarkdownCursor(nextCursor: number) {
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      const table = editableTableAt(nextMarkdown, nextCursor);
+      const restored = localCursorRef.current
+        ? resolveCollaborativeCursor(localCursorRef.current, textBinding.viewDocument, "markdown")
+        : null;
+      const targetMarkdown = textBinding.value;
+      const targetCursor = restored?.head ?? nextCursor;
+      const table = editableTableAt(targetMarkdown, targetCursor);
       if (table && !tableSourceMode) {
         const cell = editorStageRef.current?.querySelector<HTMLInputElement>(
           `[data-markdown-table-start="${table.start}"] [data-table-row="${table.rowIndex}"][data-table-column="${table.columnIndex}"]`,
         );
         if (cell) {
-          cell.focus();
           cell.setSelectionRange(cell.value.length, cell.value.length);
+          cell.focus();
           return;
         }
       }
@@ -246,13 +506,13 @@ export function CollaborativeEditor({
       const textarea = Array.from(textareas || []).find((candidate) => {
         const start = Number(candidate.dataset.markdownStart || 0);
         const end = Number(candidate.dataset.markdownEnd || 0);
-        return nextCursor >= start && nextCursor <= end;
+        return targetCursor >= start && targetCursor <= end;
       }) || textareaRef.current;
       if (!textarea) return;
       const offset = Number(textarea.dataset.markdownStart || 0);
-      const localCursor = Math.max(0, Math.min(textarea.value.length, nextCursor - offset));
-      textarea.focus();
+      const localCursor = Math.max(0, Math.min(textarea.value.length, targetCursor - offset));
       textarea.setSelectionRange(localCursor, localCursor);
+      textarea.focus();
       publishCursor(textarea, offset);
     }));
   }
@@ -296,6 +556,7 @@ export function CollaborativeEditor({
 
   function handleTableAction(action: TableAction, table = activeTable) {
     if (!table) return;
+    if ((action === "remove-row" || action === "remove-column") && !destructiveTableActionsAllowed) return;
     const tableCursor = activeTable?.start === table.start ? cursorIndex : table.start;
     const edit = editTable(markdown, tableCursor, action);
     if (edit) applyEdit(edit);
@@ -317,19 +578,46 @@ export function CollaborativeEditor({
       }
       if (nextIsTable && markdown[segment.end] !== "\n") replacement += "\n";
     }
-    changeMarkdown(markdown.slice(0, segment.start) + replacement + markdown.slice(segment.end), nextCursor);
+    changeMarkdown(
+      markdown.slice(0, segment.start) + replacement + markdown.slice(segment.end),
+      nextCursor,
+      nextCursor,
+      { kind: "text" },
+    );
   }
 
-  function changeTableCell(table: EditableMarkdownTable, row: number, column: number, value: string) {
+  function changeTableCell(
+    table: EditableMarkdownTable,
+    row: number,
+    column: number,
+    value: string,
+    selection: CellInputSelection,
+  ) {
     const edit = updateTableCell(markdown, table.start, row, column, value);
-    if (edit) changeMarkdown(edit.text, edit.cursor);
+    if (!edit) return;
+    const start = tableCellCursor(edit.text, table.start, row, column, selection.selectionStart);
+    const end = tableCellCursor(edit.text, table.start, row, column, selection.selectionEnd);
+    if (start === null || end === null) {
+      changeMarkdown(edit.text, edit.cursor);
+      return;
+    }
+    const anchor = selection.selectionDirection === "backward" ? end : start;
+    const head = selection.selectionDirection === "backward" ? start : end;
+    changeMarkdown(edit.text, head, anchor, { kind: "table-cell", tableStart: table.start, row, column });
   }
 
-  function focusTableCell(table: EditableMarkdownTable, row: number, column: number) {
-    const nextCursor = tableCellCursor(markdown, table.start, row, column);
-    if (nextCursor === null) return;
-    setCursorIndex(nextCursor);
-    providerRef.current?.setAwarenessField("cursor", { index: nextCursor });
+  function publishTableCellCursor(
+    table: EditableMarkdownTable,
+    row: number,
+    column: number,
+    input: HTMLInputElement,
+  ) {
+    const start = tableCellCursor(textBinding.value, table.start, row, column, input.selectionStart ?? 0);
+    const end = tableCellCursor(textBinding.value, table.start, row, column, input.selectionEnd ?? 0);
+    if (start === null || end === null) return;
+    const anchor = input.selectionDirection === "backward" ? end : start;
+    const head = input.selectionDirection === "backward" ? start : end;
+    publishAbsoluteCursor(anchor, head, { kind: "table-cell", tableStart: table.start, row, column });
   }
 
   async function uploadImage(
@@ -342,8 +630,7 @@ export function CollaborativeEditor({
     setEditorNotice("");
     const start = match?.start ?? selection?.start ?? cursorIndex;
     const end = match?.end ?? selection?.end ?? cursorIndex;
-    const relativeStart = Y.createRelativePositionFromTypeIndex(ytext, start);
-    const relativeEnd = Y.createRelativePositionFromTypeIndex(ytext, end);
+    const insertionCursor = createCollaborativeCursor(textBinding.viewDocument, "markdown", start, end);
     try {
       const form = new FormData();
       form.set("image", file);
@@ -355,21 +642,24 @@ export function CollaborativeEditor({
           de: "Das Bild konnte nicht hochgeladen werden.",
         }));
       }
-      const absoluteStart = Y.createAbsolutePositionFromRelativePosition(relativeStart, ydoc);
-      const absoluteEnd = Y.createAbsolutePositionFromRelativePosition(relativeEnd, ydoc);
-      if (!absoluteStart || !absoluteEnd || absoluteStart.type !== ytext || absoluteEnd.type !== ytext) {
+      const resolved = resolveCollaborativeCursor(insertionCursor, textBinding.viewDocument, "markdown");
+      if (!resolved) {
         throw new Error(text("The insertion position is no longer available.", "Die Einfügeposition ist nicht mehr verfügbar."));
       }
+      const insertionStart = Math.min(resolved.anchor, resolved.head);
+      const insertionEnd = Math.max(resolved.anchor, resolved.head);
+      const currentMarkdown = textBinding.value;
       const alt = file.name.replace(/\.[^.]+$/, "") || text("Pasted image", "Eingefügtes Bild");
-      const prefix = absoluteStart.index > 0 && ytext.toString()[absoluteStart.index - 1] !== "\n" ? "\n" : "";
-      const suffix = ytext.toString()[absoluteEnd.index] && ytext.toString()[absoluteEnd.index] !== "\n" ? "\n" : "";
+      const prefix = insertionStart > 0 && currentMarkdown[insertionStart - 1] !== "\n" ? "\n" : "";
+      const suffix = currentMarkdown[insertionEnd] && currentMarkdown[insertionEnd] !== "\n" ? "\n" : "";
       const markdownImage = `${prefix}![${alt.replace(/[\[\]]/g, "")}](${result.url})${suffix}`;
-      ydoc.transact(() => {
-        if (absoluteEnd.index > absoluteStart.index) ytext.delete(absoluteStart.index, absoluteEnd.index - absoluteStart.index);
-        ytext.insert(absoluteStart.index, markdownImage);
-      }, "image-upload");
-      const nextCursor = absoluteStart.index + markdownImage.length;
-      focusMarkdownCursor(ytext.toString(), nextCursor);
+      textBinding.apply(
+        currentMarkdown.slice(0, insertionStart) + markdownImage + currentMarkdown.slice(insertionEnd),
+        "image-upload",
+      );
+      const nextCursor = insertionStart + markdownImage.length;
+      publishAbsoluteCursor(nextCursor);
+      focusMarkdownCursor(nextCursor);
       setEditorNotice(text("Image inserted.", "Bild eingefügt."));
     } catch (error) {
       setEditorNotice(error instanceof Error ? error.message : text("Image could not be uploaded.", "Bild konnte nicht hochgeladen werden."));
@@ -612,11 +902,12 @@ export function CollaborativeEditor({
                   onTextKeyDown={handleEditorKeyDown}
                   onTextPaste={handlePaste}
                   onTextCursor={publishCursor}
-                  onTextBlur={() => providerRef.current?.setAwarenessField("cursor", null)}
+                  onTextBlur={clearLocalCursor}
                   onCellChange={changeTableCell}
-                  onCellFocus={focusTableCell}
-                  onCellBlur={() => providerRef.current?.setAwarenessField("cursor", null)}
+                  onCellCursor={publishTableCellCursor}
+                  onCellBlur={clearLocalCursor}
                   onTableAction={(table, action) => handleTableAction(action, table)}
+                  destructiveActionsDisabled={!destructiveTableActionsAllowed}
                 />
               ) : (
                 <textarea
@@ -624,14 +915,21 @@ export function CollaborativeEditor({
                   data-markdown-start={0}
                   data-markdown-end={markdown.length}
                   value={markdown}
-                  onChange={(event) => changeMarkdown(event.target.value, event.target.selectionStart)}
+                  onChange={(event) => {
+                    const textarea = event.currentTarget;
+                    const start = textarea.selectionStart;
+                    const end = textarea.selectionEnd;
+                    const anchor = textarea.selectionDirection === "backward" ? end : start;
+                    const head = textarea.selectionDirection === "backward" ? start : end;
+                    changeMarkdown(textarea.value, head, anchor, { kind: "text" });
+                  }}
                   onKeyDown={handleEditorKeyDown}
                   onPaste={handlePaste}
                   onSelect={(event) => publishCursor(event.currentTarget)}
                   onKeyUp={(event) => publishCursor(event.currentTarget)}
                   onClick={(event) => publishCursor(event.currentTarget)}
                   onFocus={(event) => publishCursor(event.currentTarget)}
-                  onBlur={() => providerRef.current?.setAwarenessField("cursor", null)}
+                  onBlur={clearLocalCursor}
                   onScroll={() => setScrollRevision((value) => value + 1)}
                   readOnly={readOnly}
                   spellCheck
@@ -655,15 +953,31 @@ export function CollaborativeEditor({
                   <span><Table2 size={14} /> {text("Table", "Tabelle")} · {activeTable.rows.length}×{activeTable.columns}</span>
                   <button aria-label={text("Add row", "Zeile hinzufügen")} onClick={() => handleTableAction("add-row")}><Plus size={13} /> {text("Row", "Zeile")}</button>
                   <button aria-label={text("Add column", "Spalte hinzufügen")} onClick={() => handleTableAction("add-column")}><Plus size={13} /> {text("Column", "Spalte")}</button>
-                  <button aria-label={text("Remove row", "Zeile entfernen")} onClick={() => handleTableAction("remove-row")}><Minus size={13} /> {text("Row", "Zeile")}</button>
-                  <button aria-label={text("Remove column", "Spalte entfernen")} onClick={() => handleTableAction("remove-column")}><Minus size={13} /> {text("Column", "Spalte")}</button>
+                  <button
+                    aria-label={text("Remove row", "Zeile entfernen")}
+                    disabled={!destructiveTableActionsAllowed}
+                    title={!destructiveTableActionsAllowed ? text(
+              "Remove rows by editing the Markdown source directly.",
+              "Entfernen Sie Zeilen direkt im Markdown-Quelltext.",
+                    ) : undefined}
+                    onClick={() => handleTableAction("remove-row")}
+                  ><Minus size={13} /> {text("Row", "Zeile")}</button>
+                  <button
+                    aria-label={text("Remove column", "Spalte entfernen")}
+                    disabled={!destructiveTableActionsAllowed}
+                    title={!destructiveTableActionsAllowed ? text(
+              "Remove columns by editing the Markdown source directly.",
+              "Entfernen Sie Spalten direkt im Markdown-Quelltext.",
+                    ) : undefined}
+                    onClick={() => handleTableAction("remove-column")}
+                  ><Minus size={13} /> {text("Column", "Spalte")}</button>
                 </div>
               )}
               <div className="remote-cursors" aria-hidden="true">
-                {people.filter((person) => person.id !== user.id && person.cursor !== null).map((person) => (
+                {remoteCursors.map((person) => (
                   showHybridTables ? (
                     <HybridRemoteCursor
-                      key={person.id}
+                      key={person.clientId}
                       person={person}
                       editorStageRef={editorStageRef}
                       markdown={markdown}
@@ -672,7 +986,7 @@ export function CollaborativeEditor({
                     />
                   ) : (
                     <RemoteCursor
-                      key={person.id}
+                      key={person.clientId}
                       person={person}
                       textareaRef={textareaRef}
                       markdown={markdown}
@@ -748,7 +1062,7 @@ function HybridRemoteCursor({
   segments,
   title,
 }: {
-  person: Person;
+  person: VisibleCursor;
   editorStageRef: RefObject<HTMLDivElement | null>;
   markdown: string;
   segments: MarkdownDocumentSegment[];
@@ -759,17 +1073,23 @@ function HybridRemoteCursor({
   useLayoutEffect(() => {
     const stage = editorStageRef.current;
     if (!stage || person.cursor === null) return;
-    const scrollContainer = stage.querySelector<HTMLElement>("[data-testid='hybrid-markdown-document']");
-
     const update = () => {
       const cursor = Math.min(person.cursor || 0, markdown.length);
       const stageRect = stage.getBoundingClientRect();
-      const tableSegment = segments.find(
-        (segment) => segment.type === "table" && cursor >= segment.start && cursor < segment.end,
-      );
+      const tableSegment = segments.find((segment) => segment.type === "table" && (
+        person.surface?.kind === "table-cell"
+          ? segment.start === person.surface.tableStart
+          : person.surface?.kind === "text"
+            ? false
+            : cursor > segment.start && cursor < segment.end
+      ));
 
       if (tableSegment?.type === "table") {
-        const table = editableTableAt(markdown, cursor);
+        const table = editableTableAt(markdown, cursor)
+          ?? editableTableAt(markdown, Math.max(tableSegment.start, Math.min(cursor - 1, tableSegment.end - 1)))
+          ?? (person.surface?.kind === "table-cell"
+            ? { rowIndex: person.surface.row, columnIndex: person.surface.column }
+            : null);
         const cell = table && stage.querySelector<HTMLInputElement>(
           `[data-markdown-table-start="${tableSegment.start}"] `
           + `[data-table-row="${table.rowIndex}"][data-table-column="${table.columnIndex}"]`,
@@ -779,10 +1099,13 @@ function HybridRemoteCursor({
           return;
         }
         const cellRect = cell.getBoundingClientRect();
+        const valueOffset = tableCellValueOffset(markdown, cursor, table.rowIndex, table.columnIndex) ?? 0;
+        const caret = caretPosition(cell, valueOffset);
         setPosition({
-          left: cellRect.left - stageRect.left + 8,
-          top: cellRect.top - stageRect.top + 7,
-          visible: cellRect.bottom >= stageRect.top
+          left: cellRect.left - stageRect.left + caret.left,
+          top: cellRect.top - stageRect.top + caret.top,
+          visible: caret.visible
+            && cellRect.bottom >= stageRect.top
             && cellRect.top <= stageRect.bottom
             && cellRect.right >= stageRect.left
             && cellRect.left <= stageRect.right,
@@ -817,12 +1140,20 @@ function HybridRemoteCursor({
 
     update();
     window.addEventListener("resize", update);
-    scrollContainer?.addEventListener("scroll", update, { passive: true });
+    stage.addEventListener("scroll", update, { capture: true, passive: true });
     return () => {
       window.removeEventListener("resize", update);
-      scrollContainer?.removeEventListener("scroll", update);
+      stage.removeEventListener("scroll", update, { capture: true });
     };
-  }, [editorStageRef, markdown, person.cursor, segments]);
+  }, [
+    editorStageRef,
+    markdown,
+    person.cursor,
+    person.surface?.kind === "table-cell" ? person.surface.column : undefined,
+    person.surface?.kind === "table-cell" ? person.surface.row : undefined,
+    person.surface?.kind === "table-cell" ? person.surface.tableStart : undefined,
+    segments,
+  ]);
 
   if (!position?.visible) return null;
   return (
@@ -848,7 +1179,7 @@ function RemoteCursor({
   scrollRevision,
   title,
 }: {
-  person: Person;
+  person: VisibleCursor;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
   markdown: string;
   scrollRevision: number;
@@ -882,7 +1213,7 @@ function RemoteCursor({
   );
 }
 
-function caretPosition(textarea: HTMLTextAreaElement, index: number) {
+function caretPosition(textarea: HTMLTextAreaElement | HTMLInputElement, index: number) {
   const style = window.getComputedStyle(textarea);
   const mirror = document.createElement("div");
   const properties = [
@@ -894,8 +1225,8 @@ function caretPosition(textarea: HTMLTextAreaElement, index: number) {
   ] as const;
   mirror.style.position = "absolute";
   mirror.style.visibility = "hidden";
-  mirror.style.whiteSpace = "pre-wrap";
-  mirror.style.overflowWrap = "break-word";
+  mirror.style.whiteSpace = textarea instanceof HTMLInputElement ? "pre" : "pre-wrap";
+  mirror.style.overflowWrap = textarea instanceof HTMLInputElement ? "normal" : "break-word";
   mirror.style.top = "0";
   mirror.style.left = "-9999px";
   for (const property of properties) {
@@ -915,22 +1246,6 @@ function caretPosition(textarea: HTMLTextAreaElement, index: number) {
     top,
     visible: top + lineHeight >= 0 && top <= textarea.clientHeight,
   };
-}
-
-function initialContent(page: PageItem, language: "en" | "de") {
-  const heading = language === "de" ? "Überschrift" : "Headline";
-  if (page.format === "LATEX") {
-    return `\\documentclass{article}
-\\begin{document}
-\\section{${escapeLatex(heading)}}
-\\end{document}
-`;
-  }
-  return `# ${heading}\n`;
-}
-
-function escapeLatex(value: string) {
-  return value.replace(/[#$%&_{}]/g, (character) => `\\${character}`);
 }
 
 function userColor(id: string) {
