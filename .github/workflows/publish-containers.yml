@@ -20,6 +20,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  GHCR_NAMESPACE: timo348
   DOCKERHUB_NAMESPACE: timo348
 
 jobs:
@@ -31,7 +32,6 @@ jobs:
       version: ${{ steps.release.outputs.version }}
       major: ${{ steps.release.outputs.major }}
       minor: ${{ steps.release.outputs.minor }}
-      owner_lc: ${{ steps.release.outputs.owner_lc }}
       created: ${{ steps.release.outputs.created }}
       dockerhub_enabled: ${{ steps.release.outputs.dockerhub_enabled }}
 
@@ -74,7 +74,6 @@ jobs:
           major="${package_version%%.*}"
           remainder="${package_version#*.}"
           minor="${remainder%%.*}"
-          owner_lc="$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
           created="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 
           dockerhub_enabled=false
@@ -90,7 +89,6 @@ jobs:
             echo "version=$package_version"
             echo "major=$major"
             echo "minor=$minor"
-            echo "owner_lc=$owner_lc"
             echo "created=$created"
             echo "dockerhub_enabled=$dockerhub_enabled"
           } >> "$GITHUB_OUTPUT"
@@ -176,13 +174,12 @@ jobs:
           SERVICE: ${{ matrix.service }}
           IMAGE_TITLE: ${{ matrix.title }}
           VERSION: ${{ needs.validate-release.outputs.version }}
-          OWNER_LC: ${{ needs.validate-release.outputs.owner_lc }}
           CREATED: ${{ needs.validate-release.outputs.created }}
           DOCKERHUB_ENABLED: ${{ needs.validate-release.outputs.dockerhub_enabled }}
         run: |
           set -euo pipefail
 
-          ghcr_image="ghcr.io/${OWNER_LC}/atlas-docs-${SERVICE}"
+          ghcr_image="ghcr.io/${GHCR_NAMESPACE}/atlas-docs-${SERVICE}"
           {
             echo "tags<<TAGS"
             echo "${ghcr_image}:sha-${GITHUB_SHA}"
@@ -257,7 +254,6 @@ jobs:
         shell: bash
         env:
           VERSION: ${{ needs.validate-release.outputs.version }}
-          OWNER_LC: ${{ needs.validate-release.outputs.owner_lc }}
           DOCKERHUB_ENABLED: ${{ needs.validate-release.outputs.dockerhub_enabled }}
         run: |
           set -euo pipefail
@@ -276,7 +272,7 @@ jobs:
           }
 
           for service in web collab migrate; do
-            verify_image "ghcr.io/${OWNER_LC}/atlas-docs-${service}:sha-${GITHUB_SHA}"
+            verify_image "ghcr.io/${GHCR_NAMESPACE}/atlas-docs-${service}:sha-${GITHUB_SHA}"
           done
 
           if [[ "$DOCKERHUB_ENABLED" == "true" ]]; then
@@ -289,7 +285,6 @@ jobs:
         shell: bash
         env:
           VERSION: ${{ needs.validate-release.outputs.version }}
-          OWNER_LC: ${{ needs.validate-release.outputs.owner_lc }}
           DOCKERHUB_ENABLED: ${{ needs.validate-release.outputs.dockerhub_enabled }}
         run: |
           set -euo pipefail
@@ -342,7 +337,7 @@ jobs:
           }
 
           for service in web collab migrate; do
-            assert_version_publishable "ghcr.io/${OWNER_LC}/atlas-docs-${service}"
+            assert_version_publishable "ghcr.io/${GHCR_NAMESPACE}/atlas-docs-${service}"
           done
 
           if [[ "$DOCKERHUB_ENABLED" == "true" ]]; then
@@ -357,7 +352,6 @@ jobs:
           VERSION: ${{ needs.validate-release.outputs.version }}
           MAJOR: ${{ needs.validate-release.outputs.major }}
           MINOR: ${{ needs.validate-release.outputs.minor }}
-          OWNER_LC: ${{ needs.validate-release.outputs.owner_lc }}
           DOCKERHUB_ENABLED: ${{ needs.validate-release.outputs.dockerhub_enabled }}
         run: |
           set -euo pipefail
@@ -373,7 +367,7 @@ jobs:
           }
 
           for service in web collab migrate; do
-            promote_image "ghcr.io/${OWNER_LC}/atlas-docs-${service}"
+            promote_image "ghcr.io/${GHCR_NAMESPACE}/atlas-docs-${service}"
           done
 
           if [[ "$DOCKERHUB_ENABLED" == "true" ]]; then
