@@ -151,9 +151,6 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Enable multi-platform emulation
-        uses: docker/setup-qemu-action@v3
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -207,14 +204,14 @@ jobs:
             echo "LABELS"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Build and publish staged multi-platform image
+      - name: Build and publish staged linux/amd64 image
         id: build
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
           target: ${{ matrix.target }}
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: ${{ steps.metadata.outputs.tags }}
           labels: ${{ steps.metadata.outputs.labels }}
@@ -272,9 +269,8 @@ jobs:
             if ! jq -e '
               [.manifests[]? | select(.platform.os == "linux") | .platform.architecture] as $architectures
               | (($architectures | index("amd64")) != null)
-                and (($architectures | index("arm64")) != null)
             ' <<< "$raw_manifest" > /dev/null; then
-              echo "::error::${image_ref} does not contain both linux/amd64 and linux/arm64"
+              echo "::error::${image_ref} does not contain linux/amd64"
               return 1
             fi
           }
@@ -323,15 +319,12 @@ jobs:
                 .manifests[]?
                 | select(
                     .platform.os == "linux"
-                    and (
-                      .platform.architecture == "amd64"
-                      or .platform.architecture == "arm64"
-                    )
+                    and .platform.architecture == "amd64"
                   )
                 | .digest
               ' <<< "$raw_manifest"
             )
-            [[ "$platform_count" -eq 2 ]]
+            [[ "$platform_count" -eq 1 ]]
           }
 
           assert_version_publishable() {

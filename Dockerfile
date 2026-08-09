@@ -1,5 +1,4 @@
-# Keep the build and runtime base reproducible. This digest is the multi-platform
-# manifest for node:22-alpine and contains both linux/amd64 and linux/arm64.
+# Keep the linux/amd64 build and runtime base reproducible with a pinned digest.
 ARG NODE_IMAGE=node:22-alpine@sha256:16e22a550f3863206a3f701448c45f7912c6896a62de43add43bb9c86130c3e2
 
 FROM ${NODE_IMAGE} AS dependencies
@@ -9,7 +8,9 @@ COPY package.json ./
 COPY apps/web/package.json apps/web/package.json
 COPY apps/collab/package.json apps/collab/package.json
 COPY package-lock.json ./
-RUN --mount=type=cache,target=/root/.npm npm ci
+# Package lifecycle scripts are not needed in the dependency layer. Prisma is
+# generated explicitly in the next step, so this install remains deterministic.
+RUN --mount=type=cache,target=/root/.npm npm ci --ignore-scripts
 COPY prisma ./prisma
 RUN ./node_modules/.bin/prisma generate
 
