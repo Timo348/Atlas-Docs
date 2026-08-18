@@ -22,6 +22,8 @@ expect_mode 2026-08-01 archive
 expect_mode 2026-08-15 archive
 expect_mode 2026-08-04 skip
 
+[[ "$("$ROOT_DIR/backup.sh" upgrade --dry-run)" == "upgrade" ]]
+
 test_root="$(mktemp -d)"
 trap 'rm -rf -- "$test_root"' EXIT
 mkdir -p "$test_root/regular" "$test_root/archive"

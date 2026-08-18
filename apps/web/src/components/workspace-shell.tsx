@@ -7,16 +7,19 @@ import { type DragEvent, useState } from "react";
 import {
   BookOpen, ChevronDown, ChevronRight, FileCode2, FilePlus2, FileText, Folder,
   FolderPlus, GripVertical, LogOut, MoreHorizontal, PanelLeftClose, PanelLeftOpen,
-  Pencil, Plus, Search, Settings2, ShieldCheck, Trash2, Users, X,
+  Network, Pencil, Plus, Search, Settings2, ShieldCheck, Trash2, Users, X,
 } from "lucide-react";
 import { CollaborativeEditor } from "@/components/collaborative-editor";
 import { usePreferences } from "@/components/preferences-provider";
 import { ProfileDialog } from "@/components/profile-dialog";
 import { SpacePermissionsDialog } from "@/components/space-permissions-dialog";
 import { SidebarSpaceIdentity, SpacePicker } from "@/components/space-picker";
+import { useDialogEscape } from "@/components/use-dialog-escape";
 import { apiErrorMessage } from "@/lib/api-errors";
+import { pageAfterDeletion } from "@/lib/page-deletion";
 import { spaceRoleLabel } from "@/lib/space-role";
 
+type PageFormat = "MARKDOWN" | "LATEX" | "CANVAS";
 type PageItem = {
   id: string;
   title: string;
@@ -24,7 +27,7 @@ type PageItem = {
   spaceId: string;
   parentId: string | null;
   folderId: string | null;
-  format: "MARKDOWN" | "LATEX";
+  format: PageFormat;
   sortOrder: number;
 };
 type FolderItem = { id: string; name: string; parentId: string | null; sortOrder: number };
@@ -36,7 +39,7 @@ type DropTarget =
   | { kind: "page"; id: string; edge: "before" | "after" };
 type ActionDialogState =
   | { kind: "text"; title: string; label: string; initial: string; submit: (value: string) => Promise<void> }
-  | { kind: "page"; title: string; label: string; initial: string; submit: (value: string, format: "MARKDOWN" | "LATEX") => Promise<void> }
+  | { kind: "page"; title: string; label: string; initial: string; submit: (value: string, format: PageFormat) => Promise<void> }
   | { kind: "confirm"; title: string; message: string; submit: () => Promise<void> }
   | { kind: "move"; title: string; folders: FlatFolder[]; currentFolderId: string | null; submit: (folderId: string | null) => Promise<void> };
 type Space = {
@@ -84,7 +87,7 @@ export function WorkspaceShell({
 
   function createPage(spaceId: string, folderId: string | null = null) {
     setDialog({
-      kind: "page", title: text("New page", "Neue Seite"), label: text("Page title", "Seitentitel"), initial: "",
+      kind: "page", title: text("New file", "Neue Datei"), label: text("Title", "Titel"), initial: "",
       submit: async (title, format) => {
         const response = await request("/api/pages", "POST", { title, spaceId, folderId, format });
         if (!response.ok) return setNotice(response.error);
@@ -150,6 +153,35 @@ export function WorkspaceShell({
         const response = await request(`/api/pages/${page.id}`, "PATCH", { folderId });
         if (!response.ok) return setNotice(response.error);
         setDialog(null);
+        router.refresh();
+      },
+    });
+  }
+
+  function deletePage(page: PageItem) {
+    setDialog({
+      kind: "confirm",
+      title: page.format === "CANVAS" ? text("Delete canvas", "Canvas löschen") : text("Delete page", "Seite löschen"),
+      message: text(
+        `“${page.title}” and its complete version history will be permanently deleted.`,
+        `„${page.title}“ und die vollständige Versionshistorie werden unwiderruflich gelöscht.`,
+      ),
+      submit: async () => {
+        const response = await fetch(`/api/pages/${page.id}`, { method: "DELETE" });
+        if (!response.ok) {
+          const result = await response.json().catch(() => null);
+          return setNotice(apiErrorMessage(result, text, {
+            en: page.format === "CANVAS" ? "The canvas could not be deleted." : "The page could not be deleted.",
+            de: page.format === "CANVAS" ? "Der Canvas konnte nicht gelöscht werden." : "Die Seite konnte nicht gelöscht werden.",
+          }));
+        }
+        setDialog(null);
+        if (selectedPage?.id === page.id && activeSpace) {
+          const fallback = pageAfterDeletion(activeSpace.pages, page.id);
+          router.replace(fallback
+            ? `/?space=${activeSpace.id}&page=${fallback.id}`
+            : `/?space=${activeSpace.id}`);
+        }
         router.refresh();
       },
     });
@@ -309,7 +341,7 @@ export function WorkspaceShell({
             <nav className="page-tree">
               {canWrite && (
                 <div className="tree-actions">
-                  <button disabled={busy} onClick={() => createPage(activeSpace.id)}><FilePlus2 size={15} /> {text("Page", "Seite")}</button>
+                  <button disabled={busy} onClick={() => createPage(activeSpace.id)}><FilePlus2 size={15} /> {text("File", "Datei")}</button>
                   <button disabled={busy} onClick={() => createFolder(activeSpace.id)}><FolderPlus size={15} /> {text("Folder", "Ordner")}</button>
                 </div>
               )}
@@ -327,6 +359,7 @@ export function WorkspaceShell({
                 onRenameFolder={renameFolder}
                 onDeleteFolder={deleteFolder}
                 onMovePage={movePage}
+                onDeletePage={deletePage}
                 dragItem={dragItem}
                 dropTarget={dropTarget}
                 onDragStart={startDrag}
@@ -340,6 +373,7 @@ export function WorkspaceShell({
                 selectedPageId={selectedPage?.id || null}
                 canWrite={Boolean(canWrite)}
                 onMovePage={movePage}
+                onDeletePage={deletePage}
                 dragItem={dragItem}
                 dropTarget={dropTarget}
                 onDragStart={startDrag}
@@ -392,7 +426,13 @@ export function WorkspaceShell({
           </button>
         )}
         {selectedPage ? (
-          <CollaborativeEditor key={selectedPage.id} page={selectedPage} user={user} headerCenter={spacePicker} />
+          <CollaborativeEditor
+            key={selectedPage.id}
+            page={selectedPage}
+            user={user}
+            headerCenter={spacePicker}
+            canManageShares={user.role === "ADMIN" || activeSpace?.role === "OWNER"}
+          />
         ) : (
           <div style={{ display: "grid", gridTemplateRows: "70px minmax(0, 1fr)", height: "100%" }}>
             <header style={{ alignItems: "center", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "center", padding: "0 28px" }}>
@@ -401,9 +441,9 @@ export function WorkspaceShell({
             <div className="empty-state">
               <span>{activeSpace ? <Folder size={28} /> : <BookOpen size={28} />}</span>
               <h1>{activeSpace ? activeSpace.name : text("Your knowledge space is ready.", "Dein Wissensbereich ist bereit.")}</h1>
-              <p>{activeSpace ? text("Create a page or folder.", "Lege eine Seite oder einen Ordner an.") : text("Create your first space.", "Lege deinen ersten Bereich an.")}</p>
+              <p>{activeSpace ? text("Create a file or folder.", "Lege eine Datei oder einen Ordner an.") : text("Create your first space.", "Lege deinen ersten Bereich an.")}</p>
               {activeSpace && canWrite ? (
-                <button className="button primary-button compact" onClick={() => createPage(activeSpace.id)}><Plus size={17} /> {text("First page", "Erste Seite")}</button>
+                <button className="button primary-button compact" onClick={() => createPage(activeSpace.id)}><Plus size={17} /> {text("First file", "Erste Datei")}</button>
               ) : !activeSpace ? (
                 <button className="button primary-button compact" onClick={createSpace}><Plus size={17} /> {text("Create space", "Bereich anlegen")}</button>
               ) : null}
@@ -447,6 +487,7 @@ function FolderTree({
   onRenameFolder,
   onDeleteFolder,
   onMovePage,
+  onDeletePage,
   dragItem,
   dropTarget,
   onDragStart,
@@ -467,6 +508,7 @@ function FolderTree({
   onRenameFolder: (folder: FolderItem) => void;
   onDeleteFolder: (folder: FolderItem) => void;
   onMovePage: (page: PageItem) => void;
+  onDeletePage: (page: PageItem) => void;
   dragItem: DragItem | null;
   dropTarget: DropTarget | null;
   onDragStart: (event: DragEvent, item: DragItem) => void;
@@ -520,7 +562,7 @@ function FolderTree({
               </button>
               {canWrite && (
                 <div className="node-actions">
-                  <button disabled={busy} onClick={() => onCreatePage(space.id, folder.id)} title={text("Page in folder", "Seite im Ordner")} aria-label={text(`Create page in ${folder.name}`, `Seite in ${folder.name} anlegen`)}><FilePlus2 size={14} /></button>
+                  <button disabled={busy} onClick={() => onCreatePage(space.id, folder.id)} title={text("File in folder", "Datei im Ordner")} aria-label={text(`Create file in ${folder.name}`, `Datei in ${folder.name} anlegen`)}><FilePlus2 size={14} /></button>
                   <button disabled={busy} onClick={() => onCreateFolder(space.id, folder.id)} title={text("Subfolder", "Unterordner")} aria-label={text(`Create subfolder in ${folder.name}`, `Unterordner in ${folder.name} anlegen`)}><FolderPlus size={14} /></button>
                   <button disabled={busy} onClick={() => onRenameFolder(folder)} title={text("Rename", "Umbenennen")} aria-label={text(`Rename ${folder.name}`, `${folder.name} umbenennen`)}><Pencil size={13} /></button>
                   <button disabled={busy} onClick={() => onDeleteFolder(folder)} title={text("Delete", "Löschen")} aria-label={text(`Delete ${folder.name}`, `${folder.name} löschen`)}><Trash2 size={13} /></button>
@@ -543,6 +585,7 @@ function FolderTree({
                   onRenameFolder={onRenameFolder}
                   onDeleteFolder={onDeleteFolder}
                   onMovePage={onMovePage}
+                  onDeletePage={onDeletePage}
                   dragItem={dragItem}
                   dropTarget={dropTarget}
                   onDragStart={onDragStart}
@@ -556,6 +599,7 @@ function FolderTree({
                   selectedPageId={selectedPageId}
                   canWrite={canWrite}
                   onMovePage={onMovePage}
+                  onDeletePage={onDeletePage}
                   dragItem={dragItem}
                   dropTarget={dropTarget}
                   onDragStart={onDragStart}
@@ -578,6 +622,7 @@ function RootPages({
   selectedPageId,
   canWrite,
   onMovePage,
+  onDeletePage,
   dragItem,
   dropTarget,
   onDragStart,
@@ -590,6 +635,7 @@ function RootPages({
   selectedPageId: string | null;
   canWrite: boolean;
   onMovePage: (page: PageItem) => void;
+  onDeletePage: (page: PageItem) => void;
   dragItem: DragItem | null;
   dropTarget: DropTarget | null;
   onDragStart: (event: DragEvent, item: DragItem) => void;
@@ -633,9 +679,10 @@ function RootPages({
             </span>
           )}
           <Link className="page-link" href={`/?space=${page.spaceId}&page=${page.id}`}>
-            {page.format === "LATEX" ? <FileCode2 size={14} /> : <FileText size={14} />}<span>{page.title}</span>
+            {page.format === "CANVAS" ? <Network size={14} /> : page.format === "LATEX" ? <FileCode2 size={14} /> : <FileText size={14} />}<span>{page.title}</span>
           </Link>
-          {canWrite && <button onClick={() => onMovePage(page)} title={text("Move page", "Seite verschieben")} aria-label={text(`Move ${page.title}`, `${page.title} verschieben`)}><MoreHorizontal size={15} /></button>}
+          {canWrite && <button onClick={() => onMovePage(page)} title={text("Move file", "Datei verschieben")} aria-label={text(`Move ${page.title}`, `${page.title} verschieben`)}><MoreHorizontal size={15} /></button>}
+          {canWrite && <button onClick={() => onDeletePage(page)} title={text("Delete file", "Datei löschen")} aria-label={text(`Delete ${page.title}`, `${page.title} löschen`)}><Trash2 size={14} /></button>}
         </div>
       )})}
     </>
@@ -689,8 +736,10 @@ function ActionDialog({
 }) {
   const { text } = usePreferences();
   const [value, setValue] = useState(dialog.kind === "text" || dialog.kind === "page" ? dialog.initial : dialog.kind === "move" ? dialog.currentFolderId || "" : "");
-  const [format, setFormat] = useState<"MARKDOWN" | "LATEX">("MARKDOWN");
+  const [format, setFormat] = useState<PageFormat>("MARKDOWN");
+  useDialogEscape(onClose, busy);
   async function submit() {
+    if (busy) return;
     onBusy(true);
     try {
       if (dialog.kind === "text") await dialog.submit(value.trim());
@@ -702,11 +751,11 @@ function ActionDialog({
     }
   }
   return (
-    <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+    <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !busy && onClose()}>
       <section className="action-dialog" role="dialog" aria-modal="true" aria-label={dialog.title}>
         <header className="dialog-header">
           <div><span className="dialog-kicker">Atlas</span><h2>{dialog.title}</h2></div>
-          <button className="icon-button" onClick={onClose} aria-label={text("Close", "Schließen")}><X size={18} /></button>
+          <button className="icon-button" disabled={busy} onClick={onClose} aria-label={text("Close", "Schließen")}><X size={18} /></button>
         </header>
         <div className="action-dialog-body">
           {(dialog.kind === "text" || dialog.kind === "page") && <label>{dialog.label}<input autoFocus value={value} onChange={(event) => setValue(event.target.value)} onKeyDown={(event) => event.key === "Enter" && value.trim() && void submit()} /></label>}
@@ -714,6 +763,7 @@ function ActionDialog({
             <div className="format-picker">
               <button className={format === "MARKDOWN" ? "active" : ""} onClick={() => setFormat("MARKDOWN")}><FileText size={20} /><span><strong>Markdown</strong><small>{text("Flexible documentation with preview", "Flexible Dokumentation mit Vorschau")}</small></span></button>
               <button className={format === "LATEX" ? "active" : ""} onClick={() => setFormat("LATEX")}><FileCode2 size={20} /><span><strong>LaTeX</strong><small>{text("Scientific documents and formulas", "Wissenschaftliche Dokumente und Formeln")}</small></span></button>
+              <button className={format === "CANVAS" ? "active" : ""} onClick={() => setFormat("CANVAS")}><Network size={20} /><span><strong>Canvas</strong><small>{text("Visual workspace with Excalidraw", "Visueller Arbeitsbereich mit Excalidraw")}</small></span></button>
             </div>
           )}
           {dialog.kind === "confirm" && <p>{dialog.message}</p>}
@@ -729,7 +779,7 @@ function ActionDialog({
         <footer className="dialog-footer">
           <span />
           <div>
-            <button className="button secondary-button compact" onClick={onClose}>{text("Cancel", "Abbrechen")}</button>
+            <button className="button secondary-button compact" disabled={busy} onClick={onClose}>{text("Cancel", "Abbrechen")}</button>
             <button className={`button compact ${dialog.kind === "confirm" ? "danger-button" : "primary-button"}`} disabled={busy || ((dialog.kind === "text" || dialog.kind === "page") && !value.trim())} onClick={() => void submit()}>
               {busy ? text("Please wait…", "Bitte warten…") : dialog.kind === "confirm" ? text("Delete", "Löschen") : text("Save", "Speichern")}
             </button>

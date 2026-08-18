@@ -11,7 +11,7 @@
     "lint": "npm run lint --workspace=@atlas/web && npm run lint --workspace=@atlas/collab",
     "test": "npm run test --workspace=@atlas/web && npm run test --workspace=@atlas/collab",
     "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate deploy",
+    "db:migrate": "prisma migrate deploy && tsx prisma/migrate-legacy-canvases.ts",
     "db:seed": "tsx prisma/seed.ts"
   },
   "dependencies": {

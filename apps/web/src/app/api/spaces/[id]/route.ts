@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireApiUser } from "@/lib/access";
+import { requireApiUser, spaceAccess } from "@/lib/access";
 import { apiErrorResponse, readJsonBody } from "@/lib/api-errors";
 import { db } from "@/lib/db";
+import { canManageSpace, spaceNameUpdateSchema } from "@/lib/space-management";
 import {
   collaborationDocumentsForPages,
   confirmsSpaceDeletion,
@@ -12,6 +13,62 @@ import { strongestSpaceRole, type EffectiveSpaceRole } from "@/lib/space-role";
 const deleteSchema = z.object({
   confirmation: z.string().max(80),
 });
+
+export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
+  const user = await requireApiUser();
+  if (!user) return apiErrorResponse("AUTH_REQUIRED", 401);
+
+  const parsed = spaceNameUpdateSchema.safeParse(await readJsonBody(request));
+  if (!parsed.success) return apiErrorResponse("INVALID_INPUT", 400);
+
+  const { id } = await context.params;
+  const outcome = await db.$transaction(async (transaction) => {
+    const spaces = await transaction.$queryRaw<{ id: string }[]>`
+      SELECT "id"
+      FROM "Space"
+      WHERE "id" = ${id}
+      FOR UPDATE
+    `;
+    if (!spaces.length) return { status: "not-found" as const };
+
+    const users = await transaction.$queryRaw<{ role: "ADMIN" | "MEMBER" }[]>`
+      SELECT "role"
+      FROM "User"
+      WHERE "id" = ${user.id} AND "active" = true
+      FOR SHARE
+    `;
+    const currentUser = users[0];
+    if (!currentUser) return { status: "forbidden" as const };
+
+    const role = currentUser.role === "ADMIN"
+      ? null
+      : await spaceAccess(user.id, id, transaction);
+    if (!canManageSpace(currentUser.role, role)) {
+      return { status: "forbidden" as const };
+    }
+
+    const space = await transaction.space.update({
+      where: { id },
+      data: { name: parsed.data.name },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        description: true,
+        updatedAt: true,
+      },
+    });
+    return { status: "updated" as const, space };
+  });
+
+  if (outcome.status === "not-found") {
+    return apiErrorResponse("SPACE_NOT_FOUND", 404);
+  }
+  if (outcome.status === "forbidden") {
+    return apiErrorResponse("SPACE_OWNER_OR_ADMIN_REQUIRED", 403);
+  }
+  return NextResponse.json(outcome.space);
+}
 
 export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
   const user = await requireApiUser();

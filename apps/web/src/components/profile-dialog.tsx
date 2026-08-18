@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Camera, Download, Settings2, X } from "lucide-react";
 import { usePreferences } from "@/components/preferences-provider";
+import { useDialogEscape } from "@/components/use-dialog-escape";
 import { apiErrorMessage } from "@/lib/api-errors";
 import type { Preferences } from "@/lib/preferences";
 
@@ -21,6 +22,7 @@ export function ProfileDialog({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  useDialogEscape(onClose, busy);
 
   function update<K extends keyof Preferences>(key: K, value: Preferences[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -30,63 +32,78 @@ export function ProfileDialog({
     if (!file) return;
     setBusy(true);
     setError("");
-    const form = new FormData();
-    form.set("image", file);
-    const response = await fetch(`/api/users/${user.id}/avatar`, { method: "PUT", body: form });
-    const result = await response.json();
-    setBusy(false);
-    if (!response.ok) {
-      return setError(apiErrorMessage(result, text, {
-        en: "The profile image could not be saved.",
-        de: "Das Profilbild konnte nicht gespeichert werden.",
-      }));
+    try {
+      const form = new FormData();
+      form.set("image", file);
+      const response = await fetch(`/api/users/${user.id}/avatar`, { method: "PUT", body: form });
+      const result = await response.json();
+      if (!response.ok) {
+        return setError(apiErrorMessage(result, text, {
+          en: "The profile image could not be saved.",
+          de: "Das Profilbild konnte nicht gespeichert werden.",
+        }));
+      }
+      setHasAvatar(true);
+      setVersion(Date.now());
+      setFile(null);
+      setNotice(text("Profile image saved.", "Profilbild gespeichert."));
+    } catch {
+      setError(text("The profile image could not be saved.", "Das Profilbild konnte nicht gespeichert werden."));
+    } finally {
+      setBusy(false);
     }
-    setHasAvatar(true);
-    setVersion(Date.now());
-    setFile(null);
-    setNotice(text("Profile image saved.", "Profilbild gespeichert."));
   }
 
   async function remove() {
     setBusy(true);
     setError("");
-    const response = await fetch(`/api/users/${user.id}/avatar`, { method: "DELETE" });
-    setBusy(false);
-    if (!response.ok) return setError(text("Profile image could not be removed.", "Profilbild konnte nicht entfernt werden."));
-    setHasAvatar(false);
-    setNotice(text("Profile image removed.", "Profilbild entfernt."));
+    try {
+      const response = await fetch(`/api/users/${user.id}/avatar`, { method: "DELETE" });
+      if (!response.ok) return setError(text("Profile image could not be removed.", "Profilbild konnte nicht entfernt werden."));
+      setHasAvatar(false);
+      setNotice(text("Profile image removed.", "Profilbild entfernt."));
+    } catch {
+      setError(text("Profile image could not be removed.", "Profilbild konnte nicht entfernt werden."));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function savePreferences() {
     setBusy(true);
     setError("");
     setNotice("");
-    const response = await fetch("/api/preferences", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(draft),
-    });
-    const result = await response.json();
-    setBusy(false);
-    if (!response.ok) {
-      return setError(apiErrorMessage(result, text, {
-        en: "The settings could not be saved.",
-        de: "Die Einstellungen konnten nicht gespeichert werden.",
-      }));
+    try {
+      const response = await fetch("/api/preferences", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(draft),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        return setError(apiErrorMessage(result, text, {
+          en: "The settings could not be saved.",
+          de: "Die Einstellungen konnten nicht gespeichert werden.",
+        }));
+      }
+      setPreferences(result as Preferences);
+      setNotice(draft.language === "de" ? "Einstellungen gespeichert." : "Settings saved.");
+    } catch {
+      setError(text("The settings could not be saved.", "Die Einstellungen konnten nicht gespeichert werden."));
+    } finally {
+      setBusy(false);
     }
-    setPreferences(result as Preferences);
-    setNotice(draft.language === "de" ? "Einstellungen gespeichert." : "Settings saved.");
   }
 
   return (
-    <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+    <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !busy && onClose()}>
       <section className="profile-dialog settings-dialog" role="dialog" aria-modal="true" aria-labelledby="profile-title">
         <header className="dialog-header">
           <div>
             <span className="dialog-kicker">{text("Your account", "Dein Konto")}</span>
             <h2 id="profile-title">{text("Profile & settings", "Profil & Einstellungen")}</h2>
           </div>
-          <button className="icon-button" onClick={onClose} aria-label={text("Close", "Schließen")}><X size={19} /></button>
+          <button className="icon-button" disabled={busy} onClick={onClose} aria-label={text("Close", "Schließen")}><X size={19} /></button>
         </header>
 
         <div className="profile-body">
@@ -159,7 +176,7 @@ export function ProfileDialog({
         <footer className="dialog-footer">
           <span />
           <div>
-            <button className="button secondary-button compact" onClick={onClose}>{text("Close", "Schließen")}</button>
+            <button className="button secondary-button compact" disabled={busy} onClick={onClose}>{text("Close", "Schließen")}</button>
             <button className="button primary-button compact" disabled={busy} onClick={savePreferences}>{busy ? text("Saving…", "Speichern…") : text("Save settings", "Einstellungen speichern")}</button>
           </div>
         </footer>

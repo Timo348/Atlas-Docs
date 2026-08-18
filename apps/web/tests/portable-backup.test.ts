@@ -22,11 +22,15 @@ test("portable paths are safe, nested, and collision resistant", () => {
     pages: [
       { id: "page-1", title: "Restore", slug: "restore", folderId: "folder-c", parentId: null, format: "MARKDOWN", sortOrder: 0 },
       { id: "page-2", title: "Formula", slug: "formula", folderId: null, parentId: null, format: "LATEX", sortOrder: 0 },
+      { id: "page-3", title: "Flow", slug: "flow", folderId: null, parentId: null, format: "CANVAS", sortOrder: 1 },
     ],
   }]);
 
   assert.equal(layout.pagePaths.get("page-1")?.sourcePath, "spaces/operations/run-books/linux/restore.md");
   assert.equal(layout.pagePaths.get("page-2")?.sourcePath, "spaces/operations/formula.tex");
+  assert.equal(layout.pagePaths.get("page-2")?.canvasPath, null);
+  assert.equal(layout.pagePaths.get("page-3")?.sourcePath, null);
+  assert.equal(layout.pagePaths.get("page-3")?.canvasPath, "spaces/operations/flow.excalidraw");
   assert.notEqual(layout.folderPaths.get("folder-a"), layout.folderPaths.get("folder-b"));
   assert.equal(sanitizePathSegment("../../Überblick"), "uberblick");
   assert.equal(sanitizePathSegment("CON"), "con-item");
@@ -44,6 +48,13 @@ test("current Yjs text and canvas become portable content", () => {
   assert.equal(decoded.canvas?.type, "excalidraw");
   assert.equal(decoded.canvas?.elements.length, 1);
   assert.ok(decoded.canvas?.files.image);
+});
+
+test("an intentionally empty canvas still exports as an Excalidraw file", () => {
+  const decoded = decodeCollaborationDocument(null, true);
+  assert.equal(decoded.source, "");
+  assert.equal(decoded.canvas?.type, "excalidraw");
+  assert.deepEqual(decoded.canvas?.elements, []);
 });
 
 test("only available Atlas page images are rewritten and selected", () => {

@@ -18,3 +18,17 @@ test("accepts a token only for its page", async () => {
   assert.equal(claims.sub, "user-1");
   await assert.rejects(() => verifyCollaborationToken(token, secret, "page:page-2"));
 });
+
+test("preserves an optional page-share id", async () => {
+  const token = await new SignJWT({ pageId: "page-1", name: "Shared editor", readOnly: false, shareId: "share-1" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuer("atlas-web")
+    .setAudience("atlas-collaboration")
+    .setSubject("share:share-1")
+    .setExpirationTime("5m")
+    .sign(new TextEncoder().encode(secret));
+
+  const claims = await verifyCollaborationToken(token, secret, "page:page-1");
+  assert.equal(claims.shareId, "share-1");
+  assert.equal(claims.readOnly, false);
+});

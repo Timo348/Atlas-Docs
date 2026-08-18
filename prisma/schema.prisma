@@ -21,34 +21,41 @@ enum SpaceRole {
 enum PageFormat {
   MARKDOWN
   LATEX
+  CANVAS
+}
+
+enum PageSharePermission {
+  VIEW
+  EDIT
 }
 
 model User {
-  id              String       @id @default(cuid())
+  id              String        @id @default(cuid())
   name            String?
-  email           String       @unique
+  email           String        @unique
   emailVerified   DateTime?
   image           String?
   passwordHash    String?
   avatarData      Bytes?
   avatarMime      String?
-  language        String       @default("en")
-  colorTheme      String       @default("system")
-  uiFont          String       @default("inter")
-  editorFont      String       @default("mono")
-  fontSize        String       @default("medium")
-  compactMode     Boolean      @default(false)
-  role            UserRole     @default(MEMBER)
-  active          Boolean      @default(true)
+  language        String        @default("en")
+  colorTheme      String        @default("system")
+  uiFont          String        @default("inter")
+  editorFont      String        @default("mono")
+  fontSize        String        @default("medium")
+  compactMode     Boolean       @default(false)
+  role            UserRole      @default(MEMBER)
+  active          Boolean       @default(true)
   accounts        Account[]
   sessions        Session[]
   memberships     Membership[]
   teamMemberships TeamMember[]
-  pagesCreated    Page[]       @relation("PageCreator")
+  pagesCreated    Page[]        @relation("PageCreator")
   pageVersions    PageVersion[]
   pageImages      PageImage[]
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  pageShares      PageShare[]   @relation("PageShareCreator")
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 }
 
 model Account {
@@ -141,29 +148,52 @@ model Membership {
 }
 
 model Page {
-  id             String        @id @default(cuid())
-  title          String
-  slug           String
-  spaceId        String
-  parentId       String?
-  folderId       String?
-  format         PageFormat    @default(MARKDOWN)
-  sortOrder      Int           @default(0)
-  versionCounter Int           @default(0)
-  createdById    String
-  space          Space         @relation(fields: [spaceId], references: [id], onDelete: Cascade)
-  parent         Page?         @relation("PageTree", fields: [parentId], references: [id], onDelete: SetNull)
-  children       Page[]        @relation("PageTree")
-  folder         Folder?       @relation(fields: [folderId], references: [id], onDelete: SetNull)
-  createdBy      User          @relation("PageCreator", fields: [createdById], references: [id])
-  versions       PageVersion[]
-  images         PageImage[]
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  id                           String        @id @default(cuid())
+  title                        String
+  slug                         String
+  spaceId                      String
+  parentId                     String?
+  folderId                     String?
+  format                       PageFormat    @default(MARKDOWN)
+  sortOrder                    Int           @default(0)
+  versionCounter               Int           @default(0)
+  legacyCanvasMigrationVersion Int           @default(1)
+  legacyCanvasTargetId         String?       @unique
+  createdById                  String
+  space                        Space         @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  parent                       Page?         @relation("PageTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children                     Page[]        @relation("PageTree")
+  folder                       Folder?       @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  createdBy                    User          @relation("PageCreator", fields: [createdById], references: [id])
+  versions                     PageVersion[]
+  images                       PageImage[]
+  shares                       PageShare[]
+  createdAt                    DateTime      @default(now())
+  updatedAt                    DateTime      @updatedAt
 
   @@unique([spaceId, slug])
   @@index([spaceId, parentId])
   @@index([spaceId, folderId])
+  @@index([legacyCanvasMigrationVersion])
+}
+
+model PageShare {
+  id          String              @id @default(cuid())
+  pageId      String
+  createdById String
+  label       String
+  tokenHash   String              @unique
+  tokenPrefix String
+  permission  PageSharePermission @default(VIEW)
+  expiresAt   DateTime?
+  revokedAt   DateTime?
+  page        Page                @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  createdBy   User                @relation("PageShareCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([pageId, revokedAt])
+  @@index([expiresAt])
 }
 
 model PageImage {

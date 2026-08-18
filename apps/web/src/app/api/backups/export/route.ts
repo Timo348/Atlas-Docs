@@ -109,7 +109,7 @@ async function* createExportEntries(
   const pageCount = spaces.reduce((count, space) => count + space.pages.length, 0);
   const manifest = {
     format: "atlas-docs-portable-export",
-    formatVersion: 1,
+    formatVersion: 2,
     createdAt: createdAt.toISOString(),
     scope,
     excludes: ["document version history", "accounts", "permissions", "sessions", "profile and space images"],
@@ -154,7 +154,17 @@ async function* createExportEntries(
             orderBy: { createdAt: "asc" },
           }),
         ]);
-        const current = decodeCollaborationDocument(storedDocument?.data || null);
+        const current = decodeCollaborationDocument(
+          storedDocument?.data || null,
+          page.format === "CANVAS",
+        );
+        if (page.format === "CANVAS") {
+          if (pageLayout.canvasPath && current.canvas) {
+            yield { name: pageLayout.canvasPath, data: `${JSON.stringify(current.canvas, null, 2)}\n` };
+          }
+          continue;
+        }
+        if (!pageLayout.sourcePath) continue;
         const rewritten = rewriteImageReferences(
           current.source,
           page.id,
@@ -163,10 +173,6 @@ async function* createExportEntries(
         );
 
         yield { name: pageLayout.sourcePath, data: rewritten.source };
-        if (current.canvas) {
-          yield { name: pageLayout.canvasPath, data: `${JSON.stringify(current.canvas, null, 2)}\n` };
-        }
-
         for (const imageId of rewritten.referencedImageIds) {
           const image = await db.pageImage.findFirst({
             where: { id: imageId, pageId: page.id },
@@ -182,7 +188,7 @@ async function* createExportEntries(
       } catch (error) {
         console.error(`[atlas-export] Failed to export page ${page.id}.`, error);
         yield {
-          name: `${pageLayout.sourcePath}.export-error.txt`,
+          name: `${pageLayout.sourcePath || pageLayout.canvasPath || `page-${page.id}`}.export-error.txt`,
           data: `Atlas Docs could not convert this page. The original page id is ${page.id}.\n`,
         };
       }
@@ -220,7 +226,7 @@ Scope: ${scope}
 Spaces: ${spaceCount}
 Pages: ${pageCount}
 
-Open the \`spaces\` directory as an Obsidian vault or as a normal folder in VS Code. Markdown and LaTeX files contain the current persisted document text. Referenced page images use relative paths. Canvas content is stored as standard \`.excalidraw\` JSON and can be opened with the Obsidian Excalidraw plugin or another compatible editor.
+Open the \`spaces\` directory as an Obsidian vault or as a normal folder in VS Code. Markdown and LaTeX files contain the current persisted document text. Referenced page images use relative paths. Canvas files are stored as standard \`.excalidraw\` JSON and can be opened with the Obsidian Excalidraw plugin or another compatible editor.
 
 This portable emergency export intentionally excludes Atlas accounts, permissions, sessions, profile images, space cover images, and document version history. Use the PostgreSQL server backup for a complete operational restore.
 ${warningSection}

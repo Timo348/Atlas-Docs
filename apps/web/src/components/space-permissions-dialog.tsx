@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Check, ImagePlus, Trash2, Users, X } from "lucide-react";
 import { usePreferences } from "@/components/preferences-provider";
+import { useDialogEscape } from "@/components/use-dialog-escape";
 import { apiErrorMessage } from "@/lib/api-errors";
 
 type Role = "OWNER" | "EDITOR" | "VIEWER";
@@ -35,7 +36,8 @@ export function SpacePermissionsDialog({
 }) {
   const { text } = usePreferences();
   const [data, setData] = useState<PermissionsData | null>(null);
-  const [tab, setTab] = useState<"users" | "teams" | "image" | "delete">("users");
+  const [tab, setTab] = useState<"general" | "users" | "teams" | "image" | "delete">("general");
+  const [spaceName, setSpaceName] = useState("");
   const [userRoles, setUserRoles] = useState<Record<string, Role | "NONE">>({});
   const [teamRoles, setTeamRoles] = useState<Record<string, "EDITOR" | "VIEWER" | "NONE">>({});
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -43,6 +45,7 @@ export function SpacePermissionsDialog({
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  useDialogEscape(onClose, busy);
 
   async function load() {
     setError("");
@@ -56,6 +59,7 @@ export function SpacePermissionsDialog({
     }
     const permissions = result as PermissionsData;
     setData(permissions);
+    setSpaceName(permissions.space.name);
     setUserRoles(Object.fromEntries(permissions.users.map((user) => [
       user.id,
       permissions.space.memberships.find((grant) => grant.userId === user.id)?.role || "NONE",
@@ -70,61 +74,108 @@ export function SpacePermissionsDialog({
     void load();
   }, [spaceId]);
 
+  async function saveSpaceName() {
+    if (!data) return;
+    const name = spaceName.trim();
+    if (name.length < 2 || name.length > 80 || name === data.space.name) return;
+
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/spaces/${spaceId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        return setError(apiErrorMessage(result, text, {
+          en: "The space name could not be saved.",
+          de: "Der Bereichsname konnte nicht gespeichert werden.",
+        }));
+      }
+      const updated = result as { id: string; name: string };
+      setData((current) => current ? { ...current, space: { ...current.space, name: updated.name } } : current);
+      setSpaceName(updated.name);
+      setDeleteConfirmation("");
+      onClose();
+    } catch {
+      setError(text("The space name could not be saved.", "Der Bereichsname konnte nicht gespeichert werden."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function savePermissions() {
     setBusy(true);
     setError("");
-    const response = await fetch(`/api/spaces/${spaceId}/permissions`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        users: Object.entries(userRoles).filter(([, role]) => role !== "NONE").map(([id, role]) => ({ id, role })),
-        teams: Object.entries(teamRoles).filter(([, role]) => role !== "NONE").map(([id, role]) => ({ id, role })),
-      }),
-    });
-    const result = await response.json();
-    setBusy(false);
-    if (!response.ok) {
-      return setError(apiErrorMessage(result, text, {
-        en: "Permissions could not be saved.",
-        de: "Rechte konnten nicht gespeichert werden.",
-      }));
+    try {
+      const response = await fetch(`/api/spaces/${spaceId}/permissions`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          users: Object.entries(userRoles).filter(([, role]) => role !== "NONE").map(([id, role]) => ({ id, role })),
+          teams: Object.entries(teamRoles).filter(([, role]) => role !== "NONE").map(([id, role]) => ({ id, role })),
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        return setError(apiErrorMessage(result, text, {
+          en: "Permissions could not be saved.",
+          de: "Rechte konnten nicht gespeichert werden.",
+        }));
+      }
+      onClose();
+    } catch {
+      setError(text("Permissions could not be saved.", "Rechte konnten nicht gespeichert werden."));
+    } finally {
+      setBusy(false);
     }
-    onClose();
   }
 
   async function uploadImage() {
     if (!imageFile) return;
     setBusy(true);
     setError("");
-    const form = new FormData();
-    form.set("image", imageFile);
-    const response = await fetch(`/api/spaces/${spaceId}/image`, { method: "PUT", body: form });
-    const result = await response.json();
-    setBusy(false);
-    if (!response.ok) {
-      return setError(apiErrorMessage(result, text, {
-        en: "Image could not be saved.",
-        de: "Bild konnte nicht gespeichert werden.",
-      }));
+    try {
+      const form = new FormData();
+      form.set("image", imageFile);
+      const response = await fetch(`/api/spaces/${spaceId}/image`, { method: "PUT", body: form });
+      const result = await response.json();
+      if (!response.ok) {
+        return setError(apiErrorMessage(result, text, {
+          en: "Image could not be saved.",
+          de: "Bild konnte nicht gespeichert werden.",
+        }));
+      }
+      setData((current) => current ? { ...current, space: { ...current.space, imageMime: imageFile.type } } : current);
+      setImageFile(null);
+      setImageVersion(Date.now());
+    } catch {
+      setError(text("Image could not be saved.", "Bild konnte nicht gespeichert werden."));
+    } finally {
+      setBusy(false);
     }
-    setData((current) => current ? { ...current, space: { ...current.space, imageMime: imageFile.type } } : current);
-    setImageFile(null);
-    setImageVersion(Date.now());
   }
 
   async function removeImage() {
     setBusy(true);
     setError("");
-    const response = await fetch(`/api/spaces/${spaceId}/image`, { method: "DELETE" });
-    setBusy(false);
-    if (!response.ok) {
-      const result = await response.json();
-      return setError(apiErrorMessage(result, text, {
-        en: "Image could not be removed.",
-        de: "Bild konnte nicht entfernt werden.",
-      }));
+    try {
+      const response = await fetch(`/api/spaces/${spaceId}/image`, { method: "DELETE" });
+      if (!response.ok) {
+        const result = await response.json();
+        return setError(apiErrorMessage(result, text, {
+          en: "Image could not be removed.",
+          de: "Bild konnte nicht entfernt werden.",
+        }));
+      }
+      setData((current) => current ? { ...current, space: { ...current.space, imageMime: null } } : current);
+    } catch {
+      setError(text("Image could not be removed.", "Bild konnte nicht entfernt werden."));
+    } finally {
+      setBusy(false);
     }
-    setData((current) => current ? { ...current, space: { ...current.space, imageMime: null } } : current);
   }
 
   async function deleteSpace() {
@@ -153,6 +204,14 @@ export function SpacePermissionsDialog({
     }
   }
 
+  const trimmedSpaceName = spaceName.trim();
+  const canSaveSpaceName = Boolean(
+    data
+    && trimmedSpaceName.length >= 2
+    && trimmedSpaceName.length <= 80
+    && trimmedSpaceName !== data.space.name,
+  );
+
   return (
     <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !busy && onClose()}>
       <section className="permissions-dialog" role="dialog" aria-modal="true" aria-labelledby="permissions-title">
@@ -161,6 +220,7 @@ export function SpacePermissionsDialog({
           <button className="icon-button" disabled={busy} onClick={onClose} aria-label={text("Close", "Schließen")}><X size={19} /></button>
         </header>
         <div className="dialog-tabs">
+          <button className={tab === "general" ? "active" : ""} onClick={() => setTab("general")}>{text("General", "Allgemein")}</button>
           <button className={tab === "users" ? "active" : ""} onClick={() => setTab("users")}>{text("Users", "Benutzer")}</button>
           <button className={tab === "teams" ? "active" : ""} onClick={() => setTab("teams")}>{text("Teams", "Teams")}</button>
           <button className={tab === "image" ? "active" : ""} onClick={() => setTab("image")}>{text("Space image", "Bereichsbild")}</button>
@@ -169,6 +229,32 @@ export function SpacePermissionsDialog({
         <div className="permissions-body">
           {!data && !error && <p className="muted-copy">{text("Loading settings …", "Einstellungen werden geladen …")}</p>}
           {error && <p className="admin-error">{error}</p>}
+          {data && tab === "general" && (
+            <div className="space-general-panel">
+              <div>
+                <h3>{text("Space details", "Bereichsdetails")}</h3>
+                <p>{text(
+                  "Changing the name updates how this space appears without changing its links or stored content.",
+                  "Der neue Name wird überall angezeigt, ohne Links oder gespeicherte Inhalte zu verändern.",
+                )}</p>
+              </div>
+              <label>
+                {text("Space name", "Bereichsname")}
+                <input
+                  autoFocus
+                  value={spaceName}
+                  minLength={2}
+                  maxLength={80}
+                  required
+                  disabled={busy}
+                  onChange={(event) => setSpaceName(event.target.value)}
+                  onKeyDown={(event) => event.key === "Enter" && canSaveSpaceName && void saveSpaceName()}
+                  aria-label={text("Space name", "Bereichsname")}
+                />
+                <small>{text("Between 2 and 80 characters.", "Zwischen 2 und 80 Zeichen.")}</small>
+              </label>
+            </div>
+          )}
           {data && tab === "users" && (
             <div className="permission-list">
               {data.users.map((user) => (
@@ -281,7 +367,8 @@ export function SpacePermissionsDialog({
           </span>
           <div>
             <button className="button secondary-button compact" disabled={busy} onClick={onClose}>{text("Cancel", "Abbrechen")}</button>
-            {tab !== "image" && tab !== "delete" && <button className="button primary-button compact" disabled={busy || !data} onClick={savePermissions}>{busy ? text("Saving …", "Speichern …") : text("Save permissions", "Rechte speichern")}</button>}
+            {tab === "general" && <button className="button primary-button compact" disabled={busy || !canSaveSpaceName} onClick={() => void saveSpaceName()}>{busy ? text("Saving …", "Speichern …") : text("Save name", "Namen speichern")}</button>}
+            {(tab === "users" || tab === "teams") && <button className="button primary-button compact" disabled={busy || !data} onClick={savePermissions}>{busy ? text("Saving …", "Speichern …") : text("Save permissions", "Rechte speichern")}</button>}
           </div>
         </footer>
       </section>

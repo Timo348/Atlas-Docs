@@ -3,13 +3,13 @@
 import { HocuspocusProvider } from "@hocuspocus/provider";
 import {
   Code2, Download, Eye, FileText, History, ImagePlus, LoaderCircle, Minus,
-  Network, Pencil, Plus, RotateCcw, Save as SaveIcon, Table2, Users, X,
+  Pencil, Plus, RotateCcw, Save as SaveIcon, Share2, Table2, Users, X,
 } from "lucide-react";
 import {
   type ClipboardEvent, type KeyboardEvent, type ReactNode, type RefObject,
   useEffect, useLayoutEffect, useMemo, useRef, useState,
 } from "react";
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { type Components as MarkdownComponents } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import * as Y from "yjs";
 import { CollaborativeCanvas } from "@/components/collaborative-canvas";
@@ -20,8 +20,11 @@ import {
 } from "@/components/hybrid-markdown-document";
 import { LatexPreview } from "@/components/latex-preview";
 import { usePreferences } from "@/components/preferences-provider";
+import { useDialogEscape } from "@/components/use-dialog-escape";
+import { PageShareDialog } from "@/components/page-share-dialog";
 import {
-  applySlashCommand, continueMarkdownList, editableTableAt, editTable, markdownDocumentSegments,
+  applySlashCommand, continueMarkdownList, editableTableAt, editTable, editTextIndentation, markdownDocumentSegments,
+  replaceHybridTextSegment,
   slashMatchAt, tableCellCursor, tableCellValueOffset, updateTableCell,
   type EditableMarkdownTable, type MarkdownDocumentSegment, type SlashCommandId, type SlashMatch,
   type TableAction, type TextEdit,
@@ -45,8 +48,9 @@ import {
   type ResolvedCollaborativeCursorSurface,
 } from "@/lib/collaborative-text";
 import { createVisibleSnapshot, restoreVisibleSnapshot } from "@/lib/version-snapshot";
+import { sharedPageImageUrl } from "@/lib/shared-page-images";
 
-type PageItem = { id: string; title: string; slug: string; parentId: string | null; format: "MARKDOWN" | "LATEX" };
+type PageItem = { id: string; title: string; slug: string; parentId: string | null; format: "MARKDOWN" | "LATEX" | "CANVAS" };
 type Tab = "write" | "preview" | "canvas";
 type Connection = "connecting" | "connected" | "disconnected";
 type PageVersion = {
@@ -73,6 +77,7 @@ type LocalCursorSurface = { kind: "text" } | {
   row: number;
   column: number;
 };
+type PublicShareAccess = { token: string; permission: "VIEW" | "EDIT" };
 
 // React development mode replays effects (setup -> cleanup -> setup). A lease
 // lets the second setup cancel destruction of the same memoized documents while
@@ -98,9 +103,13 @@ export function CollaborativeEditor({
   page,
   user,
   headerCenter,
+  publicShare,
+  canManageShares = false,
 }: {
   page: PageItem;
   headerCenter?: ReactNode;
+  publicShare?: PublicShareAccess;
+  canManageShares?: boolean;
   user: {
     id: string;
     name: string;
@@ -118,7 +127,9 @@ export function CollaborativeEditor({
     markdown: textBinding.value,
     revision: 0,
   });
-  const [tab, setTab] = useState<Tab>("write");
+  const [tab, setTab] = useState<Tab>(
+    page.format === "CANVAS" ? "canvas" : publicShare?.permission === "VIEW" ? "preview" : "write",
+  );
   const [status, setStatus] = useState<Connection>("connecting");
   const [awarenessStates, setAwarenessStates] = useState<unknown[]>([]);
   const [scrollRevision, setScrollRevision] = useState(0);
@@ -132,9 +143,15 @@ export function CollaborativeEditor({
   const [historyLoading, setHistoryLoading] = useState(false);
   const [versionBusy, setVersionBusy] = useState(false);
   const [versionNotice, setVersionNotice] = useState("");
+  useDialogEscape(
+    () => setHistoryOpen(false),
+    historyLoading || versionBusy,
+    historyOpen,
+  );
   const [cursorIndex, setCursorIndex] = useState(0);
   const [imageBusy, setImageBusy] = useState(false);
   const [editorNotice, setEditorNotice] = useState("");
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [tableSourceMode, setTableSourceMode] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const editorStageRef = useRef<HTMLDivElement>(null);
@@ -150,6 +167,7 @@ export function CollaborativeEditor({
   useEffect(() => {
     let active = true;
     let provider: HocuspocusProvider | undefined;
+    let publicPermissionRefresh: ReturnType<typeof setInterval> | undefined;
     setCollaborationAccess(createCollaborationAccessState(page.id));
     const updateText = () => {
       if (!active) return;
@@ -180,7 +198,13 @@ export function CollaborativeEditor({
         name: `page:${page.id}`,
         document: ydoc,
         token: async () => {
-          const response = await fetch(`/api/collaboration-token?pageId=${encodeURIComponent(page.id)}`);
+          const response = publicShare
+            ? await fetch("/api/public/collaboration-token", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ token: publicShare.token }),
+            })
+            : await fetch(`/api/collaboration-token?pageId=${encodeURIComponent(page.id)}`);
           if (!response.ok) throw new Error("Collaboration token unavailable.");
           const data = await response.json();
           if (active) {
@@ -216,6 +240,12 @@ export function CollaborativeEditor({
         hasAvatar: user.hasAvatar,
         avatarVersion: user.avatarVersion,
       });
+      if (publicShare) {
+        publicPermissionRefresh = setInterval(() => {
+          provider?.disconnect();
+          provider?.connect();
+        }, 60 * 1000);
+      }
     }
     void connect().catch(() => active && setStatus("disconnected"));
 
@@ -223,9 +253,10 @@ export function CollaborativeEditor({
       active = false;
       ytext.unobserve(updateText);
       providerRef.current = null;
+      if (publicPermissionRefresh) clearInterval(publicPermissionRefresh);
       provider?.destroy();
     };
-  }, [page.id, user.id, user.name, user.hasAvatar, user.avatarVersion, textBinding, ydoc, ytext]);
+  }, [page.id, publicShare, user.id, user.name, user.hasAvatar, user.avatarVersion, textBinding, ydoc, ytext]);
 
   useEffect(() => {
     const owner = {};
@@ -439,6 +470,7 @@ export function CollaborativeEditor({
     ? SLASH_COMMANDS.filter((command) => command.id.includes(activeSlash.query)
       || command.title[0].toLowerCase().includes(activeSlash.query)
       || command.title[1].toLowerCase().includes(activeSlash.query))
+      .filter((command) => !publicShare || command.id !== "image")
     : [];
   const documentSegments = useMemo(
     () => page.format === "MARKDOWN" ? markdownDocumentSegments(markdown) : [],
@@ -454,10 +486,11 @@ export function CollaborativeEditor({
       return [{
         clientId: presence.clientId,
         ...presence.user,
+        hasAvatar: publicShare ? false : presence.user.hasAvatar,
         cursor: presence.cursor.head,
         surface: presence.cursor.surface,
       }];
-  }), [presences, ydoc]);
+  }), [presences, publicShare, ydoc]);
   const visualTables = documentSegments.filter(
     (segment): segment is Extract<MarkdownDocumentSegment, { type: "table" }> => segment.type === "table",
   );
@@ -529,8 +562,10 @@ export function CollaborativeEditor({
 
   function handleEditorKeyDown(event: KeyboardEvent<HTMLTextAreaElement>, offset = 0) {
     if (event.altKey || event.ctrlKey || event.metaKey || event.nativeEvent.isComposing) return;
-    const selectionStart = offset + event.currentTarget.selectionStart;
-    const selectionEnd = offset + event.currentTarget.selectionEnd;
+    const localSelectionStart = event.currentTarget.selectionStart;
+    const localSelectionEnd = event.currentTarget.selectionEnd;
+    const selectionStart = offset + localSelectionStart;
+    const selectionEnd = offset + localSelectionEnd;
     const slash = page.format === "MARKDOWN" && !readOnly ? slashMatchAt(markdown, selectionStart) : null;
     const commands = slash
       ? SLASH_COMMANDS.filter((command) => command.id.includes(slash.query)
@@ -538,13 +573,49 @@ export function CollaborativeEditor({
         || command.title[1].toLowerCase().includes(slash.query))
       : [];
 
-    if (slash && commands.length && ["Enter", "Tab"].includes(event.key)) {
+    if (slash && commands.length && (event.key === "Enter" || (event.key === "Tab" && !event.shiftKey))) {
       const exact = commands.find((command) => command.id === slash.query);
       if (exact || slash.query.length > 0) {
         event.preventDefault();
         executeSlashCommand((exact || commands[0]).id, slash);
         return;
       }
+    }
+
+    if (event.key === "Tab" && !readOnly) {
+      const edit = editTextIndentation(
+        event.currentTarget.value,
+        localSelectionStart,
+        localSelectionEnd,
+        event.shiftKey,
+      );
+      if (!edit.changes.length) return;
+      event.preventDefault();
+      const emptyHybridSegment = showHybridTables && event.currentTarget.value.length === 0
+        ? documentSegments.find((segment) => (
+            segment.type === "text"
+            && segment.start === offset
+            && segment.end === offset
+          ))
+        : null;
+      if (emptyHybridSegment?.type === "text") {
+        changeHybridText(emptyHybridSegment, edit.text, offset + edit.selectionEnd);
+        return;
+      }
+      textBinding.applyChanges(edit.changes.map((change) => ({
+        ...change,
+        start: offset + change.start,
+        end: offset + change.end,
+      })), "markdown-indentation");
+      const nextStart = offset + edit.selectionStart;
+      const nextEnd = offset + edit.selectionEnd;
+      const backwards = event.currentTarget.selectionDirection === "backward";
+      publishAbsoluteCursor(
+        backwards ? nextEnd : nextStart,
+        backwards ? nextStart : nextEnd,
+        { kind: "text" },
+      );
+      return;
     }
 
     if (page.format !== "MARKDOWN" || event.key !== "Enter" || event.shiftKey) return;
@@ -567,21 +638,11 @@ export function CollaborativeEditor({
     value: string,
     cursor: number,
   ) {
-    let replacement = value;
-    let nextCursor = cursor;
-    if (segment.value.length === 0 && value.length > 0) {
-      const previousIsTable = visualTables.some((entry) => entry.end === segment.start);
-      const nextIsTable = visualTables.some((entry) => entry.start === segment.end);
-      if (previousIsTable && markdown[segment.start - 1] !== "\n") {
-        replacement = `\n${replacement}`;
-        nextCursor += 1;
-      }
-      if (nextIsTable && markdown[segment.end] !== "\n") replacement += "\n";
-    }
+    const edit = replaceHybridTextSegment(markdown, segment, value, cursor);
     changeMarkdown(
-      markdown.slice(0, segment.start) + replacement + markdown.slice(segment.end),
-      nextCursor,
-      nextCursor,
+      edit.text,
+      edit.cursor,
+      edit.cursor,
       { kind: "text" },
     );
   }
@@ -625,7 +686,7 @@ export function CollaborativeEditor({
     match: SlashMatch | null = null,
     selection: { start: number; end: number } | null = null,
   ) {
-    if (readOnly || page.format !== "MARKDOWN" || imageBusy) return;
+    if (publicShare || readOnly || page.format !== "MARKDOWN" || imageBusy) return;
     setImageBusy(true);
     setEditorNotice("");
     const start = match?.start ?? selection?.start ?? cursorIndex;
@@ -673,7 +734,7 @@ export function CollaborativeEditor({
     const image = Array.from(event.clipboardData.items)
       .find((item) => item.kind === "file" && item.type.startsWith("image/"))
       ?.getAsFile();
-    if (!image || readOnly || page.format !== "MARKDOWN") return;
+    if (!image || publicShare || readOnly || page.format !== "MARKDOWN") return;
     event.preventDefault();
     void uploadImage(image, null, {
       start: offset + event.currentTarget.selectionStart,
@@ -682,6 +743,7 @@ export function CollaborativeEditor({
   }
 
   async function persistTitle(nextTitle = title) {
+    if (publicShare) return true;
     const clean = nextTitle.trim();
     if (!clean || readOnly) {
       setTitle(savedTitleRef.current);
@@ -725,7 +787,7 @@ export function CollaborativeEditor({
     setVersionNotice("");
     try {
       if (!await persistTitle(snapshotTitle)) throw new Error(text("The page title could not be saved.", "Der Seitentitel konnte nicht gespeichert werden."));
-      const snapshot = createVisibleSnapshot(ydoc);
+      const snapshot = createVisibleSnapshot(ydoc, page.format);
       const response = await fetch(`/api/pages/${page.id}/versions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -772,11 +834,11 @@ export function CollaborativeEditor({
           de: "Die Version konnte nicht geladen werden.",
         }));
       }
-      restoreVisibleSnapshot(ydoc, base64ToBytes(result.snapshot));
+      restoreVisibleSnapshot(ydoc, base64ToBytes(result.snapshot), page.format);
       setTitle(result.title);
       setVersionBusy(false);
       await saveVersion(result.version, result.title);
-      setTab("write");
+      setTab(page.format === "CANVAS" ? "canvas" : "write");
     } catch (error) {
       setVersionNotice(error instanceof Error ? error.message : text("The version could not be restored.", "Die Version konnte nicht wiederhergestellt werden."));
       setVersionBusy(false);
@@ -784,6 +846,18 @@ export function CollaborativeEditor({
   }
 
   function downloadSource() {
+    if (page.format === "CANVAS") {
+      const url = URL.createObjectURL(new Blob(
+        [`${JSON.stringify(excalidrawFile(ydoc), null, 2)}\n`],
+        { type: "application/json;charset=utf-8" },
+      ));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${page.slug}.excalidraw`;
+      link.click();
+      URL.revokeObjectURL(url);
+      return;
+    }
     const isLatex = page.format === "LATEX";
     const blob = new Blob([markdown], { type: `${isLatex ? "application/x-tex" : "text/markdown"};charset=utf-8` });
     const url = URL.createObjectURL(blob);
@@ -794,8 +868,14 @@ export function CollaborativeEditor({
     URL.revokeObjectURL(url);
   }
 
+  const markdownComponents = useMemo<MarkdownComponents | undefined>(() => publicShare ? ({
+    img: ({ src, ...props }) => (
+      <img {...props} src={sharedPageImageUrl(src, page.id, publicShare.token)} />
+    ),
+  }) : undefined, [page.id, publicShare]);
+
   return (
-    <div className={`editor-shell ${headerCenter ? "editor-shell-with-center" : ""}`}>
+    <div className={`editor-shell ${headerCenter ? "editor-shell-with-center" : ""} ${page.format === "CANVAS" ? "canvas-file-editor" : ""}`}>
       <header className={`editor-header ${headerCenter ? "editor-header-with-center" : ""}`}>
         <div className="title-wrap">
           <input
@@ -804,8 +884,8 @@ export function CollaborativeEditor({
             onChange={(event) => setTitle(event.target.value)}
             onBlur={saveTitle}
             onKeyDown={(event) => event.key === "Enter" && event.currentTarget.blur()}
-            readOnly={readOnly}
-            aria-label={text("Page title", "Seitentitel")}
+            readOnly={readOnly || Boolean(publicShare)}
+            aria-label={page.format === "CANVAS" ? text("Canvas title", "Canvas-Titel") : text("Page title", "Seitentitel")}
           />
         </div>
         {headerCenter && <div className="editor-header-center">{headerCenter}</div>}
@@ -829,7 +909,7 @@ export function CollaborativeEditor({
             </div>
             <small>{activePeople}</small>
           </div>
-          <button
+          {!publicShare && <button
             className="button compact version-save-button"
             disabled={readOnly || status !== "connected" || versionBusy}
             onClick={() => void saveVersion()}
@@ -837,8 +917,8 @@ export function CollaborativeEditor({
           >
             {versionBusy ? <LoaderCircle size={15} className="spin" /> : <SaveIcon size={15} />}
             <span>{text("Save version", "Version speichern")}</span>
-          </button>
-          <button
+          </button>}
+          {!publicShare && <button
             className="button compact secondary-button version-history-button"
             onClick={() => {
               setVersionNotice("");
@@ -848,28 +928,42 @@ export function CollaborativeEditor({
             title={text("Open document history", "Dokumentenhistorie öffnen")}
           >
             <History size={15} /><span>{text("History", "Historie")}</span>
-          </button>
+          </button>}
+          {canManageShares && !publicShare && (
+            <button className="icon-button bordered" onClick={() => setShareDialogOpen(true)} title={text("Share this page", "Diese Seite freigeben")} aria-label={text("Share this page", "Diese Seite freigeben")}><Share2 size={17} /></button>
+          )}
           <button
             className="icon-button bordered"
             onClick={downloadSource}
-            title={page.format === "LATEX" ? text("Download LaTeX file", "LaTeX-Datei herunterladen") : text("Download Markdown", "Markdown herunterladen")}
-            aria-label={page.format === "LATEX" ? text("Download LaTeX file", "LaTeX-Datei herunterladen") : text("Download Markdown", "Markdown herunterladen")}
+            title={page.format === "CANVAS"
+              ? text("Download Excalidraw file", "Excalidraw-Datei herunterladen")
+              : page.format === "LATEX"
+                ? text("Download LaTeX file", "LaTeX-Datei herunterladen")
+                : text("Download Markdown", "Markdown herunterladen")}
+            aria-label={page.format === "CANVAS"
+              ? text("Download Excalidraw file", "Excalidraw-Datei herunterladen")
+              : page.format === "LATEX"
+                ? text("Download LaTeX file", "LaTeX-Datei herunterladen")
+                : text("Download Markdown", "Markdown herunterladen")}
           >
             <Download size={17} />
           </button>
         </div>
       </header>
-      <nav className="editor-tabs">
-        <button className={tab === "write" ? "active" : ""} onClick={() => setTab("write")}><Pencil size={15} /> {page.format === "LATEX" ? text("Source", "Quelltext") : text("Write", "Schreiben")}</button>
-        <button className={tab === "preview" ? "active" : ""} onClick={() => setTab("preview")}><Eye size={15} /> {text("Preview", "Vorschau")}</button>
-        <button className={tab === "canvas" ? "active" : ""} onClick={() => setTab("canvas")}><Network size={15} /> Canvas</button>
-      </nav>
+      {page.format !== "CANVAS" && (
+        <nav className="editor-tabs">
+          <button className={tab === "write" ? "active" : ""} onClick={() => setTab("write")}><Pencil size={15} /> {page.format === "LATEX" ? text("Source", "Quelltext") : text("Write", "Schreiben")}</button>
+          <button className={tab === "preview" ? "active" : ""} onClick={() => setTab("preview")}><Eye size={15} /> {text("Preview", "Vorschau")}</button>
+        </nav>
+      )}
       <section className="editor-body">
-        {tab === "write" && (
+        {page.format !== "CANVAS" && tab === "write" && (
           <div className={`markdown-editor ${page.format === "LATEX" ? "latex-source-editor" : ""}`}>
             <div className="markdown-gutter">
               <FileText size={16} /><span>{page.format === "LATEX" ? "LATEX" : "MARKDOWN"}</span>
-              {page.format === "MARKDOWN" && <small>{text("Type / for commands · paste images with Ctrl+V", "/ für Befehle · Bilder mit Strg+V einfügen")}</small>}
+              {page.format === "MARKDOWN" && <small>{publicShare
+                ? text("Shared content · images are managed by Atlas members", "Geteilter Inhalt · Bilder verwalten Atlas-Mitglieder")
+                : text("Type / for commands · paste images with Ctrl+V", "/ für Befehle · Bilder mit Strg+V einfügen")}</small>}
               {page.format === "MARKDOWN" && visualTables.length > 0 && (
                 <HybridModeToggle
                   sourceMode={tableSourceMode}
@@ -880,7 +974,7 @@ export function CollaborativeEditor({
               {imageBusy && <span className="editor-uploading"><LoaderCircle size={12} className="spin" /> {text("Uploading image…", "Bild wird hochgeladen…")}</span>}
             </div>
             <div className="textarea-stage" ref={editorStageRef}>
-              <input
+              {!publicShare && <input
                 ref={imageInputRef}
                 className="visually-hidden"
                 type="file"
@@ -891,7 +985,7 @@ export function CollaborativeEditor({
                   if (file) void uploadImage(file, pendingImageMatchRef.current);
                   event.target.value = "";
                 }}
-              />
+              />}
               {showHybridTables ? (
                 <HybridMarkdownDocument
                   segments={documentSegments}
@@ -999,22 +1093,26 @@ export function CollaborativeEditor({
             </div>
           </div>
         )}
-        {tab === "preview" && (page.format === "LATEX"
+        {page.format !== "CANVAS" && tab === "preview" && (page.format === "LATEX"
           ? <LatexPreview source={markdown} />
-          : <article className="markdown-preview"><ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown></article>)}
-        <div className={tab === "canvas" ? "canvas-visible" : "canvas-hidden"}>
-          <CollaborativeCanvas ydoc={ydoc} readOnly={readOnly} />
-        </div>
+          : <article className="markdown-preview"><ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{markdown}</ReactMarkdown></article>)}
+        {page.format === "CANVAS" && (
+          <div className="canvas-visible">
+            <CollaborativeCanvas ydoc={ydoc} readOnly={readOnly} />
+          </div>
+        )}
       </section>
       {historyOpen && (
-        <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setHistoryOpen(false)}>
+        <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !historyLoading && !versionBusy && setHistoryOpen(false)}>
           <section className="history-dialog" role="dialog" aria-modal="true" aria-label={text("Document history", "Dokumentenhistorie")}>
             <header className="dialog-header">
               <div><span className="dialog-kicker">Atlas</span><h2>{text("Document history", "Dokumentenhistorie")}</h2></div>
-              <button className="icon-button" onClick={() => setHistoryOpen(false)} aria-label={text("Close", "Schließen")}><X size={18} /></button>
+              <button className="icon-button" disabled={historyLoading || versionBusy} onClick={() => setHistoryOpen(false)} aria-label={text("Close", "Schließen")}><X size={18} /></button>
             </header>
             <div className="history-intro">
-              <p>{text("Saved versions contain this page's text and canvas.", "Gespeicherte Versionen enthalten den Text und den Canvas dieser Seite.")}</p>
+              <p>{page.format === "CANVAS"
+                ? text("Saved versions contain this canvas.", "Gespeicherte Versionen enthalten diesen Canvas.")
+                : text("Saved versions contain this document's text.", "Gespeicherte Versionen enthalten den Text dieses Dokuments.")}</p>
               {!readOnly && <button className="button compact version-save-button" disabled={status !== "connected" || versionBusy} onClick={() => void saveVersion()}><SaveIcon size={15} /> {text("New version", "Neue Version")}</button>}
             </div>
             {versionNotice && <div className="version-notice">{versionNotice}</div>}
@@ -1050,6 +1148,9 @@ export function CollaborativeEditor({
       )}
       {editorNotice && (
         <button className="atlas-toast editor-toast" onClick={() => setEditorNotice("")}>{editorNotice}<X size={14} /></button>
+      )}
+      {shareDialogOpen && !publicShare && (
+        <PageShareDialog pageId={page.id} pageTitle={title} onClose={() => setShareDialogOpen(false)} />
       )}
     </div>
   );
@@ -1257,6 +1358,20 @@ function userColor(id: string) {
 
 function initials(name: string) {
   return name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
+}
+
+function excalidrawFile(document: Y.Doc) {
+  const settings = document.getMap<unknown>("canvas-settings");
+  return {
+    type: "excalidraw",
+    version: 2,
+    source: "https://github.com/Timo348/Atlas-Docs",
+    elements: Array.from(document.getMap<unknown>("canvas-elements").values()),
+    appState: {
+      viewBackgroundColor: settings.get("viewBackgroundColor") || "#fbfaf7",
+    },
+    files: Object.fromEntries(document.getMap<unknown>("canvas-files").entries()),
+  };
 }
 
 function bytesToBase64(bytes: Uint8Array) {

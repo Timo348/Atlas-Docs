@@ -55,26 +55,39 @@ require_command() {
 }
 
 flush_collaboration_documents() {
+  local policy="${1:-best-effort}"
   local flush_script
   flush_script='fetch("http://127.0.0.1:1234/internal/flush", { method: "POST", headers: { authorization: `Bearer ${process.env.COLLAB_SECRET}` }, signal: AbortSignal.timeout(30000) }).then(async response => { if (!response.ok) throw new Error(`flush returned ${response.status}`); const result = await response.json(); console.error(`[atlas-backup] Flushed ${result.flushedDocuments} collaboration document(s).`); }).catch(error => { console.error(`[atlas-backup] Collaboration flush failed: ${error.message}`); process.exit(1); });'
 
   if ! "${COMPOSE[@]}" exec -T collab node -e "$flush_script"; then
+    if [[ "$policy" == "required" ]]; then
+      fail "Collaboration flush failed; refusing to create an upgrade backup with potentially stale documents."
+    fi
     log "WARNING: Continuing with the latest collaboration state already persisted in PostgreSQL."
   fi
 }
 
 create_dump() {
   local output="$1"
+  local tier="$2"
+  local dump_args=(
+    --format=custom
+    --compress=6
+    --no-owner
+    --no-privileges
+  )
+
+  if [[ "$tier" != "upgrade" ]]; then
+    dump_args+=('--exclude-table-data=public."PageVersion"')
+  fi
+  dump_args+=(
+    '--exclude-table-data=public."Session"'
+    '--exclude-table-data=public."VerificationToken"'
+  )
 
   "${COMPOSE[@]}" exec -T postgres sh -ec \
     'exec pg_dump --username="$POSTGRES_USER" --dbname="$POSTGRES_DB" "$@"' sh \
-    --format=custom \
-    --compress=6 \
-    --no-owner \
-    --no-privileges \
-    '--exclude-table-data=public."PageVersion"' \
-    '--exclude-table-data=public."Session"' \
-    '--exclude-table-data=public."VerificationToken"' \
+    "${dump_args[@]}" \
     > "$output"
 
   [[ -s "$output" ]] || fail "pg_dump produced an empty file."
@@ -92,7 +105,11 @@ write_metadata() {
     printf 'tier=%s\n' "$tier"
     printf 'format=postgresql-custom\n'
     printf 'encrypted=%s\n' "$encrypted"
-    printf 'excluded_table_data=PageVersion,Session,VerificationToken\n'
+    if [[ "$tier" == "upgrade" ]]; then
+      printf 'excluded_table_data=Session,VerificationToken\n'
+    else
+      printf 'excluded_table_data=PageVersion,Session,VerificationToken\n'
+    fi
     printf 'images_included=postgresql\n'
     printf 'compose_images_begin\n'
     "${COMPOSE[@]}" config --images
@@ -117,14 +134,18 @@ run_backup() {
   timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
   base_name="atlas-docs-${timestamp}-${tier}"
   destination_dir="$regular_dir"
-  [[ "$tier" == "archive" ]] && destination_dir="$archive_dir"
+  [[ "$tier" == "archive" || "$tier" == "upgrade" ]] && destination_dir="$archive_dir"
 
   dump_temp="$(mktemp "$temp_dir/.${base_name}.dump.XXXXXX")"
   TEMP_ARTIFACT="$dump_temp"
 
-  flush_collaboration_documents
+  if [[ "$tier" == "upgrade" ]]; then
+    flush_collaboration_documents required
+  else
+    flush_collaboration_documents
+  fi
   log "Creating ${tier} PostgreSQL backup."
-  create_dump "$dump_temp"
+  create_dump "$dump_temp" "$tier"
 
   encrypted="no"
   final_path="$destination_dir/${base_name}.dump"
@@ -171,10 +192,10 @@ main() {
     scheduled)
       mode="$(select_scheduled_mode "${ATLAS_BACKUP_DATE:-}")" || fail "ATLAS_BACKUP_DATE must be a valid date."
       ;;
-    regular|archive)
+    regular|archive|upgrade)
       ;;
     *)
-      fail "Usage: $0 [scheduled|regular|archive] [--dry-run]"
+      fail "Usage: $0 [scheduled|regular|archive|upgrade] [--dry-run]"
       ;;
   esac
 

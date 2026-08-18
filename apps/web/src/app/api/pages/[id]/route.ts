@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { canEdit, pageAccess, requireApiUser } from "@/lib/access";
 import { apiErrorResponse, readJsonBody } from "@/lib/api-errors";
+import { collaborationDocumentName } from "@/lib/collaboration-document";
 import { db } from "@/lib/db";
 import { insertAt } from "@/lib/tree-order";
 
@@ -71,7 +72,7 @@ export async function DELETE(_: Request, context: { params: Promise<{ id: string
   }
   await db.$transaction([
     db.page.delete({ where: { id } }),
-    db.collabDocument.deleteMany({ where: { name: `page:${id}` } }),
+    db.collabDocument.deleteMany({ where: { name: collaborationDocumentName(id) } }),
   ]);
   return new NextResponse(null, { status: 204 });
 }

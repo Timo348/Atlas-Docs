@@ -11,10 +11,13 @@ import {
   continueMarkdownList,
   editableTableAt,
   editTable,
+  editTextIndentation,
   isTableCellMaterialized,
   markdownDocumentSegments,
+  replaceHybridTextSegment,
   slashMatchAt,
   tableAt,
+  tableCellArrowNavigationTarget,
   tableCellCursor,
   tableCellValueOffset,
   updateTableCell,
@@ -136,6 +139,54 @@ test("short GFM rows expose read-only placeholders instead of unsafe edits", () 
   const existing = updateTableCell(source, source.indexOf("left"), 1, 0, "safe");
   assert.ok(existing);
   assert.equal(existing.text, "A|B|C\n---|---|---\nsafe |\ntail|middle");
+});
+
+test("table-cell arrows preserve ordinary horizontal cursor and selection movement", () => {
+  const source = "| A | B |\n| --- | --- |\n| one | longer |";
+  const table = editableTableAt(source, source.indexOf("one"));
+  assert.ok(table);
+
+  assert.equal(tableCellArrowNavigationTarget(table, 1, 0, "ArrowRight", 1, 1, 3), null);
+  assert.equal(tableCellArrowNavigationTarget(table, 1, 0, "ArrowRight", 0, 2, 3), null);
+  assert.deepEqual(
+    tableCellArrowNavigationTarget(table, 1, 0, "ArrowRight", 3, 3, 3),
+    { row: 1, column: 1, offset: 0 },
+  );
+  assert.deepEqual(
+    tableCellArrowNavigationTarget(table, 1, 1, "ArrowLeft", 0, 0, 6),
+    { row: 1, column: 0, offset: 3 },
+  );
+  assert.equal(tableCellArrowNavigationTarget(table, 1, 0, "ArrowLeft", 0, 0, 3), null);
+});
+
+test("vertical table-cell arrows preserve and clamp the visual caret offset", () => {
+  const source = "| Header | B |\n| --- | --- |\n| abc | x |\n| z | longer |";
+  const table = editableTableAt(source, source.indexOf("abc"));
+  assert.ok(table);
+
+  assert.deepEqual(
+    tableCellArrowNavigationTarget(table, 1, 0, "ArrowDown", 2, 2, 3),
+    { row: 2, column: 0, offset: 1 },
+  );
+  assert.deepEqual(
+    tableCellArrowNavigationTarget(table, 2, 1, "ArrowUp", 4, 4, 6),
+    { row: 1, column: 1, offset: 1 },
+  );
+  assert.equal(tableCellArrowNavigationTarget(table, 0, 0, "ArrowUp", 0, 0, 6), null);
+  assert.equal(tableCellArrowNavigationTarget(table, 2, 0, "ArrowDown", 0, 0, 1), null);
+});
+
+test("vertical table-cell arrows skip non-materialized Markdown placeholders", () => {
+  const source = "A|B|C\n---|---|---\none|two|three\nshort|\ntail|middle|end";
+  const table = editableTableAt(source, source.indexOf("three"));
+  assert.ok(table);
+  assert.deepEqual(table.persistedColumns, [3, 3, 1, 3]);
+
+  assert.deepEqual(
+    tableCellArrowNavigationTarget(table, 1, 2, "ArrowDown", 2, 2, 5),
+    { row: 3, column: 2, offset: 2 },
+  );
+  assert.equal(tableCellArrowNavigationTarget(table, 2, 0, "ArrowRight", 5, 5, 5), null);
 });
 
 test("concurrent edits of adjacent non-canonical table cells converge independently", () => {
@@ -601,4 +652,63 @@ test("does not continue selections, prose or list-looking text in code fences", 
   assert.equal(continueMarkdownList("- selected", 2, 7), null);
   const fenced = "```\n- code\n```";
   assert.equal(continueMarkdownList(fenced, fenced.indexOf("code") + 4), null);
+});
+
+test("captures Tab as a two-space insertion at a text caret", () => {
+  const edit = editTextIndentation("alpha", 2);
+  assert.equal(edit.text, "al  pha");
+  assert.equal(edit.selectionStart, 4);
+  assert.equal(edit.selectionEnd, 4);
+  assert.deepEqual(edit.changes, [{ start: 2, end: 2, value: "  " }]);
+});
+
+test("indents every covered line while preserving the logical selection", () => {
+  const source = "one\ntwo\nthree";
+  const edit = editTextIndentation(source, 1, 8);
+  assert.equal(edit.text, "  one\n  two\nthree");
+  assert.equal(edit.selectionStart, 3);
+  assert.equal(edit.selectionEnd, 12);
+  assert.deepEqual(edit.changes, [
+    { start: 0, end: 0, value: "  " },
+    { start: 4, end: 4, value: "  " },
+  ]);
+});
+
+test("Shift+Tab outdents selected lines with spaces or tabs", () => {
+  const source = "  one\n\ttwo\n three";
+  const edit = editTextIndentation(source, 0, source.length, true);
+  assert.equal(edit.text, "one\ntwo\nthree");
+  assert.equal(edit.selectionStart, 0);
+  assert.equal(edit.selectionEnd, edit.text.length);
+  assert.deepEqual(edit.changes, [
+    { start: 0, end: 2, value: "" },
+    { start: 6, end: 7, value: "" },
+    { start: 11, end: 12, value: "" },
+  ]);
+});
+
+test("Shift+Tab returns no edit when focus should move out of an unindented line", () => {
+  const edit = editTextIndentation("plain", 3, 3, true);
+  assert.equal(edit.text, "plain");
+  assert.equal(edit.selectionStart, 3);
+  assert.equal(edit.selectionEnd, 3);
+  assert.deepEqual(edit.changes, []);
+});
+
+test("Tab indentation in empty hybrid boundaries stays separated from the table", () => {
+  const table = "| A |\n| --- |\n| one |";
+  const segments = markdownDocumentSegments(table);
+  const before = segments[0];
+  const after = segments[segments.length - 1];
+  assert.equal(before.type, "text");
+  assert.equal(after.type, "text");
+  if (before.type !== "text" || after.type !== "text") return;
+
+  const beforeEdit = replaceHybridTextSegment(table, before, "  ", 2);
+  assert.equal(beforeEdit.text, `  \n${table}`);
+  assert.equal(beforeEdit.cursor, 2);
+
+  const afterEdit = replaceHybridTextSegment(table, after, "  ", table.length + 2);
+  assert.equal(afterEdit.text, `${table}\n  `);
+  assert.equal(afterEdit.cursor, table.length + 3);
 });

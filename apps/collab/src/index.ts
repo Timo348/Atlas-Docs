@@ -15,7 +15,18 @@ if (!databaseUrl || !secret || secret.length < 32) {
 }
 
 const prisma = new PrismaClient();
-const server = new Server({
+type CollaborationContext = {
+  user?: { id: string; name: string };
+  pageShare?: {
+    id: string;
+    pageId: string;
+    permission: "VIEW" | "EDIT";
+  };
+};
+
+const PAGE_SHARE_REVALIDATE_MS = 60_000;
+
+const server = new Server<CollaborationContext>({
   name: process.env.HOSTNAME || `atlas-${crypto.randomUUID()}`,
   port: Number(process.env.PORT || 1234),
   debounce: 2000,
@@ -54,8 +65,54 @@ const server = new Server({
   ],
   async onAuthenticate({ token, documentName, connectionConfig }) {
     const claims = await verifyCollaborationToken(token, secret, documentName);
-    connectionConfig.readOnly = claims.readOnly;
+    if (claims.shareId) {
+      const share = await prisma.pageShare.findFirst({
+        where: {
+          id: claims.shareId,
+          pageId: claims.pageId,
+          revokedAt: null,
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+        },
+        select: { permission: true },
+      });
+      if (!share) throw new Error("Page share is no longer active.");
+      connectionConfig.readOnly = claims.readOnly || share.permission !== "EDIT";
+      return {
+        user: { id: claims.sub, name: claims.name },
+        pageShare: { id: claims.shareId, pageId: claims.pageId, permission: share.permission },
+      };
+    } else {
+      connectionConfig.readOnly = claims.readOnly;
+    }
     return { user: { id: claims.sub, name: claims.name } };
+  },
+  async connected({ context, connection }) {
+    const pageShare = context.pageShare;
+    if (!pageShare) return;
+    let checking = false;
+    const timer = setInterval(async () => {
+      if (checking) return;
+      checking = true;
+      try {
+        const current = await prisma.pageShare.findFirst({
+          where: {
+            id: pageShare.id,
+            pageId: pageShare.pageId,
+            revokedAt: null,
+            OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+          },
+          select: { permission: true },
+        });
+        if (!current || current.permission !== pageShare.permission) connection.close();
+      } catch (error) {
+        console.error("[atlas-collab] Page-share revalidation failed closed.", error);
+        connection.close();
+      } finally {
+        checking = false;
+      }
+    }, PAGE_SHARE_REVALIDATE_MS);
+    timer.unref();
+    connection.onClose(() => clearInterval(timer));
   },
   async onRequest({ request, response, instance }) {
     if (request.url === "/health") {

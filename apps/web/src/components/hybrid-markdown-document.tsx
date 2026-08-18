@@ -11,6 +11,7 @@ import {
 } from "react";
 import {
   isTableCellMaterialized,
+  tableCellArrowNavigationTarget,
   type EditableMarkdownTable,
   type MarkdownDocumentSegment,
   type TableAction,
@@ -196,6 +197,41 @@ function EditableTable({
   onAction: (table: EditableMarkdownTable, action: TableAction) => void;
   destructiveActionsDisabled: boolean;
 }) {
+  const navigateCell = (event: KeyboardEvent<HTMLInputElement>, row: number, column: number) => {
+    if (
+      event.defaultPrevented
+      || event.altKey
+      || event.ctrlKey
+      || event.metaKey
+      || event.shiftKey
+      || event.nativeEvent.isComposing
+      || !["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)
+    ) return;
+    const input = event.currentTarget;
+    if (input.selectionStart === null || input.selectionEnd === null) return;
+    const target = tableCellArrowNavigationTarget(
+      table,
+      row,
+      column,
+      event.key as "ArrowUp" | "ArrowDown" | "ArrowLeft" | "ArrowRight",
+      input.selectionStart,
+      input.selectionEnd,
+      input.value.length,
+    );
+    if (!target) return;
+
+    const tableElement = input.closest<HTMLElement>("[data-markdown-table-start]");
+    const targetInput = tableElement?.querySelector<HTMLInputElement>(
+      `input[data-table-row="${target.row}"][data-table-column="${target.column}"]`,
+    );
+    if (!targetInput || targetInput.disabled) return;
+
+    event.preventDefault();
+    targetInput.focus();
+    targetInput.setSelectionRange(target.offset, target.offset);
+    onCellCursor(table, target.row, target.column, targetInput);
+  };
+
   return (
     <section
       className={`${styles.tableBlock} ${active ? styles.activeTable : ""}`}
@@ -222,6 +258,7 @@ function EditableTable({
                     text={text}
                     onChange={(value, selection) => onCellChange(table, 0, column, value, selection)}
                     onCursor={(input) => onCellCursor(table, 0, column, input)}
+                    onKeyDown={(event) => navigateCell(event, 0, column)}
                     onBlur={onCellBlur}
                   />
                 </th>
@@ -244,6 +281,7 @@ function EditableTable({
                         text={text}
                         onChange={(value, selection) => onCellChange(table, rowIndex, column, value, selection)}
                         onCursor={(input) => onCellCursor(table, rowIndex, column, input)}
+                        onKeyDown={(event) => navigateCell(event, rowIndex, column)}
                         onBlur={onCellBlur}
                       />
                     </td>
@@ -302,6 +340,7 @@ function CellInput({
   text,
   onChange,
   onCursor,
+  onKeyDown,
   onBlur,
 }: {
   value: string;
@@ -313,6 +352,7 @@ function CellInput({
   text: Translate;
   onChange: (value: string, selection: CellInputSelection) => void;
   onCursor: (input: HTMLInputElement) => void;
+  onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void;
   onBlur: () => void;
 }) {
   const publish = (event: SyntheticEvent<HTMLInputElement>) => onCursor(event.currentTarget);
@@ -338,6 +378,7 @@ function CellInput({
       onKeyUp={publish}
       onClick={publish}
       onFocus={publish}
+      onKeyDown={onKeyDown}
       onBlur={onBlur}
       data-table-row={row}
       data-table-column={column}

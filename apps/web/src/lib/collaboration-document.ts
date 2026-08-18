@@ -1,6 +1,6 @@
 import * as Y from "yjs";
 
-export type CollaborationPageFormat = "MARKDOWN" | "LATEX";
+export type CollaborationPageFormat = "MARKDOWN" | "LATEX" | "CANVAS";
 export type CollaborationLanguage = "en" | "de";
 
 const TEXT_NAME = "markdown";
@@ -22,6 +22,7 @@ export function initialCollaborationContent(
   format: CollaborationPageFormat,
   language: CollaborationLanguage,
 ) {
+  if (format === "CANVAS") return "";
   const heading = language === "de" ? "Überschrift" : "Headline";
   if (format === "LATEX") {
     return `\\documentclass{article}
@@ -43,6 +44,12 @@ export function initializeCollaborationDocument(
   format: CollaborationPageFormat,
   language: CollaborationLanguage,
 ) {
+  if (format === "CANVAS") {
+    const settings = document.getMap<unknown>("canvas-settings");
+    if (settings.size > 0) return false;
+    settings.set("viewBackgroundColor", "#fbfaf7");
+    return true;
+  }
   const text = document.getText(TEXT_NAME);
   if (text.length > 0) return false;
 

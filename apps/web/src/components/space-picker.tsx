@@ -3,6 +3,7 @@
 import { BookOpen, Check, ChevronsUpDown, Plus, Search, X } from "lucide-react";
 import { type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
 import { usePreferences } from "@/components/preferences-provider";
+import { escapeDismissesDialog } from "@/components/use-dialog-escape";
 import { spaceRoleLabel } from "@/lib/space-role";
 import styles from "./space-picker.module.css";
 
@@ -111,7 +112,7 @@ export function SpacePicker({
   }
 
   function handleDialogKeyDown(event: KeyboardEvent<HTMLElement>) {
-    if (event.key === "Escape") {
+    if (escapeDismissesDialog(event.key, false, event.nativeEvent.isComposing, event.defaultPrevented)) {
       event.preventDefault();
       close();
       return;

@@ -87,6 +87,18 @@ export const API_ERROR_MESSAGES = {
     en: "The version was not found.",
     de: "Die Version wurde nicht gefunden.",
   },
+  PAGE_SHARE_MANAGE_REQUIRED: {
+    en: "Only space owners and administrators may manage page links.",
+    de: "Nur Bereichseigentümer und Administratoren dürfen Seitenlinks verwalten.",
+  },
+  PAGE_SHARE_INVALID: {
+    en: "The page link settings are invalid.",
+    de: "Die Einstellungen des Seitenlinks sind ungültig.",
+  },
+  PAGE_SHARE_NOT_FOUND: {
+    en: "The page link was not found.",
+    de: "Der Seitenlink wurde nicht gefunden.",
+  },
   SPACE_NOT_FOUND: {
     en: "The space was not found.",
     de: "Der Bereich wurde nicht gefunden.",

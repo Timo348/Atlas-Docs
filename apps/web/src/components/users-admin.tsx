@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, KeyRound, Plus, ShieldCheck, UserCheck, UserX, X } from "lucide-react";
 import { usePreferences } from "@/components/preferences-provider";
+import { useDialogEscape } from "@/components/use-dialog-escape";
 import { apiErrorMessage } from "@/lib/api-errors";
 
 type UserRow = {
@@ -42,6 +43,14 @@ export function UsersAdmin({ initialUsers, currentUserId }: { initialUsers: User
   const [busy, setBusy] = useState(false);
   const [resetUserId, setResetUserId] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState("");
+  const [resetBusy, setResetBusy] = useState(false);
+
+  function closeResetDialog() {
+    setResetUserId(null);
+    setNewPassword("");
+  }
+
+  useDialogEscape(closeResetDialog, resetBusy, Boolean(resetUserId));
 
   async function createUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -79,19 +88,28 @@ export function UsersAdmin({ initialUsers, currentUserId }: { initialUsers: User
     });
     const data = await response.json();
     if (!response.ok) {
-      return setError(apiErrorMessage(data, text, {
+      setError(apiErrorMessage(data, text, {
         en: "The change could not be saved.",
         de: "Die Änderung konnte nicht gespeichert werden.",
       }));
+      return false;
     }
     setUsers((current) => current.map((user) => user.id === id ? { ...user, ...data } : user));
+    return true;
   }
 
   async function resetPassword() {
     if (!resetUserId || newPassword.length < 12) return;
-    await updateUser(resetUserId, { password: newPassword });
-    setResetUserId(null);
-    setNewPassword("");
+    setResetBusy(true);
+    try {
+      if (await updateUser(resetUserId, { password: newPassword })) {
+        closeResetDialog();
+      }
+    } catch {
+      setError(text("The password could not be saved.", "Das Passwort konnte nicht gespeichert werden."));
+    } finally {
+      setResetBusy(false);
+    }
   }
 
   return (
@@ -171,25 +189,25 @@ export function UsersAdmin({ initialUsers, currentUserId }: { initialUsers: User
         ))}
       </div>
       {resetUserId && (
-        <div className="modal-backdrop">
+        <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !resetBusy && closeResetDialog()}>
           <section className="action-dialog" role="dialog" aria-modal="true" aria-labelledby="reset-password-title">
             <header className="dialog-header">
               <div>
                 <span className="dialog-kicker">{text("User account", "Benutzerkonto")}</span>
                 <h2 id="reset-password-title">{text("Reset password", "Passwort neu setzen")}</h2>
               </div>
-              <button className="icon-button" onClick={() => setResetUserId(null)} aria-label={text("Close", "Schließen")}>
+              <button className="icon-button" disabled={resetBusy} onClick={closeResetDialog} aria-label={text("Close", "Schließen")}>
                 <X size={18} />
               </button>
             </header>
             <div className="action-dialog-body">
-              <label>{text("New password", "Neues Passwort")}<input autoFocus type="password" minLength={12} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></label>
+              <label>{text("New password", "Neues Passwort")}<input autoFocus disabled={resetBusy} type="password" minLength={12} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></label>
             </div>
             <footer className="dialog-footer">
               <span>{text("At least 12 characters", "Mindestens 12 Zeichen")}</span>
               <div>
-                <button className="button secondary-button compact" onClick={() => setResetUserId(null)}>{text("Cancel", "Abbrechen")}</button>
-                <button className="button primary-button compact" disabled={newPassword.length < 12} onClick={resetPassword}>{text("Save", "Speichern")}</button>
+                <button className="button secondary-button compact" disabled={resetBusy} onClick={closeResetDialog}>{text("Cancel", "Abbrechen")}</button>
+                <button className="button primary-button compact" disabled={resetBusy || newPassword.length < 12} onClick={resetPassword}>{resetBusy ? text("Saving …", "Speichern …") : text("Save", "Speichern")}</button>
               </div>
             </footer>
           </section>

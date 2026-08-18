@@ -30,7 +30,16 @@ export type TextChange = {
   value: string;
 };
 
+export type TextIndentationEdit = {
+  text: string;
+  selectionStart: number;
+  selectionEnd: number;
+  changes: TextChange[];
+};
+
 export type TableAction = "add-row" | "add-column" | "remove-row" | "remove-column";
+export type TableCellArrowKey = "ArrowUp" | "ArrowDown" | "ArrowLeft" | "ArrowRight";
+export type TableCellNavigationTarget = { row: number; column: number; offset: number };
 
 export type EditableMarkdownTable = {
   start: number;
@@ -153,6 +162,35 @@ export function markdownDocumentSegments(text: string): MarkdownDocumentSegment[
   return segments;
 }
 
+/**
+ * Keeps content typed into an empty hybrid-editor boundary separate from the
+ * adjacent table. Prefix and suffix newlines are part of the same replacement,
+ * so no transient edit can append text to a Markdown table row.
+ */
+export function replaceHybridTextSegment(
+  text: string,
+  segment: Extract<MarkdownDocumentSegment, { type: "text" }>,
+  value: string,
+  cursor: number,
+): TextEdit {
+  let replacement = value;
+  let nextCursor = cursor;
+  if (segment.value.length === 0 && value.length > 0) {
+    const tables = parseTables(text);
+    const previousIsTable = tables.some((table) => table.end === segment.start);
+    const nextIsTable = tables.some((table) => table.start === segment.end);
+    if (previousIsTable && text[segment.start - 1] !== "\n") {
+      replacement = `\n${replacement}`;
+      nextCursor += 1;
+    }
+    if (nextIsTable && text[segment.end] !== "\n") replacement += "\n";
+  }
+  return {
+    text: text.slice(0, segment.start) + replacement + text.slice(segment.end),
+    cursor: nextCursor,
+  };
+}
+
 export function updateTableCell(
   text: string,
   cursor: number,
@@ -193,6 +231,58 @@ export function isTableCellMaterialized(table: EditableMarkdownTable, row: numbe
     && column >= 0
     && column < table.columns
     && column < (table.persistedColumns[row] ?? 0);
+}
+
+/**
+ * Resolves spreadsheet-style arrow movement without taking over ordinary text
+ * cursor movement. Horizontal arrows cross a cell boundary only when a collapsed
+ * caret is already at that boundary. Vertical arrows preserve the decoded caret
+ * offset and skip read-only placeholders from short Markdown rows.
+ */
+export function tableCellArrowNavigationTarget(
+  table: EditableMarkdownTable,
+  row: number,
+  column: number,
+  key: TableCellArrowKey,
+  selectionStart: number,
+  selectionEnd: number,
+  currentValueLength: number,
+): TableCellNavigationTarget | null {
+  if (
+    !isTableCellMaterialized(table, row, column)
+    || !Number.isInteger(selectionStart)
+    || !Number.isInteger(selectionEnd)
+    || !Number.isInteger(currentValueLength)
+    || currentValueLength < 0
+    || selectionStart < 0
+    || selectionStart > currentValueLength
+    || selectionEnd < 0
+    || selectionEnd > currentValueLength
+    || selectionStart !== selectionEnd
+  ) return null;
+
+  if (key === "ArrowLeft" || key === "ArrowRight") {
+    if (key === "ArrowLeft" && selectionStart !== 0) return null;
+    if (key === "ArrowRight" && selectionStart !== currentValueLength) return null;
+    const targetColumn = column + (key === "ArrowLeft" ? -1 : 1);
+    if (!isTableCellMaterialized(table, row, targetColumn)) return null;
+    return {
+      row,
+      column: targetColumn,
+      offset: key === "ArrowLeft" ? table.rows[row][targetColumn].length : 0,
+    };
+  }
+
+  const rowStep = key === "ArrowUp" ? -1 : 1;
+  for (let targetRow = row + rowStep; targetRow >= 0 && targetRow < table.rows.length; targetRow += rowStep) {
+    if (!isTableCellMaterialized(table, targetRow, column)) continue;
+    return {
+      row: targetRow,
+      column,
+      offset: Math.min(selectionStart, table.rows[targetRow][column].length),
+    };
+  }
+  return null;
 }
 
 export function tableCellCursor(
@@ -330,6 +420,45 @@ export function continueMarkdownList(
   };
 }
 
+/**
+ * Applies a two-space editor indentation without replacing the selected text.
+ * A caret inserts one indentation level at its current position. A selection
+ * indents every covered line, while Shift+Tab removes one leading level. The
+ * returned selection tracks the same logical text after the edit.
+ */
+export function editTextIndentation(
+  text: string,
+  selectionStart: number,
+  selectionEnd = selectionStart,
+  outdent = false,
+): TextIndentationEdit {
+  const start = clampOffset(Math.min(selectionStart, selectionEnd), text.length);
+  const end = clampOffset(Math.max(selectionStart, selectionEnd), text.length);
+  let changes: TextChange[];
+
+  if (!outdent && start === end) {
+    changes = [{ start, end: start, value: "  " }];
+  } else {
+    const firstLineStart = lineStartAt(text, start);
+    const lastSelectedPosition = end > start ? end - 1 : end;
+    const lastLineStart = lineStartAt(text, lastSelectedPosition);
+    const lineStarts = lineStartsBetween(text, firstLineStart, lastLineStart);
+    changes = outdent
+      ? lineStarts.flatMap((lineStart) => {
+          const width = removableIndentWidth(text, lineStart);
+          return width ? [{ start: lineStart, end: lineStart + width, value: "" }] : [];
+        })
+      : lineStarts.map((lineStart) => ({ start: lineStart, end: lineStart, value: "  " }));
+  }
+
+  return {
+    text: applyTextChanges(text, changes),
+    selectionStart: mapOffsetThroughChanges(start, changes),
+    selectionEnd: mapOffsetThroughChanges(end, changes),
+    changes,
+  };
+}
+
 function parseTableAt(text: string, cursor: number): ParsedTable | null {
   const table = parseTables(text).find((candidate) => cursor >= candidate.start && cursor < candidate.end);
   if (!table) return null;
@@ -462,6 +591,44 @@ function applyTextChanges(text: string, changes: readonly TextChange[]) {
     next = next.slice(0, change.start) + change.value + next.slice(change.end);
   }
   return next;
+}
+
+function lineStartAt(text: string, offset: number) {
+  return text.lastIndexOf("\n", Math.max(0, offset - 1)) + 1;
+}
+
+function lineStartsBetween(text: string, first: number, last: number) {
+  const starts: number[] = [];
+  let current = first;
+  while (current <= last) {
+    starts.push(current);
+    const newline = text.indexOf("\n", current);
+    if (newline === -1) break;
+    current = newline + 1;
+  }
+  return starts;
+}
+
+function removableIndentWidth(text: string, lineStart: number) {
+  if (text[lineStart] === "\t") return 1;
+  let width = 0;
+  while (width < 2 && text[lineStart + width] === " ") width++;
+  return width;
+}
+
+function mapOffsetThroughChanges(offset: number, changes: readonly TextChange[]) {
+  let delta = 0;
+  for (const change of [...changes].sort((left, right) => left.start - right.start)) {
+    if (change.start === change.end) {
+      if (offset < change.start) break;
+      delta += change.value.length;
+      continue;
+    }
+    if (offset < change.start) break;
+    if (offset <= change.end) return change.start + delta + change.value.length;
+    delta += change.value.length - (change.end - change.start);
+  }
+  return offset + delta;
 }
 
 function columnAt(line: string, cursor: number, columnCount: number) {

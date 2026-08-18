@@ -32,6 +32,18 @@ test("encodes the initial content as an applicable Yjs state update", () => {
   document.destroy();
 });
 
+test("creates an initialized canvas document without page text", () => {
+  assert.equal(initialCollaborationContent("CANVAS", "de"), "");
+  const state = createInitialCollaborationState("CANVAS", "de");
+  const document = new Y.Doc();
+  Y.applyUpdate(document, state);
+
+  assert.equal(document.getText("markdown").toString(), "");
+  assert.equal(document.getMap("canvas-settings").get("viewBackgroundColor"), "#fbfaf7");
+  assert.equal(collaborationStateNeedsInitialization(state), false);
+  document.destroy();
+});
+
 test("initialization and repeated update delivery insert the template exactly once", () => {
   const source = new Y.Doc();
   assert.equal(initializeCollaborationDocument(source, "MARKDOWN", "en"), true);

@@ -9,7 +9,7 @@ export type PortablePage = {
   slug: string;
   folderId: string | null;
   parentId: string | null;
-  format: "MARKDOWN" | "LATEX";
+  format: "MARKDOWN" | "LATEX" | "CANVAS";
   sortOrder: number;
 };
 export type PortableSpace = {
@@ -20,8 +20,8 @@ export type PortableSpace = {
   pages: PortablePage[];
 };
 export type PortablePageLayout = {
-  sourcePath: string;
-  canvasPath: string;
+  sourcePath: string | null;
+  canvasPath: string | null;
   assetsDirectory: string;
   relativeAssetsDirectory: string;
 };
@@ -93,8 +93,10 @@ export function buildPortableLayout(spaces: PortableSpace[]): PortableLayout {
       const segment = uniqueSegment(sanitizePathSegment(page.slug, "page"), page.id, used);
       const base = posix.join(directory, segment);
       pagePaths.set(page.id, {
-        sourcePath: `${base}.${page.format === "LATEX" ? "tex" : "md"}`,
-        canvasPath: `${base}.excalidraw`,
+        sourcePath: page.format === "CANVAS"
+          ? null
+          : `${base}.${page.format === "LATEX" ? "tex" : "md"}`,
+        canvasPath: page.format === "CANVAS" ? `${base}.excalidraw` : null,
         assetsDirectory: `${base}.assets`,
         relativeAssetsDirectory: `${segment}.assets`,
       });
@@ -104,7 +106,7 @@ export function buildPortableLayout(spaces: PortableSpace[]): PortableLayout {
   return { spacePaths, folderPaths, pagePaths };
 }
 
-export function decodeCollaborationDocument(data: Uint8Array | null) {
+export function decodeCollaborationDocument(data: Uint8Array | null, includeEmptyCanvas = false) {
   const document = new Y.Doc();
   try {
     if (data?.byteLength) Y.applyUpdate(document, data);
@@ -112,7 +114,15 @@ export function decodeCollaborationDocument(data: Uint8Array | null) {
     const elements = Array.from(document.getMap<unknown>("canvas-elements").values());
     const files = Object.fromEntries(document.getMap<unknown>("canvas-files").entries());
     const settings = document.getMap<unknown>("canvas-settings");
-    const hasCanvas = elements.length > 0 || Object.keys(files).length > 0 || settings.size > 0;
+    const hasVisibleElement = elements.some((element) => (
+      !element
+      || typeof element !== "object"
+      || (element as { isDeleted?: unknown }).isDeleted !== true
+    ));
+    const background = settings.get("viewBackgroundColor");
+    const hasCustomBackground = typeof background === "string"
+      && background.toLowerCase() !== "#fbfaf7";
+    const hasCanvas = includeEmptyCanvas || hasVisibleElement || hasCustomBackground;
     return {
       source,
       canvas: hasCanvas ? {

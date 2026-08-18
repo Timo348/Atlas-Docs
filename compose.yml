@@ -89,12 +89,13 @@ services:
       ADMIN_NAME: ${ADMIN_NAME:-Administrator}
       ADMIN_EMAIL: ${ADMIN_EMAIL}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      ATLAS_CANVAS_MIGRATION_TIMEOUT_MS: ${ATLAS_CANVAS_MIGRATION_TIMEOUT_MS:-600000}
       NODE_EXTRA_CA_CERTS: ${NODE_EXTRA_CA_CERTS:-}
     command:
       [
         "sh",
         "-c",
-        "./node_modules/.bin/prisma migrate deploy && ./node_modules/.bin/tsx prisma/seed.ts",
+        "./node_modules/.bin/prisma migrate deploy && ./node_modules/.bin/tsx prisma/migrate-legacy-canvases.ts && ./node_modules/.bin/tsx prisma/seed.ts",
       ]
     cap_drop:
       - ALL

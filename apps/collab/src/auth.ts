@@ -5,6 +5,7 @@ export type CollaborationClaims = {
   pageId: string;
   name: string;
   readOnly: boolean;
+  shareId?: string;
 };
 
 export async function verifyCollaborationToken(
@@ -21,6 +22,7 @@ export async function verifyCollaborationToken(
     typeof payload.sub !== "string" ||
     typeof payload.pageId !== "string" ||
     typeof payload.name !== "string" ||
+    (payload.shareId !== undefined && typeof payload.shareId !== "string") ||
     documentName !== `page:${payload.pageId}`
   ) {
     throw new Error("Invalid collaboration token.");
@@ -31,5 +33,6 @@ export async function verifyCollaborationToken(
     pageId: payload.pageId,
     name: payload.name,
     readOnly: payload.readOnly === true,
+    shareId: typeof payload.shareId === "string" ? payload.shareId : undefined,
   };
 }
