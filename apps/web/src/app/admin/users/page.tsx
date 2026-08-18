@@ -26,6 +26,7 @@ export default async function UsersPage() {
     uiFont: current.uiFont,
     editorFont: current.editorFont,
     fontSize: current.fontSize,
+    defaultEditorView: current.defaultEditorView,
     compactMode: current.compactMode,
   });
 

@@ -24,6 +24,8 @@ export type TextEdit = {
   changes?: TextChange[];
 };
 
+export type MarkdownInlineStyle = "bold" | "italic" | "strikethrough" | "code" | "link";
+
 export type TextChange = {
   start: number;
   end: number;
@@ -160,6 +162,34 @@ export function markdownDocumentSegments(text: string): MarkdownDocumentSegment[
   }
   segments.push({ type: "text", start: offset, end: text.length, value: text.slice(offset) });
   return segments;
+}
+
+export function formatMarkdownInline(
+  text: string,
+  selectionStart: number,
+  selectionEnd: number,
+  style: MarkdownInlineStyle,
+  language: "en" | "de",
+): TextEdit {
+  const start = Math.max(0, Math.min(text.length, Math.min(selectionStart, selectionEnd)));
+  const end = Math.max(start, Math.min(text.length, Math.max(selectionStart, selectionEnd)));
+  const selected = text.slice(start, end);
+  const fallback = language === "de" ? "Text" : "Text";
+  const label = selected || (style === "link" ? (language === "de" ? "Linktext" : "Link text") : fallback);
+  const value = style === "bold"
+    ? `**${label}**`
+    : style === "italic"
+      ? `*${label}*`
+      : style === "strikethrough"
+        ? `~~${label}~~`
+        : style === "code"
+          ? `\`${label}\``
+          : `[${label}](https://example.com)`;
+  return {
+    text: text.slice(0, start) + value + text.slice(end),
+    cursor: start + value.length,
+    changes: [{ start, end, value }],
+  };
 }
 
 /**

@@ -18,6 +18,7 @@ export async function PATCH(request: Request) {
       uiFont: true,
       editorFont: true,
       fontSize: true,
+      defaultEditorView: true,
       compactMode: true,
     },
   });

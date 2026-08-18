@@ -2,8 +2,8 @@
 
 import { HocuspocusProvider } from "@hocuspocus/provider";
 import {
-  Code2, Download, Eye, FileText, History, ImagePlus, LoaderCircle, Minus,
-  Pencil, Plus, RotateCcw, Save as SaveIcon, Share2, Table2, Users, X,
+  Bold, Code2, Download, Eye, FileText, History, ImagePlus, Italic, Link2, LoaderCircle, Minus,
+  Pencil, Plus, RotateCcw, Save as SaveIcon, Share2, Strikethrough, Table2, Users, X,
 } from "lucide-react";
 import {
   type ClipboardEvent, type KeyboardEvent, type ReactNode, type RefObject,
@@ -23,10 +23,10 @@ import { usePreferences } from "@/components/preferences-provider";
 import { useDialogEscape } from "@/components/use-dialog-escape";
 import { PageShareDialog } from "@/components/page-share-dialog";
 import {
-  applySlashCommand, continueMarkdownList, editableTableAt, editTable, editTextIndentation, markdownDocumentSegments,
+  applySlashCommand, continueMarkdownList, editableTableAt, editTable, editTextIndentation, formatMarkdownInline, markdownDocumentSegments,
   replaceHybridTextSegment,
   slashMatchAt, tableCellCursor, tableCellValueOffset, updateTableCell,
-  type EditableMarkdownTable, type MarkdownDocumentSegment, type SlashCommandId, type SlashMatch,
+  type EditableMarkdownTable, type MarkdownDocumentSegment, type MarkdownInlineStyle, type SlashCommandId, type SlashMatch,
   type TableAction, type TextEdit,
 } from "@/lib/markdown-editor";
 import { apiErrorMessage } from "@/lib/api-errors";
@@ -128,7 +128,9 @@ export function CollaborativeEditor({
     revision: 0,
   });
   const [tab, setTab] = useState<Tab>(
-    page.format === "CANVAS" ? "canvas" : publicShare?.permission === "VIEW" ? "preview" : "write",
+    page.format === "CANVAS"
+      ? "canvas"
+      : publicShare?.permission === "VIEW" ? "preview" : preferences.defaultEditorView,
   );
   const [status, setStatus] = useState<Connection>("connecting");
   const [awarenessStates, setAwarenessStates] = useState<unknown[]>([]);
@@ -516,6 +518,16 @@ export function CollaborativeEditor({
     focusMarkdownCursor(edit.cursor);
   }
 
+  function applyInlineFormatting(style: MarkdownInlineStyle, selectionStart?: number, selectionEnd?: number) {
+    if (page.format !== "MARKDOWN" || readOnly) return;
+    const resolved = localCursorRef.current
+      ? resolveCollaborativeCursor(localCursorRef.current, textBinding.viewDocument, "markdown")
+      : null;
+    const start = selectionStart ?? resolved?.anchor ?? cursorIndex;
+    const end = selectionEnd ?? resolved?.head ?? cursorIndex;
+    applyEdit(formatMarkdownInline(markdown, start, end, style, preferences.language));
+  }
+
   function focusMarkdownCursor(nextCursor: number) {
     requestAnimationFrame(() => requestAnimationFrame(() => {
       const restored = localCursorRef.current
@@ -561,11 +573,24 @@ export function CollaborativeEditor({
   }
 
   function handleEditorKeyDown(event: KeyboardEvent<HTMLTextAreaElement>, offset = 0) {
-    if (event.altKey || event.ctrlKey || event.metaKey || event.nativeEvent.isComposing) return;
+    if (event.nativeEvent.isComposing) return;
     const localSelectionStart = event.currentTarget.selectionStart;
     const localSelectionEnd = event.currentTarget.selectionEnd;
     const selectionStart = offset + localSelectionStart;
     const selectionEnd = offset + localSelectionEnd;
+    if (page.format === "MARKDOWN" && (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey) {
+      const style = event.key.toLowerCase() === "b"
+        ? "bold"
+        : event.key.toLowerCase() === "i"
+          ? "italic"
+          : event.key.toLowerCase() === "k" ? "link" : null;
+      if (style) {
+        event.preventDefault();
+        applyInlineFormatting(style, selectionStart, selectionEnd);
+      }
+      return;
+    }
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
     const slash = page.format === "MARKDOWN" && !readOnly ? slashMatchAt(markdown, selectionStart) : null;
     const commands = slash
       ? SLASH_COMMANDS.filter((command) => command.id.includes(slash.query)
@@ -868,11 +893,17 @@ export function CollaborativeEditor({
     URL.revokeObjectURL(url);
   }
 
-  const markdownComponents = useMemo<MarkdownComponents | undefined>(() => publicShare ? ({
-    img: ({ src, ...props }) => (
-      <img {...props} src={sharedPageImageUrl(src, page.id, publicShare.token)} />
-    ),
-  }) : undefined, [page.id, publicShare]);
+  const markdownComponents = useMemo<MarkdownComponents>(() => ({
+    a: ({ href, node: _node, ...props }) => {
+      const external = /^(?:https?:)?\/\//i.test(href || "");
+      return <a {...props} href={href} target={external ? "_blank" : undefined} rel={external ? "noreferrer noopener" : undefined} />;
+    },
+    ...(publicShare ? {
+      img: ({ src, node: _node, ...props }) => (
+        <img {...props} src={sharedPageImageUrl(src, page.id, publicShare.token)} />
+      ),
+    } : {}),
+  }), [page.id, publicShare]);
 
   return (
     <div className={`editor-shell ${headerCenter ? "editor-shell-with-center" : ""} ${page.format === "CANVAS" ? "canvas-file-editor" : ""}`}>
@@ -970,6 +1001,15 @@ export function CollaborativeEditor({
                   text={text}
                   onToggle={() => setTableSourceMode((value) => !value)}
                 />
+              )}
+              {page.format === "MARKDOWN" && !readOnly && (
+                <div className="markdown-format-toolbar" role="toolbar" aria-label={text("Text formatting", "Textformatierung")}>
+                  <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => applyInlineFormatting("bold")} title={text("Bold (Ctrl+B)", "Fett (Strg+B)")} aria-label={text("Bold", "Fett")}><Bold size={14} /></button>
+                  <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => applyInlineFormatting("italic")} title={text("Italic (Ctrl+I)", "Kursiv (Strg+I)")} aria-label={text("Italic", "Kursiv")}><Italic size={14} /></button>
+                  <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => applyInlineFormatting("strikethrough")} title={text("Strikethrough", "Durchgestrichen")} aria-label={text("Strikethrough", "Durchgestrichen")}><Strikethrough size={14} /></button>
+                  <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => applyInlineFormatting("code")} title={text("Inline code", "Inline-Code")} aria-label={text("Inline code", "Inline-Code")}><Code2 size={14} /></button>
+                  <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => applyInlineFormatting("link")} title={text("Insert link (Ctrl+K)", "Link einfügen (Strg+K)")} aria-label={text("Insert link", "Link einfügen")}><Link2 size={14} /></button>
+                </div>
               )}
               {imageBusy && <span className="editor-uploading"><LoaderCircle size={12} className="spin" /> {text("Uploading image…", "Bild wird hochgeladen…")}</span>}
             </div>

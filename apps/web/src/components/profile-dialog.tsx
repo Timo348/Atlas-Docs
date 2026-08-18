@@ -149,6 +149,11 @@ export function ProfileDialog({
                 <option value="small">{text("Small", "Klein")}</option><option value="medium">{text("Medium", "Mittel")}</option><option value="large">{text("Large", "Groß")}</option>
               </select>
             </label>
+            <label>{text("Default document view", "Standard-Dokumentansicht")}
+              <select value={draft.defaultEditorView} onChange={(event) => update("defaultEditorView", event.target.value as Preferences["defaultEditorView"])}>
+                <option value="write">{text("Write", "Schreiben")}</option><option value="preview">{text("Preview", "Vorschau")}</option>
+              </select>
+            </label>
             <label className="checkbox-setting">
               <input type="checkbox" checked={draft.compactMode} onChange={(event) => update("compactMode", event.target.checked)} />
               <span><strong>{text("Compact navigation", "Kompakte Navigation")}</strong><small>{text("Show more items in the sidebar.", "Mehr Einträge in der Seitenleiste anzeigen.")}</small></span>

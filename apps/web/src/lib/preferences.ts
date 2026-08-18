@@ -6,6 +6,7 @@ export const preferencesSchema = z.object({
   uiFont: z.enum(["inter", "helvetica", "serif", "system"]),
   editorFont: z.enum(["mono", "sans"]),
   fontSize: z.enum(["small", "medium", "large"]),
+  defaultEditorView: z.enum(["write", "preview"]),
   compactMode: z.boolean(),
 });
 
@@ -17,6 +18,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   uiFont: "inter",
   editorFont: "mono",
   fontSize: "medium",
+  defaultEditorView: "write",
   compactMode: false,
 };
 

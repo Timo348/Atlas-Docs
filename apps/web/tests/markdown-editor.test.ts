@@ -12,6 +12,7 @@ import {
   editableTableAt,
   editTable,
   editTextIndentation,
+  formatMarkdownInline,
   isTableCellMaterialized,
   markdownDocumentSegments,
   replaceHybridTextSegment,
@@ -22,6 +23,20 @@ import {
   tableCellValueOffset,
   updateTableCell,
 } from "../src/lib/markdown-editor";
+
+test("formats selected Markdown inline without changing surrounding text", () => {
+  const bold = formatMarkdownInline("before selected after", 7, 15, "bold", "en");
+  assert.equal(bold.text, "before **selected** after");
+  assert.deepEqual(bold.changes, [{ start: 7, end: 15, value: "**selected**" }]);
+
+  const link = formatMarkdownInline("Atlas", 0, 5, "link", "en");
+  assert.equal(link.text, "[Atlas](https://example.com)");
+});
+
+test("inline formatting inserts useful placeholders at a collapsed caret", () => {
+  assert.equal(formatMarkdownInline("", 0, 0, "italic", "de").text, "*Text*");
+  assert.equal(formatMarkdownInline("", 0, 0, "link", "de").text, "[Linktext](https://example.com)");
+});
 
 test("detects and expands a slash command on the current line", () => {
   const source = "Intro\n/table";

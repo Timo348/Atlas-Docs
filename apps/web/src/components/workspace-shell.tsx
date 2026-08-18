@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { type DragEvent, useState } from "react";
+import { type DragEvent, useEffect, useState } from "react";
 import {
   BookOpen, ChevronDown, ChevronRight, FileCode2, FilePlus2, FileText, Folder,
   FolderPlus, GripVertical, LogOut, MoreHorizontal, PanelLeftClose, PanelLeftOpen,
@@ -17,7 +17,9 @@ import { SidebarSpaceIdentity, SpacePicker } from "@/components/space-picker";
 import { useDialogEscape } from "@/components/use-dialog-escape";
 import { apiErrorMessage } from "@/lib/api-errors";
 import { pageAfterDeletion } from "@/lib/page-deletion";
+import { spaceNavigationHref } from "@/lib/space-navigation";
 import { spaceRoleLabel } from "@/lib/space-role";
+import { workspaceShortcut } from "@/lib/workspace-shortcuts";
 
 type PageFormat = "MARKDOWN" | "LATEX" | "CANVAS";
 type PageItem = {
@@ -80,6 +82,34 @@ export function WorkspaceShell({
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const activeSpace = spaces.find((space) => space.id === selectedSpaceId) || spaces[0] || null;
   const canWrite = activeSpace?.role === "OWNER" || activeSpace?.role === "EDITOR";
+
+  useEffect(() => {
+    function handleKeyDown(event: globalThis.KeyboardEvent) {
+      const shortcut = workspaceShortcut({
+        key: event.key,
+        altKey: event.altKey,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        shiftKey: event.shiftKey,
+        defaultPrevented: event.defaultPrevented,
+        isComposing: event.isComposing,
+        repeat: event.repeat,
+      });
+      if (!shortcut || busy || dialog || permissionsOpen || profileOpen || spacePickerOpen) return;
+      if (shortcut === "new-file") {
+        if (!activeSpace || !canWrite) return;
+        event.preventDefault();
+        createPage(activeSpace.id);
+        return;
+      }
+      if (!spaces.length) return;
+      event.preventDefault();
+      setSpacePickerOpen(true);
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [activeSpace, busy, canWrite, dialog, permissionsOpen, profileOpen, spacePickerOpen, spaces.length, text]);
 
   function request<T extends { id: string }>(url: string, method: string, body: unknown) {
     return jsonRequest<T>(url, method, body, text);
@@ -202,9 +232,7 @@ export function WorkspaceShell({
 
   function selectSpace(space: Space) {
     setSpacePickerOpen(false);
-    router.push(space.pages[0]
-      ? `/?space=${space.id}&page=${space.pages[0].id}`
-      : `/?space=${space.id}`);
+    router.push(spaceNavigationHref(space));
   }
 
   function toggleFolder(id: string) {
@@ -341,7 +369,7 @@ export function WorkspaceShell({
             <nav className="page-tree">
               {canWrite && (
                 <div className="tree-actions">
-                  <button disabled={busy} onClick={() => createPage(activeSpace.id)}><FilePlus2 size={15} /> {text("File", "Datei")}</button>
+                  <button disabled={busy} onClick={() => createPage(activeSpace.id)} title={text("New file (Ctrl+Shift+N)", "Neue Datei (Strg+Umschalt+N)")} aria-keyshortcuts="Control+Shift+N Meta+Shift+N"><FilePlus2 size={15} /> {text("File", "Datei")}</button>
                   <button disabled={busy} onClick={() => createFolder(activeSpace.id)}><FolderPlus size={15} /> {text("Folder", "Ordner")}</button>
                 </div>
               )}

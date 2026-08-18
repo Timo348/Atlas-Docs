@@ -88,6 +88,7 @@ export default async function Home(props: { searchParams: Promise<{ page?: strin
     uiFont: user.uiFont,
     editorFont: user.editorFont,
     fontSize: user.fontSize,
+    defaultEditorView: user.defaultEditorView,
     compactMode: user.compactMode,
   });
 

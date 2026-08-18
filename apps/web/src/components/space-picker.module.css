@@ -12,6 +12,7 @@
   min-height: 46px;
   padding: 5px 9px 5px 6px;
   text-align: left;
+  text-decoration: none;
   width: 100%;
 }
 
@@ -87,6 +88,7 @@
   min-height: 54px;
   padding: 6px 13px 6px 7px;
   text-align: left;
+  text-decoration: none;
   transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
   width: clamp(250px, 27vw, 360px);
 }
@@ -100,7 +102,7 @@
 .trigger:focus-visible,
 .closeButton:focus-visible,
 .search button:focus-visible,
-.results button:focus-visible,
+.results a:focus-visible,
 .footer button:focus-visible {
   box-shadow: 0 0 0 3px var(--focus-ring);
   outline: 0;
@@ -287,7 +289,7 @@
   margin: 0;
 }
 
-.results li > button {
+.results li > a {
   align-items: center;
   background: transparent;
   border: 1px solid transparent;
@@ -300,14 +302,15 @@
   min-height: 62px;
   padding: 8px 11px;
   text-align: left;
+  text-decoration: none;
   width: 100%;
 }
 
-.results li > button:hover {
+.results li > a:hover {
   background: var(--hover);
 }
 
-.results li > button.selectedResult {
+.results li > a.selectedResult {
   background: var(--accent-soft);
   border-color: var(--accent);
 }
@@ -506,7 +509,7 @@
     padding-right: 8px;
   }
 
-  .results li > button {
+  .results li > a {
     gap: 9px;
     grid-template-columns: 38px minmax(0, 1fr) 24px;
   }

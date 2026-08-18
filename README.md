@@ -12,9 +12,11 @@
 Write in Markdown and LaTeX, sketch in standalone Excalidraw canvases, organize
 everything in permission-aware spaces, and keep your content portable.
 
-[Why Atlas Docs](#why-atlas-docs) &middot; [Features](#features) &middot;
+[Product tour](#product-tour) &middot; [Why Atlas Docs](#why-atlas-docs) &middot;
+[Features](#features) &middot;
 [Security](#security-and-privacy) &middot; [Architecture](#architecture) &middot;
-[Quick start](#quick-start) &middot; [Setup guide](SETUP.md)
+[Quick start](#quick-start) &middot; [Usage guide](UsageGuide.md) &middot;
+[Setup guide](SETUP.md)
 
 </div>
 
@@ -24,6 +26,41 @@ everything in permission-aware spaces, and keep your content portable.
 
 > This README follows the repository source. Features newer than the selected
 > `ATLAS_VERSION` require a local source build until a matching release is tagged.
+
+## Product tour
+
+### Think visually without leaving your knowledge base
+
+![A standalone collaborative Excalidraw canvas in Atlas Docs](docs/assets/atlas-docs-canvas.png)
+
+<p align="center"><sub>Standalone Excalidraw canvases live beside Markdown and LaTeX files, with real-time collaboration, versions, sharing, and portable downloads.</sub></p>
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/assets/atlas-docs-space-management.png" alt="Renaming and managing a space in Atlas Docs">
+      <br><br>
+      <strong>Spaces that stay under control</strong>
+      <br>
+      Rename spaces, organize members and teams, choose a space image, and keep destructive actions behind explicit confirmation.
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/assets/atlas-docs-user-management.png" alt="Atlas Docs user administration">
+      <br><br>
+      <strong>Administration without the clutter</strong>
+      <br>
+      Create local accounts, connect OIDC users, assign instance roles, reset credentials, and deactivate access from one focused view.
+    </td>
+  </tr>
+</table>
+
+### Make the workspace yours
+
+<p align="center">
+  <img src="docs/assets/atlas-docs-profile-settings.png" width="700" alt="Profile and appearance settings in Atlas Docs">
+</p>
+
+<p align="center"><sub>Language, theme, typography, text size, navigation density, profile image, default document view, and portable emergency exports follow each account.</sub></p>
 
 ## Why Atlas Docs
 
@@ -163,7 +200,7 @@ Compose plugin. Read the [complete setup guide](SETUP.md) before starting; it
 lists the required secrets, network settings, and production checks.
 
 ```bash
-ATLAS_RELEASE=v1.5.1 # Replace with the published tag you intend to deploy.
+ATLAS_RELEASE=v2.0.0 # Replace with the published tag you intend to deploy.
 git clone --branch "$ATLAS_RELEASE" --depth 1 https://github.com/Timo348/Atlas-Docs.git
 cd Atlas-Docs
 cp .env.example .env
@@ -205,6 +242,7 @@ operational procedures.
 
 ## Documentation and links
 
+- [End-user guide and keyboard shortcuts (German)](UsageGuide.md)
 - [Setup, configuration, upgrades, backup, and development](SETUP.md)
 - [Environment variable template](.env.example)
 - [Version tags](https://github.com/Timo348/Atlas-Docs/tags)

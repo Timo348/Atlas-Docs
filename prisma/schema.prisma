@@ -43,6 +43,7 @@ model User {
   uiFont          String        @default("inter")
   editorFont      String        @default("mono")
   fontSize        String        @default("medium")
+  defaultEditorView String      @default("write")
   compactMode     Boolean       @default(false)
   role            UserRole      @default(MEMBER)
   active          Boolean       @default(true)

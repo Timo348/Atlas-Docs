@@ -1,9 +1,11 @@
 "use client";
 
 import { BookOpen, Check, ChevronsUpDown, Plus, Search, X } from "lucide-react";
-import { type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
+import Link from "next/link";
+import { type KeyboardEvent, type MouseEvent, useEffect, useId, useRef, useState } from "react";
 import { usePreferences } from "@/components/preferences-provider";
 import { escapeDismissesDialog } from "@/components/use-dialog-escape";
+import { opensSpacePicker, spaceNavigationHref } from "@/lib/space-navigation";
 import { spaceRoleLabel } from "@/lib/space-role";
 import styles from "./space-picker.module.css";
 
@@ -14,7 +16,14 @@ export type SpacePickerSpace = {
   hasImage: boolean;
   imageVersion: number;
   role: "OWNER" | "EDITOR" | "VIEWER";
+  pages: Array<{ id: string }>;
 };
+
+function handlePickerLink(event: MouseEvent<HTMLAnchorElement>, onOpen: () => void) {
+  if (!opensSpacePicker(event)) return;
+  event.preventDefault();
+  onOpen();
+}
 
 export function SidebarSpaceIdentity({
   space,
@@ -26,11 +35,13 @@ export function SidebarSpaceIdentity({
   const { text } = usePreferences();
 
   return (
-    <button
-      type="button"
+    <Link
+      href={space ? spaceNavigationHref(space) : "/"}
       className={styles.sidebarIdentity}
-      onClick={onOpen}
+      onClick={(event) => handlePickerLink(event, onOpen)}
       aria-haspopup="dialog"
+      aria-keyshortcuts="Control+Shift+K Meta+Shift+K"
+      title={text("Switch space (Ctrl+Shift+K)", "Bereich wechseln (Strg+Umschalt+K)")}
       aria-label={text(
         `Choose space. Current space: ${space?.name || "Atlas"}`,
         `Bereich auswählen. Aktueller Bereich: ${space?.name || "Atlas"}`,
@@ -41,7 +52,7 @@ export function SidebarSpaceIdentity({
         <small>{text("Current space", "Aktueller Bereich")}</small>
         <strong>{space?.name || "Atlas"}</strong>
       </span>
-    </button>
+    </Link>
   );
 }
 
@@ -68,7 +79,6 @@ export function SpacePicker({
   const [query, setQuery] = useState("");
   const dialogRef = useRef<HTMLElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const dialogId = useId();
   const titleId = useId();
@@ -137,7 +147,7 @@ export function SpacePicker({
 
   function focusFirstResult(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key !== "ArrowDown") return;
-    const firstResult = dialogRef.current?.querySelector<HTMLButtonElement>("[data-space-result]");
+    const firstResult = dialogRef.current?.querySelector<HTMLAnchorElement>("[data-space-result]");
     if (!firstResult) return;
     event.preventDefault();
     firstResult.focus();
@@ -145,12 +155,13 @@ export function SpacePicker({
 
   return (
     <>
-      <button
-        ref={triggerRef}
-        type="button"
+      <Link
+        href={activeSpace ? spaceNavigationHref(activeSpace) : "/"}
         className={styles.trigger}
-        onClick={onOpen}
+        onClick={(event) => handlePickerLink(event, onOpen)}
         aria-haspopup="dialog"
+        aria-keyshortcuts="Control+Shift+K Meta+Shift+K"
+        title={text("Switch space (Ctrl+Shift+K)", "Bereich wechseln (Strg+Umschalt+K)")}
         aria-expanded={open}
         aria-controls={open ? dialogId : undefined}
       >
@@ -160,7 +171,7 @@ export function SpacePicker({
           <strong>{activeSpace?.name || text("No space selected", "Kein Bereich ausgewählt")}</strong>
         </span>
         <ChevronsUpDown className={styles.triggerChevron} size={17} aria-hidden="true" />
-      </button>
+      </Link>
 
       {open && (
         <div className={styles.backdrop} onMouseDown={(event) => event.target === event.currentTarget && close()}>
@@ -233,12 +244,16 @@ export function SpacePicker({
                 const selected = space.id === activeSpace?.id;
                 return (
                   <li key={space.id}>
-                    <button
-                      type="button"
+                    <Link
+                      href={spaceNavigationHref(space)}
                       data-space-result
                       className={selected ? styles.selectedResult : undefined}
-                      onClick={() => select(space.id)}
-                      aria-pressed={selected}
+                      onClick={(event) => {
+                        if (!opensSpacePicker(event)) return;
+                        event.preventDefault();
+                        select(space.id);
+                      }}
+                      aria-current={selected ? "page" : undefined}
                     >
                       <SpaceArtwork space={space} className={styles.resultArtwork} />
                       <span className={styles.resultCopy}>
@@ -251,7 +266,7 @@ export function SpacePicker({
                           <Check size={16} aria-hidden="true" />
                         </span>
                       )}
-                    </button>
+                    </Link>
                   </li>
                 );
               })}

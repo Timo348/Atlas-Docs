@@ -6,6 +6,10 @@ test("accepts Helvetica as a persisted interface font", () => {
   assert.equal(normalizePreferences({ ...DEFAULT_PREFERENCES, uiFont: "helvetica" }).uiFont, "helvetica");
 });
 
+test("accepts a persisted default document view", () => {
+  assert.equal(normalizePreferences({ ...DEFAULT_PREFERENCES, defaultEditorView: "preview" }).defaultEditorView, "preview");
+});
+
 test("falls back to accessible defaults for invalid preference data", () => {
   assert.deepEqual(normalizePreferences({ ...DEFAULT_PREFERENCES, colorTheme: "neon" }), DEFAULT_PREFERENCES);
 });
