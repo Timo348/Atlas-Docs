@@ -156,6 +156,7 @@ verwalten. Instanzadministratoren verwalten zusätzlich Benutzer und Teams.
 - helles, dunkles oder systemabhängiges Farbschema
 - Schriftarten und Textgröße
 - Standardansicht **Schreiben** oder **Vorschau**
+- Startbereich beim Öffnen von Atlas ohne direkten Seiten- oder Bereichslink
 - kompakte Navigation
 
 Die Einstellungen werden mit deinem Konto gespeichert und gelten auch auf

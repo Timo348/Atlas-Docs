@@ -30,33 +30,37 @@ enum PageSharePermission {
 }
 
 model User {
-  id              String        @id @default(cuid())
-  name            String?
-  email           String        @unique
-  emailVerified   DateTime?
-  image           String?
-  passwordHash    String?
-  avatarData      Bytes?
-  avatarMime      String?
-  language        String        @default("en")
-  colorTheme      String        @default("system")
-  uiFont          String        @default("inter")
-  editorFont      String        @default("mono")
-  fontSize        String        @default("medium")
-  defaultEditorView String      @default("write")
-  compactMode     Boolean       @default(false)
-  role            UserRole      @default(MEMBER)
-  active          Boolean       @default(true)
-  accounts        Account[]
-  sessions        Session[]
-  memberships     Membership[]
-  teamMemberships TeamMember[]
-  pagesCreated    Page[]        @relation("PageCreator")
-  pageVersions    PageVersion[]
-  pageImages      PageImage[]
-  pageShares      PageShare[]   @relation("PageShareCreator")
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  id                String        @id @default(cuid())
+  name              String?
+  email             String        @unique
+  emailVerified     DateTime?
+  image             String?
+  passwordHash      String?
+  avatarData        Bytes?
+  avatarMime        String?
+  language          String        @default("en")
+  colorTheme        String        @default("system")
+  uiFont            String        @default("inter")
+  editorFont        String        @default("mono")
+  fontSize          String        @default("medium")
+  defaultEditorView String        @default("write")
+  defaultSpaceId    String?
+  compactMode       Boolean       @default(false)
+  role              UserRole      @default(MEMBER)
+  active            Boolean       @default(true)
+  accounts          Account[]
+  sessions          Session[]
+  memberships       Membership[]
+  teamMemberships   TeamMember[]
+  pagesCreated      Page[]        @relation("PageCreator")
+  pageVersions      PageVersion[]
+  pageImages        PageImage[]
+  pageShares        PageShare[]   @relation("PageShareCreator")
+  defaultSpace      Space?        @relation("DefaultSpace", fields: [defaultSpaceId], references: [id], onDelete: SetNull)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([defaultSpaceId])
 }
 
 model Account {
@@ -94,18 +98,19 @@ model VerificationToken {
 }
 
 model Space {
-  id          String            @id @default(cuid())
-  name        String
-  slug        String            @unique
-  description String?
-  imageData   Bytes?
-  imageMime   String?
-  memberships Membership[]
-  teamAccess  SpaceTeamAccess[]
-  folders     Folder[]
-  pages       Page[]
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  id              String            @id @default(cuid())
+  name            String
+  slug            String            @unique
+  description     String?
+  imageData       Bytes?
+  imageMime       String?
+  memberships     Membership[]
+  teamAccess      SpaceTeamAccess[]
+  folders         Folder[]
+  pages           Page[]
+  defaultForUsers User[]            @relation("DefaultSpace")
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
 }
 
 model Team {

@@ -66,7 +66,7 @@ release archive, then enter its root. The value below is the currently published
 tag; replace it when deploying a newer release:
 
 ```bash
-ATLAS_RELEASE=v2.0.0
+ATLAS_RELEASE=v2.0.1
 git clone --branch "$ATLAS_RELEASE" --depth 1 https://github.com/Timo348/Atlas-Docs.git
 cd Atlas-Docs
 cp .env.example .env

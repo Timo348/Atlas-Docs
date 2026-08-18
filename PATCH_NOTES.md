@@ -1,4 +1,36 @@
-# Atlas Docs 2.0.0
+# Atlas Docs Patch Notes
+
+## 2.0.1 – Configurable start space
+
+Released on August 18, 2026.
+
+[GitHub release](https://github.com/Timo348/Atlas-Docs/releases/tag/v2.0.1) ·
+[Setup and upgrade guide](SETUP.md) · [End-user guide](UsageGuide.md)
+
+Users can now choose the space Atlas opens when the application is visited
+without a direct page or space link. The new **Start space** preference is
+available under **Profile & settings** and follows the account across devices.
+
+- Direct `?page=` and `?space=` links continue to take priority.
+- Only currently accessible spaces can be saved through the preferences API.
+- Direct and active team-based space grants are both supported.
+- Revoked or expired access falls back safely to the first accessible space.
+- Deleting the configured space automatically clears the preference.
+- Selecting **Automatic** preserves the original first-accessible-space
+  behavior.
+
+The patch includes a small additive database migration for the nullable
+`User.defaultSpaceId` relation. Existing users keep the automatic behavior, and
+no content migration is required.
+
+Deployment images are published for Linux/amd64 as `2.0.1`, `2.0`, `2`, and
+`latest` in Docker Hub and GHCR. All Atlas services in one deployment must use
+matching versions.
+
+Completed issue:
+[\#18 – Standard Space](https://github.com/Timo348/Atlas-Docs/issues/18).
+
+## 2.0.0
 
 Released on August 18, 2026.
 

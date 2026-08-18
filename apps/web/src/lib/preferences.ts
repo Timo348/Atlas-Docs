@@ -7,6 +7,7 @@ export const preferencesSchema = z.object({
   editorFont: z.enum(["mono", "sans"]),
   fontSize: z.enum(["small", "medium", "large"]),
   defaultEditorView: z.enum(["write", "preview"]),
+  defaultSpaceId: z.string().cuid().nullable(),
   compactMode: z.boolean(),
 });
 
@@ -19,6 +20,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   editorFont: "mono",
   fontSize: "medium",
   defaultEditorView: "write",
+  defaultSpaceId: null,
   compactMode: false,
 };
 

@@ -5,6 +5,7 @@ import { strongestSpaceRole } from "@/lib/space-role";
 import { WorkspaceShell } from "@/components/workspace-shell";
 import { PreferencesProvider } from "@/components/preferences-provider";
 import { normalizePreferences } from "@/lib/preferences";
+import { preferredLandingSpace } from "@/lib/landing-space";
 
 export default async function Home(props: { searchParams: Promise<{ page?: string; space?: string }> }) {
   const user = await requireUser();
@@ -73,13 +74,18 @@ export default async function Home(props: { searchParams: Promise<{ page?: strin
   }));
   const pages = spaces.flatMap((space) => space.pages);
   const requested = pages.find((page) => page.id === requestedPage);
-  const selectedSpace = spaces.find((space) => space.id === requested?.spaceId)
-    || spaces.find((space) => space.id === requestedSpace)
-    || spaces[0]
-    || null;
-  const selected = requested?.spaceId === selectedSpace?.id
+  const selectedSpaceId = preferredLandingSpace(
+    spaces.map((space) => space.id),
+    {
+      pageSpaceId: requested?.spaceId,
+      requestedSpaceId: requestedSpace,
+      defaultSpaceId: user.defaultSpaceId,
+    },
+  );
+  const selectedSpace = spaces.find((space) => space.id === selectedSpaceId) || null;
+  const selected = (requested?.spaceId === selectedSpace?.id
     ? requested
-    : selectedSpace?.pages[0] || null;
+    : selectedSpace?.pages[0]) || null;
   if (requestedPage && !selected) redirect("/");
 
   const preferences = normalizePreferences({
@@ -89,6 +95,7 @@ export default async function Home(props: { searchParams: Promise<{ page?: strin
     editorFont: user.editorFont,
     fontSize: user.fontSize,
     defaultEditorView: user.defaultEditorView,
+    defaultSpaceId: spaces.some((space) => space.id === user.defaultSpaceId) ? user.defaultSpaceId : null,
     compactMode: user.compactMode,
   });
 

@@ -10,6 +10,11 @@ test("accepts a persisted default document view", () => {
   assert.equal(normalizePreferences({ ...DEFAULT_PREFERENCES, defaultEditorView: "preview" }).defaultEditorView, "preview");
 });
 
+test("accepts a nullable default landing space", () => {
+  assert.equal(normalizePreferences({ ...DEFAULT_PREFERENCES, defaultSpaceId: "cm12345678901234567890123" }).defaultSpaceId, "cm12345678901234567890123");
+  assert.equal(normalizePreferences({ ...DEFAULT_PREFERENCES, defaultSpaceId: null }).defaultSpaceId, null);
+});
+
 test("falls back to accessible defaults for invalid preference data", () => {
   assert.deepEqual(normalizePreferences({ ...DEFAULT_PREFERENCES, colorTheme: "neon" }), DEFAULT_PREFERENCES);
 });

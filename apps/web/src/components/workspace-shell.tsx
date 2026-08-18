@@ -494,7 +494,11 @@ export function WorkspaceShell({
           }}
         />
       )}
-      {profileOpen && <ProfileDialog user={user} onClose={() => { setProfileOpen(false); router.refresh(); }} />}
+      {profileOpen && <ProfileDialog
+        user={user}
+        spaces={spaces.map(({ id, name }) => ({ id, name }))}
+        onClose={() => { setProfileOpen(false); router.refresh(); }}
+      />}
       {dialog && <ActionDialog key={`${dialog.kind}:${dialog.title}`} dialog={dialog} busy={busy} onBusy={setBusy} onClose={() => setDialog(null)} />}
       {notice && <button className="atlas-toast" onClick={() => setNotice("")}>{notice}<X size={14} /></button>}
     </main>

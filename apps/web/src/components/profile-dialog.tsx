@@ -9,9 +9,11 @@ import type { Preferences } from "@/lib/preferences";
 
 export function ProfileDialog({
   user,
+  spaces,
   onClose,
 }: {
   user: { id: string; name: string; email: string; role: "ADMIN" | "MEMBER"; hasAvatar: boolean; avatarVersion: number };
+  spaces: { id: string; name: string }[];
   onClose: () => void;
 }) {
   const { preferences, setPreferences, text } = usePreferences();
@@ -153,6 +155,16 @@ export function ProfileDialog({
               <select value={draft.defaultEditorView} onChange={(event) => update("defaultEditorView", event.target.value as Preferences["defaultEditorView"])}>
                 <option value="write">{text("Write", "Schreiben")}</option><option value="preview">{text("Preview", "Vorschau")}</option>
               </select>
+            </label>
+            <label>{text("Start space", "Startbereich")}
+              <select value={draft.defaultSpaceId || ""} onChange={(event) => update("defaultSpaceId", event.target.value || null)}>
+                <option value="">{text("Automatic · first available", "Automatisch · erster verfügbarer Bereich")}</option>
+                {spaces.map((space) => <option key={space.id} value={space.id}>{space.name}</option>)}
+              </select>
+              <small>{text(
+                "Used when Atlas opens without a direct page or space link.",
+                "Wird verwendet, wenn Atlas ohne direkten Seiten- oder Bereichslink geöffnet wird.",
+              )}</small>
             </label>
             <label className="checkbox-setting">
               <input type="checkbox" checked={draft.compactMode} onChange={(event) => update("compactMode", event.target.checked)} />

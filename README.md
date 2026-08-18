@@ -109,7 +109,8 @@ or a straightforward Docker-based operating model.
 - Administrator interfaces for users and teams.
 - English and German interfaces.
 - Per-user theme, interface and editor fonts, text size, compact navigation, and
-  profile image preferences.
+  profile image preferences, plus configurable default document and start-space
+  views.
 
 ### Portability and operations
 
@@ -200,7 +201,7 @@ Compose plugin. Read the [complete setup guide](SETUP.md) before starting; it
 lists the required secrets, network settings, and production checks.
 
 ```bash
-ATLAS_RELEASE=v2.0.0 # Replace with the published tag you intend to deploy.
+ATLAS_RELEASE=v2.0.1 # Replace with the published tag you intend to deploy.
 git clone --branch "$ATLAS_RELEASE" --depth 1 https://github.com/Timo348/Atlas-Docs.git
 cd Atlas-Docs
 cp .env.example .env
@@ -242,7 +243,7 @@ operational procedures.
 
 ## Documentation and links
 
-- [Atlas Docs 2.0.0 patch notes](PATCH_NOTES.md)
+- [Atlas Docs patch notes](PATCH_NOTES.md)
 - [End-user guide and keyboard shortcuts (German)](UsageGuide.md)
 - [Setup, configuration, upgrades, backup, and development](SETUP.md)
 - [Environment variable template](.env.example)

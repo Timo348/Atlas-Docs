@@ -33,6 +33,7 @@ export default async function TeamsPage() {
     editorFont: current.editorFont,
     fontSize: current.fontSize,
     defaultEditorView: current.defaultEditorView,
+    defaultSpaceId: current.defaultSpaceId,
     compactMode: current.compactMode,
   });
   const text = (english: string, german: string) => preferences.language === "de" ? german : english;
