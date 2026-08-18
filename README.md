@@ -242,6 +242,7 @@ operational procedures.
 
 ## Documentation and links
 
+- [Atlas Docs 2.0.0 patch notes](PATCH_NOTES.md)
 - [End-user guide and keyboard shortcuts (German)](UsageGuide.md)
 - [Setup, configuration, upgrades, backup, and development](SETUP.md)
 - [Environment variable template](.env.example)

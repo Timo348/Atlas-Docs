@@ -6,3 +6,9 @@ node_modules
 .env
 coverage
 apps/web/public/excalidraw-assets
+
+# Repository documentation is published through Git and is not required by
+# any Dockerfile build or runtime stage.
+*.md
+docs
+.github
