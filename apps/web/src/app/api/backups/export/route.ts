@@ -5,9 +5,11 @@ import { apiErrorResponse } from "@/lib/api-errors";
 import { db } from "@/lib/db";
 import {
   buildPortableLayout,
+  attachmentExportName,
   canUseExportScope,
   decodeCollaborationDocument,
   imageExtension,
+  rewriteAttachmentReferences,
   rewriteImageReferences,
   type ExportScope,
   type PortableSpace,
@@ -109,7 +111,7 @@ async function* createExportEntries(
   const pageCount = spaces.reduce((count, space) => count + space.pages.length, 0);
   const manifest = {
     format: "atlas-docs-portable-export",
-    formatVersion: 2,
+    formatVersion: 3,
     createdAt: createdAt.toISOString(),
     scope,
     excludes: ["document version history", "accounts", "permissions", "sessions", "profile and space images"],
@@ -143,7 +145,7 @@ async function* createExportEntries(
       if (!pageLayout) continue;
 
       try {
-        const [storedDocument, imageMetadata] = await Promise.all([
+        const [storedDocument, imageMetadata, assetMetadata] = await Promise.all([
           db.collabDocument.findUnique({
             where: { name: `page:${page.id}` },
             select: { data: true },
@@ -153,7 +155,23 @@ async function* createExportEntries(
             select: { id: true, mime: true },
             orderBy: { createdAt: "asc" },
           }),
+          db.pageAsset.findMany({
+            where: { pageId: page.id },
+            select: { id: true, name: true, kind: true },
+            orderBy: { createdAt: "asc" },
+          }),
         ]);
+        if (page.format === "PDF") {
+          const document = await db.pageAsset.findFirst({
+            where: { pageId: page.id, kind: "DOCUMENT" },
+            orderBy: { createdAt: "desc" },
+            select: { data: true },
+          });
+          if (pageLayout.sourcePath && document) {
+            yield { name: pageLayout.sourcePath, data: document.data, compress: false };
+          }
+          continue;
+        }
         const current = decodeCollaborationDocument(
           storedDocument?.data || null,
           page.format === "CANVAS",
@@ -172,7 +190,14 @@ async function* createExportEntries(
           imageMetadata,
         );
 
-        yield { name: pageLayout.sourcePath, data: rewritten.source };
+        const rewrittenAttachments = rewriteAttachmentReferences(
+          rewritten.source,
+          page.id,
+          pageLayout.relativeAssetsDirectory,
+          assetMetadata.filter((asset) => asset.kind === "ATTACHMENT"),
+        );
+
+        yield { name: pageLayout.sourcePath, data: rewrittenAttachments.source };
         for (const imageId of rewritten.referencedImageIds) {
           const image = await db.pageImage.findFirst({
             where: { id: imageId, pageId: page.id },
@@ -182,6 +207,18 @@ async function* createExportEntries(
           yield {
             name: `${pageLayout.assetsDirectory}/${image.id}.${imageExtension(image.mime)}`,
             data: image.data,
+            compress: false,
+          };
+        }
+        for (const assetId of rewrittenAttachments.referencedAssetIds) {
+          const asset = await db.pageAsset.findFirst({
+            where: { id: assetId, pageId: page.id, kind: "ATTACHMENT" },
+            select: { id: true, name: true, data: true },
+          });
+          if (!asset) continue;
+          yield {
+            name: `${pageLayout.assetsDirectory}/${attachmentExportName(asset.id, asset.name)}`,
+            data: asset.data,
             compress: false,
           };
         }
@@ -226,12 +263,12 @@ Scope: ${scope}
 Spaces: ${spaceCount}
 Pages: ${pageCount}
 
-Open the \`spaces\` directory as an Obsidian vault or as a normal folder in VS Code. Markdown and LaTeX files contain the current persisted document text. Referenced page images use relative paths. Canvas files are stored as standard \`.excalidraw\` JSON and can be opened with the Obsidian Excalidraw plugin or another compatible editor.
+Open the \`spaces\` directory as an Obsidian vault or as a normal folder in VS Code. Markdown and LaTeX files contain the current persisted document text. Referenced page images and PDF attachments use relative paths. Canvas files are stored as standard \`.excalidraw\` JSON, and PDF pages remain standard \`.pdf\` files.
 
 This portable emergency export intentionally excludes Atlas accounts, permissions, sessions, profile images, space cover images, and document version history. Use the PostgreSQL server backup for a complete operational restore.
 ${warningSection}
 ## Deutscher Hinweis
 
-Der Ordner \`spaces\` kann direkt als Obsidian-Vault oder in VS Code geöffnet werden. Dieser Notfall-Export enthält den aktuellen Dokumentstand, referenzierte Seitenbilder und Canvas-Dateien, jedoch keine Versionshistorie oder Kontodaten.
+Der Ordner \`spaces\` kann direkt als Obsidian-Vault oder in VS Code geöffnet werden. Dieser Notfall-Export enthält den aktuellen Dokumentstand, referenzierte Seitenbilder, PDF-Anhänge, PDF-Dateien und Canvas-Dateien, jedoch keine Versionshistorie oder Kontodaten.
 `;
 }

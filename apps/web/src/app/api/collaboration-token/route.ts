@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
 
   const page = await pageAccess(user.id, pageId);
   if (!page) return apiErrorResponse("ACCESS_DENIED", 403);
+  if (page.format === "PDF") return apiErrorResponse("COLLABORATION_PAGE_ID_REQUIRED", 400);
 
   const secret = process.env.COLLAB_SECRET;
   if (!secret || secret.length < 32) {

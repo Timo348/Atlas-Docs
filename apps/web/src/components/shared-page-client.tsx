@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { BookOpen, Eye, Pencil } from "lucide-react";
 import { CollaborativeEditor } from "@/components/collaborative-editor";
+import { PdfDocument } from "@/components/pdf-document";
 import { usePreferences } from "@/components/preferences-provider";
 
 export function SharedPageClient({
@@ -11,13 +12,13 @@ export function SharedPageClient({
   permission,
   shareId,
 }: {
-  page: { id: string; title: string; slug: string; parentId: null; format: "MARKDOWN" | "LATEX" | "CANVAS" };
+  page: { id: string; title: string; slug: string; parentId: null; format: "MARKDOWN" | "LATEX" | "CANVAS" | "PDF" };
   token: string;
   permission: "VIEW" | "EDIT";
   shareId: string;
 }) {
   const { text } = usePreferences();
-  const editing = permission === "EDIT";
+  const editing = permission === "EDIT" && page.format !== "PDF";
   const accessBadge = (
     <span className={`shared-access-badge ${editing ? "editing" : "viewing"}`}>
       {editing ? <Pencil size={13} /> : <Eye size={13} />}
@@ -34,19 +35,29 @@ export function SharedPageClient({
         )}</p>
         <Link href="/signin" className="button compact secondary-button">{text("Sign in", "Anmelden")}</Link>
       </header>
-      <CollaborativeEditor
-        page={page}
-        user={{
-          id: `share:${shareId}`,
-          name: editing ? text("Shared editor", "Geteilter Bearbeiter") : text("Shared viewer", "Geteilter Betrachter"),
-          email: "",
-          role: "MEMBER",
-          hasAvatar: false,
-          avatarVersion: 0,
-        }}
-        headerCenter={accessBadge}
-        publicShare={{ token, permission }}
-      />
+      {!isCollaborativePage(page) ? (
+        <PdfDocument page={page} headerCenter={accessBadge} publicShare={{ kind: "page", token, permission: "VIEW" }} />
+      ) : (
+        <CollaborativeEditor
+          page={page}
+          user={{
+            id: `share:${shareId}`,
+            name: editing ? text("Shared editor", "Geteilter Bearbeiter") : text("Shared viewer", "Geteilter Betrachter"),
+            email: "",
+            role: "MEMBER",
+            hasAvatar: false,
+            avatarVersion: 0,
+          }}
+          headerCenter={accessBadge}
+          publicShare={{ kind: "page", token, permission }}
+        />
+      )}
     </main>
   );
+}
+
+function isCollaborativePage(
+  page: { format: "MARKDOWN" | "LATEX" | "CANVAS" | "PDF" },
+): page is typeof page & { format: "MARKDOWN" | "LATEX" | "CANVAS" } {
+  return page.format !== "PDF";
 }

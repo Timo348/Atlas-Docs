@@ -22,6 +22,12 @@ enum PageFormat {
   MARKDOWN
   LATEX
   CANVAS
+  PDF
+}
+
+enum PageAssetKind {
+  DOCUMENT
+  ATTACHMENT
 }
 
 enum PageSharePermission {
@@ -55,7 +61,9 @@ model User {
   pagesCreated      Page[]        @relation("PageCreator")
   pageVersions      PageVersion[]
   pageImages        PageImage[]
+  pageAssets        PageAsset[]
   pageShares        PageShare[]   @relation("PageShareCreator")
+  folderShares      FolderShare[] @relation("FolderShareCreator")
   defaultSpace      Space?        @relation("DefaultSpace", fields: [defaultSpaceId], references: [id], onDelete: SetNull)
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
@@ -173,6 +181,7 @@ model Page {
   createdBy                    User          @relation("PageCreator", fields: [createdById], references: [id])
   versions                     PageVersion[]
   images                       PageImage[]
+  assets                       PageAsset[]
   shares                       PageShare[]
   createdAt                    DateTime      @default(now())
   updatedAt                    DateTime      @updatedAt
@@ -216,6 +225,22 @@ model PageImage {
   @@index([pageId, createdAt])
 }
 
+model PageAsset {
+  id          String        @id @default(cuid())
+  pageId      String
+  createdById String
+  kind        PageAssetKind
+  name        String
+  mime        String
+  size        Int
+  data        Bytes
+  page        Page          @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  createdBy   User          @relation(fields: [createdById], references: [id])
+  createdAt   DateTime      @default(now())
+
+  @@index([pageId, kind, createdAt])
+}
+
 model Folder {
   id        String   @id @default(cuid())
   name      String
@@ -226,11 +251,31 @@ model Folder {
   parent    Folder?  @relation("FolderTree", fields: [parentId], references: [id], onDelete: Cascade)
   children  Folder[] @relation("FolderTree")
   pages     Page[]
+  shares    FolderShare[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([spaceId, parentId, name])
   @@index([spaceId, parentId])
+}
+
+model FolderShare {
+  id          String              @id @default(cuid())
+  folderId    String
+  createdById String
+  label       String
+  tokenHash   String              @unique
+  tokenPrefix String
+  permission  PageSharePermission @default(VIEW)
+  expiresAt   DateTime?
+  revokedAt   DateTime?
+  folder      Folder              @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  createdBy   User                @relation("FolderShareCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([folderId, revokedAt])
+  @@index([expiresAt])
 }
 
 model PageVersion {

@@ -9,6 +9,7 @@ import {
   validPageShareToken,
 } from "../src/lib/page-share";
 import { sharedPageImageUrl } from "../src/lib/shared-page-images";
+import { folderScopeIds } from "../src/lib/folder-share";
 
 test("share tokens are random URL-safe 256-bit credentials", () => {
   const first = createPageShareToken();
@@ -42,12 +43,30 @@ test("share permissions map to collaboration read-only state", () => {
 
 test("only page-local stored image URLs are rewritten", () => {
   assert.equal(
-    sharedPageImageUrl("/api/pages/page-1/images/image-2", "page-1", "token"),
+    sharedPageImageUrl("/api/pages/page-1/images/image-2", "page-1", { kind: "page", token: "token", permission: "VIEW" }),
     "/api/public/shares/token/images/image-2",
   );
   assert.equal(
-    sharedPageImageUrl("/api/pages/other/images/image-2", "page-1", "token"),
+    sharedPageImageUrl("/api/pages/other/images/image-2", "page-1", { kind: "page", token: "token", permission: "VIEW" }),
     "/api/pages/other/images/image-2",
   );
-  assert.equal(sharedPageImageUrl("https://example.com/image.png", "page-1", "token"), "https://example.com/image.png");
+  assert.equal(sharedPageImageUrl("https://example.com/image.png", "page-1", { kind: "page", token: "token", permission: "VIEW" }), "https://example.com/image.png");
+});
+
+test("folder shares include the root and every nested folder, but not siblings", () => {
+  const scope = folderScopeIds([
+    { id: "root", parentId: null },
+    { id: "child", parentId: "root" },
+    { id: "grandchild", parentId: "child" },
+    { id: "sibling", parentId: null },
+    { id: "sibling-child", parentId: "sibling" },
+  ], "root");
+  assert.deepEqual([...scope], ["root", "child", "grandchild"]);
+});
+
+test("folder-shared images use a page-scoped public URL", () => {
+  assert.equal(
+    sharedPageImageUrl("/api/pages/page-1/images/image-2", "page-1", { kind: "folder", token: "folder-token", permission: "VIEW" }),
+    "/api/public/folder-shares/folder-token/pages/page-1/images/image-2",
+  );
 });

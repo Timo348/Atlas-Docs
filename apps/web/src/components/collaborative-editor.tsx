@@ -3,7 +3,7 @@
 import { HocuspocusProvider } from "@hocuspocus/provider";
 import {
   Bold, Code2, Download, Eye, FileText, History, ImagePlus, Italic, Link2, LoaderCircle, Minus,
-  Pencil, Plus, RotateCcw, Save as SaveIcon, Share2, Strikethrough, Table2, Users, X,
+  Paperclip, Pencil, Plus, Printer, RotateCcw, Save as SaveIcon, Share2, Strikethrough, Table2, Users, X,
 } from "lucide-react";
 import {
   type ClipboardEvent, type KeyboardEvent, type ReactNode, type RefObject,
@@ -50,6 +50,8 @@ import {
 } from "@/lib/collaborative-text";
 import { createVisibleSnapshot, restoreVisibleSnapshot } from "@/lib/version-snapshot";
 import { sharedPageImageUrl } from "@/lib/shared-page-images";
+import { sharedPageAttachmentUrl } from "@/lib/shared-page-attachments";
+import type { PublicShareAccess } from "@/lib/public-share";
 
 type PageItem = { id: string; title: string; slug: string; parentId: string | null; format: "MARKDOWN" | "LATEX" | "CANVAS" };
 type Tab = "write" | "preview" | "canvas";
@@ -78,8 +80,6 @@ type LocalCursorSurface = { kind: "text" } | {
   row: number;
   column: number;
 };
-type PublicShareAccess = { token: string; permission: "VIEW" | "EDIT" };
-
 // React development mode replays effects (setup -> cleanup -> setup). A lease
 // lets the second setup cancel destruction of the same memoized documents while
 // still disposing superseded page documents deterministically after unmount.
@@ -153,12 +153,14 @@ export function CollaborativeEditor({
   );
   const [cursorIndex, setCursorIndex] = useState(0);
   const [imageBusy, setImageBusy] = useState(false);
+  const [attachmentBusy, setAttachmentBusy] = useState(false);
   const [editorNotice, setEditorNotice] = useState("");
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [tableSourceMode, setTableSourceMode] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const editorStageRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
   const pendingImageMatchRef = useRef<SlashMatch | null>(null);
   const providerRef = useRef<HocuspocusProvider | null>(null);
   const localCursorRef = useRef<CollaborativeCursor | null>(null);
@@ -205,7 +207,7 @@ export function CollaborativeEditor({
             ? await fetch("/api/public/collaboration-token", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ token: publicShare.token }),
+              body: JSON.stringify({ token: publicShare.token, kind: publicShare.kind, pageId: page.id }),
             })
             : await fetch(`/api/collaboration-token?pageId=${encodeURIComponent(page.id)}`);
           if (!response.ok) throw new Error("Collaboration token unavailable.");
@@ -756,6 +758,50 @@ export function CollaborativeEditor({
     }
   }
 
+  async function uploadAttachment(file: File) {
+    if (publicShare || readOnly || page.format !== "MARKDOWN" || attachmentBusy) return;
+    setAttachmentBusy(true);
+    setEditorNotice("");
+    const insertionCursor = createCollaborativeCursor(
+      textBinding.viewDocument,
+      "markdown",
+      cursorIndex,
+      cursorIndex,
+    );
+    try {
+      const form = new FormData();
+      form.set("file", file);
+      const response = await fetch(`/api/pages/${page.id}/attachments`, { method: "POST", body: form });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(apiErrorMessage(result, text, {
+          en: "The PDF attachment could not be uploaded.",
+          de: "Der PDF-Anhang konnte nicht hochgeladen werden.",
+        }));
+      }
+      const resolved = resolveCollaborativeCursor(insertionCursor, textBinding.viewDocument, "markdown");
+      if (!resolved) throw new Error(text("The insertion position is no longer available.", "Die Einfügeposition ist nicht mehr verfügbar."));
+      const position = Math.min(resolved.anchor, resolved.head);
+      const currentMarkdown = textBinding.value;
+      const label = file.name.replace(/[\[\]]/g, "") || "PDF";
+      const prefix = position > 0 && currentMarkdown[position - 1] !== "\n" ? "\n" : "";
+      const suffix = currentMarkdown[position] && currentMarkdown[position] !== "\n" ? "\n" : "";
+      const link = `${prefix}[${label}](${result.url})${suffix}`;
+      textBinding.apply(
+        currentMarkdown.slice(0, position) + link + currentMarkdown.slice(position),
+        "attachment-upload",
+      );
+      const nextCursor = position + link.length;
+      publishAbsoluteCursor(nextCursor);
+      focusMarkdownCursor(nextCursor);
+      setEditorNotice(text("PDF attachment inserted.", "PDF-Anhang eingefügt."));
+    } catch (error) {
+      setEditorNotice(error instanceof Error ? error.message : text("The PDF attachment could not be uploaded.", "Der PDF-Anhang konnte nicht hochgeladen werden."));
+    } finally {
+      setAttachmentBusy(false);
+    }
+  }
+
   function handlePaste(event: ClipboardEvent<HTMLTextAreaElement>, offset = 0) {
     const image = Array.from(event.clipboardData.items)
       .find((item) => item.kind === "file" && item.type.startsWith("image/"))
@@ -894,10 +940,26 @@ export function CollaborativeEditor({
     URL.revokeObjectURL(url);
   }
 
+  function exportPdf() {
+    if (
+      page.format === "LATEX"
+      && !document.querySelector(".latex-print-document .latex-preview")?.shadowRoot?.querySelector(".page")
+    ) {
+      setEditorNotice(text(
+        "The LaTeX preview is not ready yet. Check the source or try again in a moment.",
+        "Die LaTeX-Vorschau ist noch nicht bereit. Prüfe den Quelltext oder versuche es gleich erneut.",
+      ));
+      return;
+    }
+    window.print();
+  }
+
   const markdownComponents = useMemo<MarkdownComponents>(() => ({
     a: ({ href, node: _node, ...props }) => {
-      const external = /^(?:https?:)?\/\//i.test(href || "");
-      return <a {...props} href={href} target={external ? "_blank" : undefined} rel={external ? "noreferrer noopener" : undefined} />;
+      const resolvedHref = publicShare ? sharedPageAttachmentUrl(href, page.id, publicShare) : href;
+      const external = /^(?:https?:)?\/\//i.test(resolvedHref || "");
+      const attachment = resolvedHref?.includes("/attachments/");
+      return <a {...props} href={resolvedHref} target={external || attachment ? "_blank" : undefined} rel={external || attachment ? "noreferrer noopener" : undefined} />;
     },
     code: ({ children, className, node: _node, ...props }) => {
       const source = String(children).replace(/\n$/, "");
@@ -914,7 +976,7 @@ export function CollaborativeEditor({
     },
     ...(publicShare ? {
       img: ({ src, node: _node, ...props }) => (
-        <img {...props} src={sharedPageImageUrl(src, page.id, publicShare.token)} />
+        <img {...props} src={sharedPageImageUrl(src, page.id, publicShare)} />
       ),
     } : {}),
   }), [page.id, publicShare]);
@@ -993,6 +1055,14 @@ export function CollaborativeEditor({
           >
             <Download size={17} />
           </button>
+          {page.format !== "CANVAS" && <button
+            className="icon-button bordered"
+            onClick={exportPdf}
+            title={text("Export as PDF", "Als PDF exportieren")}
+            aria-label={text("Export as PDF", "Als PDF exportieren")}
+          >
+            <Printer size={17} />
+          </button>}
         </div>
       </header>
       {page.format !== "CANVAS" && (
@@ -1023,9 +1093,11 @@ export function CollaborativeEditor({
                   <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => applyInlineFormatting("strikethrough")} title={text("Strikethrough", "Durchgestrichen")} aria-label={text("Strikethrough", "Durchgestrichen")}><Strikethrough size={14} /></button>
                   <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => applyInlineFormatting("code")} title={text("Inline code", "Inline-Code")} aria-label={text("Inline code", "Inline-Code")}><Code2 size={14} /></button>
                   <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => applyInlineFormatting("link")} title={text("Insert link (Ctrl+K)", "Link einfügen (Strg+K)")} aria-label={text("Insert link", "Link einfügen")}><Link2 size={14} /></button>
+                  <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => attachmentInputRef.current?.click()} title={text("Attach PDF", "PDF anhängen")} aria-label={text("Attach PDF", "PDF anhängen")}><Paperclip size={14} /></button>
                 </div>
               )}
               {imageBusy && <span className="editor-uploading"><LoaderCircle size={12} className="spin" /> {text("Uploading image…", "Bild wird hochgeladen…")}</span>}
+              {attachmentBusy && <span className="editor-uploading"><LoaderCircle size={12} className="spin" /> {text("Uploading PDF…", "PDF wird hochgeladen…")}</span>}
             </div>
             <div className="textarea-stage" ref={editorStageRef}>
               {!publicShare && <input
@@ -1037,6 +1109,18 @@ export function CollaborativeEditor({
                 onChange={(event) => {
                   const file = event.target.files?.[0];
                   if (file) void uploadImage(file, pendingImageMatchRef.current);
+                  event.target.value = "";
+                }}
+              />}
+              {!publicShare && <input
+                ref={attachmentInputRef}
+                className="visually-hidden"
+                type="file"
+                accept="application/pdf,.pdf"
+                tabIndex={-1}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void uploadAttachment(file);
                   event.target.value = "";
                 }}
               />}
@@ -1156,6 +1240,14 @@ export function CollaborativeEditor({
           </div>
         )}
       </section>
+      {page.format !== "CANVAS" && (
+        <section className={`pdf-print-document ${page.format === "LATEX" ? "latex-print-document" : "markdown-print-document"}`} aria-hidden="true">
+          <h1 className="pdf-print-title">{title}</h1>
+          {page.format === "LATEX"
+            ? <LatexPreview source={markdown} />
+            : <article className="markdown-preview"><ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{markdown}</ReactMarkdown></article>}
+        </section>
+      )}
       {historyOpen && (
         <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !historyLoading && !versionBusy && setHistoryOpen(false)}>
           <section className="history-dialog" role="dialog" aria-modal="true" aria-label={text("Document history", "Dokumentenhistorie")}>

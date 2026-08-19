@@ -8,7 +8,7 @@ import { spaceAccess } from "@/lib/access";
 export async function pageShareManagementPage(user: Pick<User, "id" | "role">, pageId: string) {
   const page = await db.page.findUnique({
     where: { id: pageId },
-    select: { id: true, title: true, spaceId: true },
+    select: { id: true, title: true, spaceId: true, format: true },
   });
   if (!page) return { allowed: false, page: null };
   const role = await spaceAccess(user.id, page.spaceId);

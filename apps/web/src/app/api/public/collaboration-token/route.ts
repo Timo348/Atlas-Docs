@@ -10,19 +10,31 @@ import {
   resolveCollaborationLanguage,
 } from "@/lib/collaboration-document";
 import { db } from "@/lib/db";
+import { activeFolderSharePage } from "@/lib/folder-share-server";
 
-const requestSchema = z.object({ token: z.string().min(1).max(128) });
+const requestSchema = z.object({
+  token: z.string().min(1).max(128),
+  kind: z.enum(["page", "folder"]).default("page"),
+  pageId: z.string().min(1).optional(),
+});
 
 export async function POST(request: Request) {
   const parsed = requestSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) return apiErrorResponse("ACCESS_DENIED", 403);
-  const share = await activePageShare(parsed.data.token);
-  if (!share) return apiErrorResponse("ACCESS_DENIED", 403);
+  const pageShare = parsed.data.kind === "page" ? await activePageShare(parsed.data.token) : null;
+  const folderAccess = parsed.data.kind === "folder" && parsed.data.pageId
+    ? await activeFolderSharePage(parsed.data.token, parsed.data.pageId)
+    : null;
+  if (!pageShare && !folderAccess) return apiErrorResponse("ACCESS_DENIED", 403);
+  const page = pageShare?.page ?? folderAccess!.page;
+  const permission = pageShare?.permission ?? folderAccess!.share.permission;
+  const shareId = pageShare?.id ?? folderAccess!.share.id;
+  if (page.format === "PDF") return apiErrorResponse("ACCESS_DENIED", 403);
 
   const secret = process.env.COLLAB_SECRET;
   if (!secret || secret.length < 32) return apiErrorResponse("COLLABORATION_NOT_CONFIGURED", 500);
-  const language = resolveCollaborationLanguage(share.page.createdBy.language, share.page.createdBy.language);
-  const initialization = initialCollaborationDocumentUpsert(share.page.id, share.page.format, language);
+  const language = resolveCollaborationLanguage(page.createdBy.language, page.createdBy.language);
+  const initialization = initialCollaborationDocumentUpsert(page.id, page.format, language);
   await db.$transaction(async (transaction) => {
     await transaction.collabDocument.upsert({
       ...initialization,
@@ -40,18 +52,18 @@ export async function POST(request: Request) {
     });
   });
 
-  const readOnly = pageShareIsReadOnly(share.permission);
+  const readOnly = pageShareIsReadOnly(permission);
   const name = readOnly ? "Shared viewer" : "Shared editor";
   const token = await new SignJWT({
-    pageId: share.page.id,
-    shareId: share.id,
+    pageId: page.id,
+    ...(pageShare ? { shareId } : { folderShareId: shareId }),
     name,
     readOnly,
   })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuer("atlas-web")
     .setAudience("atlas-collaboration")
-    .setSubject(`share:${share.id}`)
+    .setSubject(`${pageShare ? "share" : "folder-share"}:${shareId}`)
     .setIssuedAt()
     .setExpirationTime("6m")
     .sign(new TextEncoder().encode(secret));
@@ -59,6 +71,6 @@ export async function POST(request: Request) {
   return NextResponse.json({
     token,
     readOnly,
-    user: { id: `share:${share.id}`, name },
+    user: { id: `${pageShare ? "share" : "folder-share"}:${shareId}`, name },
   }, { headers: { "Cache-Control": "no-store" } });
 }

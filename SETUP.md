@@ -21,7 +21,7 @@ option removes the named PostgreSQL and Redis volumes.
 
 - [Requirements](#requirements)
 - [First installation](#first-installation)
-- [Page-specific share links](#page-specific-share-links)
+- [Page and folder share links](#page-and-folder-share-links)
 - [Optional OpenID Connect](#optional-openid-connect)
 - [Ports, TLS, and reverse proxies](#ports-tls-and-reverse-proxies)
 - [Health and routine operations](#health-and-routine-operations)
@@ -66,7 +66,7 @@ release archive, then enter its root. The value below is the currently published
 tag; replace it when deploying a newer release:
 
 ```bash
-ATLAS_RELEASE=v2.0.2
+ATLAS_RELEASE=v2.1.0
 git clone --branch "$ATLAS_RELEASE" --depth 1 https://github.com/Timo348/Atlas-Docs.git
 cd Atlas-Docs
 cp .env.example .env
@@ -117,6 +117,7 @@ At minimum, review every variable in this table:
 | `COLLAB_PUBLIC_URL` | Optional exact browser-facing `ws://` or `wss://` URL. Set it when a reverse proxy uses a different WebSocket host, port, or URL. Leave it empty only when host derivation plus `COLLAB_PORT` describes the public endpoint correctly. |
 | `ATLAS_IMAGE_REGISTRY` | Registry namespace containing the three Atlas images. The release template selects Docker Hub; the commented alternative selects GHCR. |
 | `ATLAS_VERSION` | Exact tag used for `atlas-docs-web`, `atlas-docs-collab`, and `atlas-docs-migrate`. |
+| `ATLAS_UPLOAD_MAX_MB` | Positive whole-MB upload limit shared by profile/space images, imported files, and PDF attachments. Defaults to `25` when omitted. |
 | `AUTH_MODE` | `local`, `oidc`, or `both`. See [OIDC](#optional-openid-connect). |
 | `AUTH_SECRET` | Random value of at least 32 characters. Keep it stable across restarts. |
 | `ADMIN_NAME` | Display name used only when the initial administrator is created. |
@@ -171,11 +172,17 @@ With the shipped direct-port defaults, open the host on port `30002`. The same
 browser must also be able to connect to port `30003` for live editing. Use the
 `ADMIN_EMAIL` and `ADMIN_PASSWORD` configured before the first start.
 
-## Page-specific share links
+## Page and folder share links
 
 A space owner or instance administrator can use the link button in a page
 header to create access for that page without granting access to its containing
 space. Each link has a label, one of two permissions, and an optional expiry:
+
+The same roles can use the share button beside a folder. A folder link exposes
+that folder, all nested folders, and the files currently inside that tree, but
+not sibling folders or the rest of the space. Moving a file into or out of the
+tree changes its availability through the link immediately. Folder links use
+the same permission, expiry, hashing, and revocation controls as page links.
 
 - `VIEW` opens the current live document or canvas read-only.
 - `EDIT` can change the current Markdown, LaTeX, or canvas content. It cannot
@@ -204,15 +211,15 @@ requests the current access state again instead of trusting its old session.
 constructs the one-time URL. Public pages send `noindex`, `nofollow`,
 `noarchive`, no-cache, and no-referrer directives. Those browser controls do not
 erase server access logs: configure the reverse proxy and analytics layer not
-to retain or export `/share/<token>` paths if URL secrecy matters. Never place a
+to retain or export `/share/<token>` or `/share/folder/<token>` paths if URL secrecy matters. Never place a
 share URL in issue reports, screenshots, referrer-bearing links, or public chat.
 
-The page image endpoint also checks the same share token and only serves images
+Page and folder asset endpoints also check the same share scope and only serve images
 belonging to that exact page. Existing images may be viewed from rendered
 Markdown; `EDIT` links intentionally cannot upload new ones. Deleting the page
 invalidates all of its links through the database cascade.
 
-Database backups include page-share records, but only in hashed form. Portable
+Database backups include page- and folder-share records, but only in hashed form. Portable
 ZIP exports do not include share links or permission records. Restoring a full
 database backup can restore links that were active at the backup time, so review
 and revoke them after a disaster-recovery restore when that risk is relevant.

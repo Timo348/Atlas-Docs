@@ -2,7 +2,7 @@ name: atlas-docs
 
 services:
   web:
-    image: ${ATLAS_IMAGE_REGISTRY:-docker.io/timo348}/atlas-docs-web:${ATLAS_VERSION:-1.5.1}
+    image: ${ATLAS_IMAGE_REGISTRY:-docker.io/timo348}/atlas-docs-web:${ATLAS_VERSION:-2.1.0}
     pull_policy: missing
     init: true
     restart: unless-stopped
@@ -22,6 +22,7 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       PUBLIC_COLLAB_URL: ${COLLAB_PUBLIC_URL:-}
       PUBLIC_COLLAB_PORT: ${COLLAB_PORT:-30003}
+      ATLAS_UPLOAD_MAX_MB: ${ATLAS_UPLOAD_MAX_MB:-25}
       NODE_EXTRA_CA_CERTS: ${NODE_EXTRA_CA_CERTS:-}
     cap_drop:
       - ALL
@@ -45,7 +46,7 @@ services:
         condition: service_healthy
 
   collab:
-    image: ${ATLAS_IMAGE_REGISTRY:-docker.io/timo348}/atlas-docs-collab:${ATLAS_VERSION:-1.5.1}
+    image: ${ATLAS_IMAGE_REGISTRY:-docker.io/timo348}/atlas-docs-collab:${ATLAS_VERSION:-2.1.0}
     pull_policy: missing
     init: true
     restart: unless-stopped
@@ -80,7 +81,7 @@ services:
         condition: service_healthy
 
   migrate:
-    image: ${ATLAS_IMAGE_REGISTRY:-docker.io/timo348}/atlas-docs-migrate:${ATLAS_VERSION:-1.5.1}
+    image: ${ATLAS_IMAGE_REGISTRY:-docker.io/timo348}/atlas-docs-migrate:${ATLAS_VERSION:-2.1.0}
     pull_policy: missing
     init: true
     restart: "no"

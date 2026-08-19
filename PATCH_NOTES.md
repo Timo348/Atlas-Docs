@@ -1,5 +1,71 @@
 # Atlas Docs Patch Notes
 
+## 2.1.0 – Folder sharing, PDFs, imports, and export
+
+Released on August 19, 2026.
+
+[GitHub release](https://github.com/Timo348/Atlas-Docs/releases/tag/v2.1.0) ·
+[Setup and upgrade guide](SETUP.md) · [End-user guide](UsageGuide.md)
+
+Atlas Docs 2.1 expands the file workflow and public sharing model:
+
+- Space owners and administrators can share a folder through a hashed link.
+  The link includes its nested folders and files, follows later moves into or
+  out of that folder, and supports read-only or content-editing access, expiry,
+  permission changes, and revocation.
+- PDF files can be imported as standalone pages, viewed, downloaded, shared,
+  and included in portable backups. Markdown pages can also contain uploaded
+  PDF attachments without exposing them outside the page or folder share.
+- New-file creation accepts `.md`, `.tex`, `.excalidraw`, and `.pdf` imports.
+- Markdown and LaTeX documents can use the browser print workflow for PDF
+  export with a dedicated A4 print layout.
+- One MB-based `ATLAS_UPLOAD_MAX_MB` setting controls supported image, import,
+  and PDF attachment uploads. The default is 25 MB.
+
+### Upgrade notes from 2.0.2
+
+1. Create an upgrade backup and stop application writes as documented in
+   [the safe upgrade procedure](SETUP.md#standard-safe-upgrade).
+2. Replace the release deployment files with the copies from tag `v2.1.0`.
+   Keep the installation's secret `.env`; do not overwrite it with
+   `.env.example`.
+3. Merge this new setting into `.env` if a different limit is desired:
+
+   ```dotenv
+   ATLAS_UPLOAD_MAX_MB=25
+   ```
+
+   Omitting it keeps the 25 MB Compose default.
+4. Set `ATLAS_VERSION=2.1.0`, then validate, pull, and start all matching
+   services:
+
+   ```bash
+   docker compose config --quiet
+   docker compose pull
+   docker compose up -d --no-build
+   docker compose ps -a
+   docker compose logs --no-color migrate
+   ```
+
+The release adds additive `PageAsset`, PDF page-format, and `FolderShare`
+database migrations. The one-shot `migrate` service applies them before the web
+and collaboration services start. A database rollback still requires restoring
+the pre-upgrade backup; changing only image tags is not a schema rollback.
+
+Matching Linux/amd64 `web`, `collab`, and `migrate` images are published on
+Docker Hub with the tags `2.1.0`, `2.1`, `2`, and `latest`. Keep all three Atlas
+services on the same tag.
+
+Completed issues:
+
+- [#8 – Seiten Teilen](https://github.com/Timo348/Atlas-Docs/issues/8)
+- [#9 – Ordner Teilen](https://github.com/Timo348/Atlas-Docs/issues/9)
+- [#20 – PDF Dateityp](https://github.com/Timo348/Atlas-Docs/issues/20)
+- [#24 – File Size Upload](https://github.com/Timo348/Atlas-Docs/issues/24)
+- [#27 – PDF Export](https://github.com/Timo348/Atlas-Docs/issues/27)
+- [#28 – Import File](https://github.com/Timo348/Atlas-Docs/issues/28)
+
+
 ## 2.0.2 – Clearer Markdown previews
 
 Released on August 19, 2026.

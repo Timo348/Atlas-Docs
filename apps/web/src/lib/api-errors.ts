@@ -64,8 +64,8 @@ export const API_ERROR_MESSAGES = {
     de: "Die Bilddatei ist leer.",
   },
   IMAGE_TOO_LARGE: {
-    en: "The image may not exceed 5 MB.",
-    de: "Das Bild darf maximal 5 MB groß sein.",
+    en: "The image exceeds the configured upload limit.",
+    de: "Das Bild überschreitet das konfigurierte Upload-Limit.",
   },
   IMAGE_INVALID_TYPE: {
     en: "Only valid PNG, JPEG, WebP, and GIF images are allowed.",
@@ -74,6 +74,30 @@ export const API_ERROR_MESSAGES = {
   IMAGE_SAVE_FAILED: {
     en: "The image could not be saved.",
     de: "Das Bild konnte nicht gespeichert werden.",
+  },
+  FILE_MISSING: {
+    en: "A file is required.",
+    de: "Eine Datei ist erforderlich.",
+  },
+  FILE_EMPTY: {
+    en: "The file is empty.",
+    de: "Die Datei ist leer.",
+  },
+  FILE_TOO_LARGE: {
+    en: "The file exceeds the configured upload limit.",
+    de: "Die Datei überschreitet das konfigurierte Upload-Limit.",
+  },
+  FILE_INVALID_TYPE: {
+    en: "Only Markdown, LaTeX, Excalidraw, and PDF files are supported.",
+    de: "Es werden nur Markdown-, LaTeX-, Excalidraw- und PDF-Dateien unterstützt.",
+  },
+  FILE_INVALID_CONTENT: {
+    en: "The file content is invalid or does not match the selected file type.",
+    de: "Der Dateiinhalt ist ungültig oder entspricht nicht dem ausgewählten Dateityp.",
+  },
+  FILE_SAVE_FAILED: {
+    en: "The file could not be saved.",
+    de: "Die Datei konnte nicht gespeichert werden.",
   },
   VERSION_INVALID: {
     en: "The submitted version is invalid.",
@@ -98,6 +122,18 @@ export const API_ERROR_MESSAGES = {
   PAGE_SHARE_NOT_FOUND: {
     en: "The page link was not found.",
     de: "Der Seitenlink wurde nicht gefunden.",
+  },
+  FOLDER_SHARE_MANAGE_REQUIRED: {
+    en: "Only space owners and administrators may manage folder links.",
+    de: "Nur Bereichseigentümer und Administratoren dürfen Ordnerlinks verwalten.",
+  },
+  FOLDER_SHARE_INVALID: {
+    en: "The folder link settings are invalid.",
+    de: "Die Einstellungen des Ordnerlinks sind ungültig.",
+  },
+  FOLDER_SHARE_NOT_FOUND: {
+    en: "The folder link was not found.",
+    de: "Der Ordnerlink wurde nicht gefunden.",
   },
   SPACE_NOT_FOUND: {
     en: "The space was not found.",

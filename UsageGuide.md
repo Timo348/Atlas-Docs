@@ -93,8 +93,8 @@ Markdown-Tabellen können direkt als visuelle Tabelle bearbeitet werden.
 
 Bearbeite den Text unter **Quelltext** und kontrolliere das Ergebnis unter
 **Vorschau**. Über das Download-Symbol erhältst du die ursprüngliche `.tex`-
-Datei. Die Vorschau basiert auf LaTeX.js und ersetzt keinen vollständigen
-TeX-Compiler; ein PDF-Export ist derzeit nicht Bestandteil von Atlas Docs.
+Datei. Das Drucker-Symbol öffnet den Browserdialog für den PDF-Export. Die
+Vorschau basiert auf LaTeX.js und ersetzt keinen vollständigen TeX-Compiler.
 
 ## 5. Canvas verwenden
 
@@ -117,7 +117,7 @@ Dokumenten und Canvases werden in Echtzeit übertragen.
 Eine Wiederherstellung verändert den aktuellen Inhalt für alle Mitwirkenden.
 Speichere deshalb vorher bei Bedarf eine zusätzliche Version.
 
-## 7. Nur eine Seite freigeben
+## 7. Seiten und Ordner freigeben
 
 Bereichseigentümer und Instanzadministratoren können über das
 **Teilen-Symbol** neben der Historie einen Link ausschließlich für die geöffnete
@@ -134,6 +134,12 @@ Ein Bearbeitungslink darf Dokument- oder Canvas-Inhalte ändern, aber keine
 Seitentitel, Bilder, Versionen oder Bereichseinstellungen verwalten. Berechtigungen
 aktiver Links können nachträglich geändert und Links jederzeit widerrufen
 werden.
+
+Über das Teilen-Symbol neben einem Ordner können dieselben Rollen den gesamten
+Ordnerbaum freigeben. Der Link enthält alle Unterordner und die aktuell darin
+liegenden Dateien, aber keine benachbarten Ordner oder den restlichen Bereich.
+Verschobene Dateien werden entsprechend in die Freigabe aufgenommen oder aus
+ihr entfernt.
 
 > Ein Freigabelink ist ein Zugangsschlüssel. Teile ihn nur über einen
 > vertrauenswürdigen Kanal und widerrufe ihn, sobald er nicht mehr benötigt
@@ -197,7 +203,7 @@ Browser- und Betriebssystemkürzel können je nach Umgebung Vorrang haben.
 - Verwende Freigabelinks mit Ablaufdatum, wenn dauerhafter Zugriff nicht nötig
   ist.
 - Nutze **Nur lesen**, sofern Empfänger keine Änderungen vornehmen müssen.
-- Lade native `.md`-, `.tex`- oder `.excalidraw`-Dateien herunter, wenn du einen
+- Lade native `.md`-, `.tex`-, `.excalidraw`- oder `.pdf`-Dateien herunter, wenn du einen
   einzelnen Inhalt außerhalb von Atlas Docs weiterverwenden möchtest.
 - Wende dich bei fehlenden Rechten oder Anmeldeproblemen an den zuständigen
   Atlas-Administrator.

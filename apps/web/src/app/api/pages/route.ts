@@ -67,7 +67,7 @@ export async function POST(request: Request) {
     await transaction.collabDocument.create({
       data: {
         name: collaborationDocumentName(createdPage.id),
-        data: Buffer.from(createInitialCollaborationState(createdPage.format, language)),
+        data: Buffer.from(createInitialCollaborationState(parsed.data.format, language)),
       },
     });
     return createdPage;

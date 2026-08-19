@@ -23,7 +23,7 @@ test("every API error code has non-empty English and German messages", () => {
 test("API error bodies keep an English fallback alongside the stable code", () => {
   assert.deepEqual(apiErrorBody("IMAGE_TOO_LARGE"), {
     code: "IMAGE_TOO_LARGE",
-    error: "The image may not exceed 5 MB.",
+    error: "The image exceeds the configured upload limit.",
   });
 });
 

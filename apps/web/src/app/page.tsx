@@ -6,6 +6,7 @@ import { WorkspaceShell } from "@/components/workspace-shell";
 import { PreferencesProvider } from "@/components/preferences-provider";
 import { normalizePreferences } from "@/lib/preferences";
 import { preferredLandingSpace } from "@/lib/landing-space";
+import { uploadLimitMb } from "@/lib/upload-limit";
 
 export default async function Home(props: { searchParams: Promise<{ page?: string; space?: string }> }) {
   const user = await requireUser();
@@ -105,6 +106,7 @@ export default async function Home(props: { searchParams: Promise<{ page?: strin
         spaces={spaces}
         selectedSpaceId={selectedSpace?.id || null}
         selectedPage={selected}
+        uploadLimitMb={uploadLimitMb()}
         user={{
           id: user.id,
           name: user.name || user.email,

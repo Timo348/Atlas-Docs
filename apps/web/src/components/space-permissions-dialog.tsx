@@ -26,11 +26,13 @@ type PermissionsData = {
 export function SpacePermissionsDialog({
   spaceId,
   currentUserId,
+  uploadLimitMb,
   onClose,
   onDeleted,
 }: {
   spaceId: string;
   currentUserId: string;
+  uploadLimitMb: number;
   onClose: () => void;
   onDeleted: () => void;
 }) {
@@ -309,8 +311,8 @@ export function SpacePermissionsDialog({
               <div>
                 <h3>{text("Image for this space", "Bild für diesen Bereich")}</h3>
                 <p>{text(
-                  "JPG and PNG images up to 5 MB are allowed. Only owners and administrators can change this image.",
-                  "Erlaubt sind JPG- und PNG-Bilder bis 5 MB. Nur Eigentümer und Administratoren können dieses Bild ändern.",
+                  `JPG and PNG images up to ${uploadLimitMb} MB are allowed. Only owners and administrators can change this image.`,
+                  `Erlaubt sind JPG- und PNG-Bilder bis ${uploadLimitMb} MB. Nur Eigentümer und Administratoren können dieses Bild ändern.`,
                 )}</p>
                 <input
                   type="file"

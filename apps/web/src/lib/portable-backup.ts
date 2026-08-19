@@ -9,7 +9,7 @@ export type PortablePage = {
   slug: string;
   folderId: string | null;
   parentId: string | null;
-  format: "MARKDOWN" | "LATEX" | "CANVAS";
+  format: "MARKDOWN" | "LATEX" | "CANVAS" | "PDF";
   sortOrder: number;
 };
 export type PortableSpace = {
@@ -95,7 +95,7 @@ export function buildPortableLayout(spaces: PortableSpace[]): PortableLayout {
       pagePaths.set(page.id, {
         sourcePath: page.format === "CANVAS"
           ? null
-          : `${base}.${page.format === "LATEX" ? "tex" : "md"}`,
+          : `${base}.${page.format === "LATEX" ? "tex" : page.format === "PDF" ? "pdf" : "md"}`,
         canvasPath: page.format === "CANVAS" ? `${base}.excalidraw` : null,
         assetsDirectory: `${base}.assets`,
         relativeAssetsDirectory: `${segment}.assets`,
@@ -161,6 +161,32 @@ export function rewriteImageReferences(
     return `./${relativeAssetsDirectory}/${imageId}.${imageExtension(image.mime)}`;
   });
   return { source: rewritten, referencedImageIds: Array.from(referencedImageIds) };
+}
+
+export function rewriteAttachmentReferences(
+  source: string,
+  pageId: string,
+  relativeAssetsDirectory: string,
+  attachments: { id: string; name: string }[],
+) {
+  const available = new Map(attachments.map((attachment) => [attachment.id, attachment]));
+  const referencedAssetIds = new Set<string>();
+  const escapedPageId = escapeRegularExpression(pageId);
+  const pattern = new RegExp(
+    `(?:https?:\\/\\/[^\\s/)<>'"]+)?\\/api\\/pages\\/${escapedPageId}\\/attachments\\/([a-zA-Z0-9_-]+)(?:\\?[^\\s)<>'"]*)?`,
+    "g",
+  );
+  const rewritten = source.replace(pattern, (original, assetId: string) => {
+    const attachment = available.get(assetId);
+    if (!attachment) return original;
+    referencedAssetIds.add(assetId);
+    return `./${relativeAssetsDirectory}/${attachmentExportName(assetId, attachment.name)}`;
+  });
+  return { source: rewritten, referencedAssetIds: Array.from(referencedAssetIds) };
+}
+
+export function attachmentExportName(id: string, name: string) {
+  return `${id}-${sanitizePathSegment(name, "attachment.pdf")}`;
 }
 
 export function imageExtension(mime: string) {

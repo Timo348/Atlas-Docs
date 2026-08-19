@@ -7,9 +7,9 @@
 ![Apache-2.0 license](https://img.shields.io/badge/license-Apache--2.0-4f46e5.svg)
 ![Self-hosted](https://img.shields.io/badge/deployment-self--hosted-22c55e.svg)
 ![Docker Compose](https://img.shields.io/badge/runtime-Docker%20Compose-2496ed.svg?logo=docker&logoColor=white)
-![Markdown, LaTeX, and Canvas](https://img.shields.io/badge/files-Markdown%20%7C%20LaTeX%20%7C%20Canvas-f59e0b.svg)
+![Markdown, LaTeX, Canvas, and PDF](https://img.shields.io/badge/files-Markdown%20%7C%20LaTeX%20%7C%20Canvas%20%7C%20PDF-f59e0b.svg)
 
-Write in Markdown and LaTeX, sketch in standalone Excalidraw canvases, organize
+Write in Markdown and LaTeX, sketch in standalone Excalidraw canvases, view PDFs, organize
 everything in permission-aware spaces, and keep your content portable.
 
 [Product tour](#product-tour) &middot; [Why Atlas Docs](#why-atlas-docs) &middot;
@@ -71,7 +71,7 @@ or a straightforward Docker-based operating model.
 
 | Product principle | What it means |
 | --- | --- |
-| **Portable by default** | Markdown, LaTeX, standard `.excalidraw` files, source downloads, and portable ZIP exports keep content useful outside the application. |
+| **Portable by default** | Markdown, LaTeX, PDF, standard `.excalidraw` files, source downloads, and portable ZIP exports keep content useful outside the application. |
 | **Built for live work** | Yjs and Hocuspocus synchronize text and canvases, while presence and cursors make active collaborators visible. |
 | **Organized for teams** | Spaces, nested folders, teams, direct grants, and `OWNER` / `EDITOR` / `VIEWER` roles keep knowledge structured. |
 | **Operated by you** | Docker Compose, PostgreSQL backups, local browser assets, pinned infrastructure images, and offline deployment options support self-managed installations. |
@@ -81,6 +81,8 @@ or a straightforward Docker-based operating model.
 ### Documents and visual files
 
 - Real-time Markdown and LaTeX editing with previews and source-file downloads.
+- Import Markdown, LaTeX, Excalidraw, and PDF files; view or download PDF pages,
+  attach PDFs to Markdown, and export Markdown/LaTeX through the browser's PDF print flow.
 - Syntax-highlighted Markdown code blocks for Java, Python, C, C#, C++, and
   Bash, plus clearly marked preview links and a wider responsive reading area.
 - Standalone, collaboratively edited Excalidraw canvas files.
@@ -148,7 +150,9 @@ content can still be requested by the reader's browser.
   should still use HTTPS and avoid recording `/share/` paths in analytics or
   long-lived proxy logs.
 - Uploaded page images share the page authorization model, are checked by file
-  signature, are limited to 5 MB, and are removed with their page.
+  signature, use the `ATLAS_UPLOAD_MAX_MB` runtime limit (25 MB by default), and
+  are removed with their page. The same limit applies to profile/space images,
+  imported files, and PDF attachments.
 - Atlas application containers run as a non-root user. Compose drops Linux
   capabilities and enables `no-new-privileges` for the web, collaboration, and
   migration services.
@@ -161,10 +165,11 @@ content can still be requested by the reader's browser.
 | `EDITOR` | Yes | Yes | No |
 | `OWNER` | Yes | Yes | Yes |
 
-Page links share the current live document rather than creating a detached
-snapshot. `EDIT` links can modify Markdown, LaTeX, or canvas content, but cannot
-rename the page, upload images, manage versions, browse the space, or change
-permissions. See [page-specific share links](SETUP.md#page-specific-share-links)
+Page and folder links share current live content rather than creating detached
+snapshots. Folder links include the selected folder tree without exposing its
+siblings or the rest of the space. `EDIT` links can modify Markdown, LaTeX, or
+canvas content, but cannot rename files, upload images, manage versions, or
+change permissions. See [page and folder share links](SETUP.md#page-and-folder-share-links)
 for the threat model and operating guidance.
 
 TLS, DNS, firewall policy, load balancing, and edge routing are intentionally
@@ -203,7 +208,7 @@ Compose plugin. Read the [complete setup guide](SETUP.md) before starting; it
 lists the required secrets, network settings, and production checks.
 
 ```bash
-ATLAS_RELEASE=v2.0.2 # Replace with the published tag you intend to deploy.
+ATLAS_RELEASE=v2.1.0 # Replace with the published tag you intend to deploy.
 git clone --branch "$ATLAS_RELEASE" --depth 1 https://github.com/Timo348/Atlas-Docs.git
 cd Atlas-Docs
 cp .env.example .env
@@ -248,6 +253,7 @@ operational procedures.
 - [Atlas Docs patch notes](PATCH_NOTES.md)
 - [End-user guide and keyboard shortcuts (German)](UsageGuide.md)
 - [Setup, configuration, upgrades, backup, and development](SETUP.md)
+- [Release checklist and mandatory upgrade-note policy](RELEASING.md)
 - [Environment variable template](.env.example)
 - [Version tags](https://github.com/Timo348/Atlas-Docs/tags)
 - [Issue tracker](https://github.com/Timo348/Atlas-Docs/issues)

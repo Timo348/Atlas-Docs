@@ -59,3 +59,12 @@ test("preview links and document width remain visible and responsive", () => {
   assert.match(previewRule, /width:\s*min\(1120px,\s*100%\)/);
   assert.match(css, /@media \(max-width:\s*760px\)[\s\S]*?\.markdown-preview\s*\{[^}]*padding:\s*30px 22px 80px/);
 });
+
+test("PDF print mode isolates an A4 document without keeping the application grid", () => {
+  const css = readFileSync(new URL("../src/app/globals.css", import.meta.url), "utf8");
+  assert.match(css, /@media print\s*\{/);
+  assert.match(css, /@page\s*\{[^}]*size:\s*A4/);
+  assert.match(css, /\.workspace, \.content, \.editor-shell, \.shared-page-frame\s*\{[^}]*display:\s*block\s*!important/);
+  assert.match(css, /\.editor-header, \.editor-tabs, \.editor-body[^}]*display:\s*none\s*!important/);
+  assert.match(css, /\.pdf-print-document, \.pdf-print-document \*\s*\{[^}]*visibility:\s*visible\s*!important/);
+});

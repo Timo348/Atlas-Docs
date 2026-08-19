@@ -10,10 +10,12 @@ import type { Preferences } from "@/lib/preferences";
 export function ProfileDialog({
   user,
   spaces,
+  uploadLimitMb,
   onClose,
 }: {
   user: { id: string; name: string; email: string; role: "ADMIN" | "MEMBER"; hasAvatar: boolean; avatarVersion: number };
   spaces: { id: string; name: string }[];
+  uploadLimitMb: number;
   onClose: () => void;
 }) {
   const { preferences, setPreferences, text } = usePreferences();
@@ -115,7 +117,7 @@ export function ProfileDialog({
           <div>
             <h3>{user.name}</h3><p>{user.email}</p>
             <label className="file-picker"><Camera size={16} /> {text("Choose an image", "Bild auswählen")}<input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={(event) => setFile(event.target.files?.[0] || null)} /></label>
-            <small>{text("PNG, JPEG, WebP, or GIF. Maximum 5 MB.", "PNG, JPEG, WebP oder GIF. Maximal 5 MB.")}</small>
+            <small>{text(`PNG, JPEG, WebP, or GIF. Maximum ${uploadLimitMb} MB.`, `PNG, JPEG, WebP oder GIF. Maximal ${uploadLimitMb} MB.`)}</small>
             <div className="profile-image-actions">
               {hasAvatar && <button className="button secondary-button compact" disabled={busy} onClick={remove}>{text("Remove", "Entfernen")}</button>}
               <button className="button secondary-button compact" disabled={!file || busy} onClick={upload}>{text("Save image", "Bild speichern")}</button>
@@ -174,7 +176,7 @@ export function ProfileDialog({
         </section>
 
         <section className="preferences-section backup-section">
-          <div className="settings-heading"><Download size={17} /><div><h3>{text("Emergency export", "Notfall-Export")}</h3><p>{text("Download current documents, referenced images, and canvases as a portable ZIP.", "Aktuelle Dokumente, referenzierte Bilder und Canvas-Dateien als portables ZIP herunterladen.")}</p></div></div>
+          <div className="settings-heading"><Download size={17} /><div><h3>{text("Emergency export", "Notfall-Export")}</h3><p>{text("Download current documents, referenced images, PDFs, and canvases as a portable ZIP.", "Aktuelle Dokumente, referenzierte Bilder, PDFs und Canvas-Dateien als portables ZIP herunterladen.")}</p></div></div>
           <div className="backup-actions">
             <a className="button secondary-button compact" href="/api/backups/export?scope=accessible" onClick={() => setNotice(text("Portable export started.", "Portabler Export gestartet."))}>
               <Download size={14} /> {text("Export my accessible spaces", "Meine sichtbaren Bereiche exportieren")}

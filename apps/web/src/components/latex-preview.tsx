@@ -34,6 +34,7 @@ export function LatexPreview({ source }: { source: string }) {
         setError("");
       } catch {
         if (!active) return;
+        containerRef.current?.shadowRoot?.replaceChildren();
         setError(text(
           "The LaTeX document could not be rendered. Check the source for syntax errors.",
           "Das LaTeX-Dokument konnte nicht gerendert werden. Prüfe den Quelltext auf Syntaxfehler.",
