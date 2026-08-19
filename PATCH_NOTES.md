@@ -1,5 +1,39 @@
 # Atlas Docs Patch Notes
 
+## 2.0.2 – Clearer Markdown previews
+
+Released on August 19, 2026.
+
+[GitHub release](https://github.com/Timo348/Atlas-Docs/releases/tag/v2.0.2) ·
+[Setup and upgrade guide](SETUP.md) · [End-user guide](UsageGuide.md)
+
+Markdown previews are now easier to scan on both wide and small screens.
+
+- Fenced Java, Python, C, C#, C++, and Bash code blocks use deterministic
+  syntax highlighting. Common aliases such as `py`, `cs`, `c#`, `c++`, and
+  `sh` resolve to the same supported language definitions.
+- Preview links use the theme accent color, a persistent underline, and a
+  stronger hover/focus treatment.
+- The reading area grows up to 1,120 px and uses the full available width on
+  narrower screens. Mobile padding drops to 22 px without introducing page-
+  level horizontal scrolling; long code lines and tables scroll inside their
+  own content area.
+
+The patch does not change the database schema and needs no content migration.
+Deployment images are published for Linux/amd64 as `2.0.2`, `2.0`, `2`, and
+`latest` on Docker Hub. All Atlas services in one deployment must use matching
+versions.
+
+Completed issues:
+
+- [#7 – Syntax Highlight](https://github.com/Timo348/Atlas-Docs/issues/7)
+- [#23 – Farbig Markieren](https://github.com/Timo348/Atlas-Docs/issues/23)
+- [#26 – Seitengröße Erhöhen](https://github.com/Timo348/Atlas-Docs/issues/26)
+
+Verification covered 152 web tests, 4 collaboration-service tests, TypeScript
+checks, the optimized Next.js production build, all three production container
+builds, and desktop/mobile browser checks against the running stack.
+
 ## 2.0.1 – Configurable start space
 
 Released on August 18, 2026.

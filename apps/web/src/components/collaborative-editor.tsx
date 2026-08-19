@@ -29,6 +29,7 @@ import {
   type EditableMarkdownTable, type MarkdownDocumentSegment, type MarkdownInlineStyle, type SlashCommandId, type SlashMatch,
   type TableAction, type TextEdit,
 } from "@/lib/markdown-editor";
+import { highlightMarkdownCode } from "@/lib/markdown-highlight";
 import { apiErrorMessage } from "@/lib/api-errors";
 import {
   applyCollaborationPermission,
@@ -897,6 +898,19 @@ export function CollaborativeEditor({
     a: ({ href, node: _node, ...props }) => {
       const external = /^(?:https?:)?\/\//i.test(href || "");
       return <a {...props} href={href} target={external ? "_blank" : undefined} rel={external ? "noreferrer noopener" : undefined} />;
+    },
+    code: ({ children, className, node: _node, ...props }) => {
+      const source = String(children).replace(/\n$/, "");
+      const result = highlightMarkdownCode(source, className);
+      if (!result) return <code {...props} className={className}>{children}</code>;
+      return (
+        <code
+          {...props}
+          className={`hljs language-${result.language}`}
+          data-language={result.language}
+          dangerouslySetInnerHTML={{ __html: result.html }}
+        />
+      );
     },
     ...(publicShare ? {
       img: ({ src, node: _node, ...props }) => (

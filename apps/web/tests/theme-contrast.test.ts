@@ -9,6 +9,7 @@ const requiredPairs: [string, string, number][] = [
   ["ink", "surface", 7],
   ["muted", "surface", 4.5],
   ["accent", "surface", 4.5],
+  ["accent", "paper", 4.5],
   ["on-accent", "accent", 4.5],
   ["warm", "paper", 4.5],
   ["success-text", "success-bg", 4.5],
@@ -60,6 +61,19 @@ test("fenced code inherits the accessible block text color", () => {
   const block = css.match(/\.markdown-preview pre code\s*\{([^}]+)\}/)?.[1];
   assert.ok(block, "Missing fenced code style");
   assert.match(block, /color:\s*inherit\s*;/, "Fenced code must inherit --code-text from its pre element");
+});
+
+test("syntax-highlight colors remain readable on light and dark code blocks", () => {
+  const light = variablesFor(":root");
+  const dark = variablesFor("html[data-theme=\"dark\"]");
+  for (const token of ["syntax-comment", "syntax-keyword", "syntax-name", "syntax-number", "syntax-string", "syntax-type"]) {
+    for (const background of [light["code-block"], dark["code-block"]]) {
+      assert.ok(
+        contrast(light[token], background) >= 4.5,
+        `${token} must remain readable against ${background}`,
+      );
+    }
+  }
 });
 
 function variablesFor(selector: string) {

@@ -81,6 +81,8 @@ or a straightforward Docker-based operating model.
 ### Documents and visual files
 
 - Real-time Markdown and LaTeX editing with previews and source-file downloads.
+- Syntax-highlighted Markdown code blocks for Java, Python, C, C#, C++, and
+  Bash, plus clearly marked preview links and a wider responsive reading area.
 - Standalone, collaboratively edited Excalidraw canvas files.
 - Hybrid GFM table editing with row and column controls that keeps the persisted
   document as Markdown.
@@ -201,7 +203,7 @@ Compose plugin. Read the [complete setup guide](SETUP.md) before starting; it
 lists the required secrets, network settings, and production checks.
 
 ```bash
-ATLAS_RELEASE=v2.0.1 # Replace with the published tag you intend to deploy.
+ATLAS_RELEASE=v2.0.2 # Replace with the published tag you intend to deploy.
 git clone --branch "$ATLAS_RELEASE" --depth 1 https://github.com/Timo348/Atlas-Docs.git
 cd Atlas-Docs
 cp .env.example .env

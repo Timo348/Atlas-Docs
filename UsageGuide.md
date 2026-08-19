@@ -52,6 +52,10 @@ In **Schreiben** bearbeitest du den Inhalt, unter **Vorschau** siehst du das
 gerenderte Ergebnis. Die Formatierungsleiste bietet Fett, Kursiv,
 Durchgestrichen, Inline-Code und Links.
 
+Links werden in der Vorschau farbig und unterstrichen dargestellt. Codeblöcke
+mit den Sprachangaben `java`, `python`, `c`, `c#`, `c++` oder `bash` erhalten
+Syntaxfarben; die Kurzformen `py`, `cs` und `sh` werden ebenfalls erkannt.
+
 ### Slash-Befehle
 
 Tippe `/` in eine leere oder begonnene Zeile. Suche anschließend einen Befehl
