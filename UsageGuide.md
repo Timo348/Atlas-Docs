@@ -9,8 +9,10 @@ Installation, Konfiguration und Datensicherung stehen in der
 1. Melde dich mit deinem lokalen Konto oder dem eingerichteten
    Single-Sign-on-Anbieter an.
 2. Wähle oben den gewünschten **Bereich (Space)** aus.
-3. Erstelle links über **Datei** ein Dokument oder Canvas. Mit **Ordner** kannst
-   du Inhalte strukturieren.
+3. Erstelle links über **Datei** ein Dokument, eine PDF-Datei oder ein Canvas.
+   Über den Reiter **Importieren** kannst du vorhandene `.md`, `.tex`,
+   `.excalidraw` und `.pdf`-Dateien übernehmen. Mit **Ordner** kannst du
+   Inhalte strukturieren.
 4. Bearbeite den Inhalt. Änderungen werden während der Arbeit automatisch
    synchronisiert.
 5. Lege vor wichtigen Änderungen über **Version speichern** einen
@@ -38,13 +40,14 @@ der Dokumente.
   Bestätigung. Gelöschte Inhalte und ihre Versionen können nicht über die
   Oberfläche wiederhergestellt werden.
 
-Atlas Docs kennt drei Dateitypen:
+Atlas Docs kennt vier Dateitypen:
 
 | Dateityp | Geeignet für | Download |
 | --- | --- | --- |
 | Markdown | Notizen, Dokumentation, Checklisten und Tabellen | `.md` |
 | LaTeX | Wissenschaftliche oder technisch gesetzte Dokumente | `.tex` |
 | Canvas | Diagramme, Skizzen und visuelle Planung mit Excalidraw | `.excalidraw` |
+| PDF | Unveränderbare Dokumente, Angebote und Anhänge | Original-PDF |
 
 ## 3. Markdown verwenden
 
@@ -74,7 +77,14 @@ und bestätige ihn mit `Enter` oder `Tab`.
 | `/link` | Link |
 
 Bilder lassen sich außerdem mit `Strg/Cmd + V` aus der Zwischenablage
-einfügen. Unterstützt werden PNG, JPEG, WebP und GIF bis 5 MB.
+einfügen. Unterstützt werden PNG, JPEG, WebP und GIF. Die maximale Größe für
+Bilder, Importe und PDF-Anhänge legt die Installation fest; standardmäßig sind
+es 25 MB.
+
+Über **PDF anhängen** in der Formatierungsleiste kannst du zusätzlich eine PDF
+an eine Markdown-Seite anhängen. Die Datei bleibt an diese Seite gebunden und
+ist nur für Personen sichtbar, die Zugriff auf die Seite oder deren
+Freigabeordner haben.
 
 ### Tabellen
 
@@ -96,14 +106,22 @@ Bearbeite den Text unter **Quelltext** und kontrolliere das Ergebnis unter
 Datei. Das Drucker-Symbol öffnet den Browserdialog für den PDF-Export. Die
 Vorschau basiert auf LaTeX.js und ersetzt keinen vollständigen TeX-Compiler.
 
-## 5. Canvas verwenden
+## 5. PDF-Dateien verwenden
+
+PDF-Dateien können über **Datei → Importieren** als eigene, nicht bearbeitbare
+PDF-Seite angelegt werden. Atlas zeigt sie direkt an; über die Aktionsleiste
+kannst du sie herunterladen oder über einen Seiten- beziehungsweise
+Ordnerfreigabelink teilen. Für Markdown- und LaTeX-Dateien öffnet
+**Als PDF exportieren** den Browser-Druckdialog mit einem A4-Drucklayout.
+
+## 6. Canvas verwenden
 
 Ein Canvas ist eine eigenständige Excalidraw-Datei. Formen, Text, Verbindungen
 und Zeichnungen werden wie Dokumente live mit anderen Personen synchronisiert.
 Über das Download-Symbol kannst du das Canvas als `.excalidraw` speichern und
 in kompatiblen Anwendungen weiterverwenden.
 
-## 6. Zusammenarbeit und Versionen
+## 7. Zusammenarbeit und Versionen
 
 Der **LIVE**-Status und die Avatare zeigen aktive Mitwirkende. Änderungen an
 Dokumenten und Canvases werden in Echtzeit übertragen.
@@ -117,7 +135,7 @@ Dokumenten und Canvases werden in Echtzeit übertragen.
 Eine Wiederherstellung verändert den aktuellen Inhalt für alle Mitwirkenden.
 Speichere deshalb vorher bei Bedarf eine zusätzliche Version.
 
-## 7. Seiten und Ordner freigeben
+## 8. Seiten und Ordner freigeben
 
 Bereichseigentümer und Instanzadministratoren können über das
 **Teilen-Symbol** neben der Historie einen Link ausschließlich für die geöffnete
@@ -145,7 +163,7 @@ ihr entfernt.
 > vertrauenswürdigen Kanal und widerrufe ihn, sobald er nicht mehr benötigt
 > wird.
 
-## 8. Rollen und Rechte
+## 9. Rollen und Rechte
 
 | Rolle | Inhalte lesen | Inhalte bearbeiten | Bereich und Rechte verwalten |
 | --- | :---: | :---: | :---: |
@@ -157,7 +175,7 @@ Zugriff kann direkt oder über ein Team vergeben werden. Nur Eigentümer und
 Administratoren können einen Bereich umbenennen, löschen oder seine Rechte
 verwalten. Instanzadministratoren verwalten zusätzlich Benutzer und Teams.
 
-## 9. Profil und persönliche Einstellungen
+## 10. Profil und persönliche Einstellungen
 
 Öffne unten links dein Profil. Dort kannst du Folgendes anpassen:
 
@@ -172,10 +190,10 @@ verwalten. Instanzadministratoren verwalten zusätzlich Benutzer und Teams.
 Die Einstellungen werden mit deinem Konto gespeichert und gelten auch auf
 anderen Geräten. Im Profil kannst du außerdem alle für dich sichtbaren Bereiche
 als portables ZIP exportieren. Dieser Export enthält aktuelle, in PostgreSQL
-gespeicherte Inhalte und referenzierte Bilder, aber keine Konten, Rechte,
-Sitzungen oder Versionshistorie.
+gespeicherte Inhalte, referenzierte Bilder und PDF-Dateien beziehungsweise
+PDF-Anhänge, aber keine Konten, Rechte, Sitzungen oder Versionshistorie.
 
-## 10. Tastenkürzel
+## 11. Tastenkürzel
 
 `Strg` gilt für Windows und Linux, `Cmd` für macOS.
 
@@ -197,7 +215,7 @@ Sitzungen oder Versionshistorie.
 
 Browser- und Betriebssystemkürzel können je nach Umgebung Vorrang haben.
 
-## 11. Gute Arbeitsweise
+## 12. Gute Arbeitsweise
 
 - Speichere vor großen Umbauten eine benannte Version.
 - Verwende Freigabelinks mit Ablaufdatum, wenn dauerhafter Zugriff nicht nötig
@@ -205,5 +223,7 @@ Browser- und Betriebssystemkürzel können je nach Umgebung Vorrang haben.
 - Nutze **Nur lesen**, sofern Empfänger keine Änderungen vornehmen müssen.
 - Lade native `.md`-, `.tex`-, `.excalidraw`- oder `.pdf`-Dateien herunter, wenn du einen
   einzelnen Inhalt außerhalb von Atlas Docs weiterverwenden möchtest.
+- Prüfe beim Import, ob die Datei das für deine Installation geltende
+  Uploadlimit einhält.
 - Wende dich bei fehlenden Rechten oder Anmeldeproblemen an den zuständigen
   Atlas-Administrator.
