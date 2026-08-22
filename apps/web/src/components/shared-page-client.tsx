@@ -11,7 +11,15 @@ export function SharedPageClient({
   permission,
   shareId,
 }: {
-  page: { id: string; title: string; slug: string; parentId: null; format: "MARKDOWN" | "LATEX" | "CANVAS" };
+  page: {
+    id: string;
+    title: string;
+    slug: string;
+    parentId: null;
+    format: "MARKDOWN" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TODO" | "TEXT" | "FILE";
+    fileMime?: string | null;
+    fileSize?: number | null;
+  };
   token: string;
   permission: "VIEW" | "EDIT";
   shareId: string;

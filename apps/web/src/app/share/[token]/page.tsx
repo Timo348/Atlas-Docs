@@ -35,6 +35,8 @@ export default async function SharedPage(props: { params: Promise<{ token: strin
           slug: share.page.slug,
           parentId: null,
           format: share.page.format,
+          fileMime: share.page.fileMime,
+          fileSize: share.page.fileSize,
         }}
         token={token}
         permission={share.permission}

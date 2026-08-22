@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import * as Y from "yjs";
 import { createVisibleSnapshot, restoreVisibleSnapshot } from "../src/lib/version-snapshot";
+import { addTodoTask, initializeTodoBoard, readTodoTasks } from "../src/lib/todo-board";
 
 test("a text page snapshot restores text without carrying legacy canvas state", () => {
   const document = new Y.Doc();
@@ -38,5 +39,20 @@ test("a canvas snapshot restores canvas state without carrying text", () => {
   assert.equal(document.getText("markdown").toString(), "keep this text untouched");
   assert.deepEqual(document.getMap("canvas-elements").get("shape"), { id: "shape", x: 10 });
   assert.equal(document.getMap("canvas-files").size, 0);
+  document.destroy();
+});
+
+test("a Todo snapshot replaces visible task state without carrying text", () => {
+  const document = new Y.Doc();
+  document.getText("markdown").insert(0, "keep this text");
+  initializeTodoBoard(document);
+  addTodoTask(document, { title: "Version eins", priority: "HIGH" });
+  const snapshot = createVisibleSnapshot(document, "TODO");
+  addTodoTask(document, { title: "Version zwei", priority: "URGENT" });
+
+  restoreVisibleSnapshot(document, snapshot, "TODO");
+
+  assert.equal(document.getText("markdown").toString(), "keep this text");
+  assert.deepEqual(readTodoTasks(document).map((task) => task.title), ["Version eins"]);
   document.destroy();
 });

@@ -1,0 +1,7 @@
+ALTER TYPE "PageFormat" ADD VALUE 'TEXT';
+ALTER TYPE "PageFormat" ADD VALUE 'FILE';
+
+ALTER TABLE "Page"
+ADD COLUMN "fileData" BYTEA,
+ADD COLUMN "fileMime" TEXT,
+ADD COLUMN "fileSize" INTEGER;

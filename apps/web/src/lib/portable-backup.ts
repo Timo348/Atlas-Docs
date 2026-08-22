@@ -1,5 +1,6 @@
 import { posix } from "node:path";
 import * as Y from "yjs";
+import { portableExtension } from "@/lib/page-file";
 
 export type ExportScope = "accessible" | "instance";
 export type PortableFolder = { id: string; name: string; parentId: string | null; sortOrder: number };
@@ -9,7 +10,9 @@ export type PortablePage = {
   slug: string;
   folderId: string | null;
   parentId: string | null;
-  format: "MARKDOWN" | "LATEX" | "CANVAS";
+  format: "MARKDOWN" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TODO" | "TEXT" | "FILE";
+  fileData?: Uint8Array | null;
+  fileMime?: string | null;
   sortOrder: number;
 };
 export type PortableSpace = {
@@ -95,7 +98,7 @@ export function buildPortableLayout(spaces: PortableSpace[]): PortableLayout {
       pagePaths.set(page.id, {
         sourcePath: page.format === "CANVAS"
           ? null
-          : `${base}.${page.format === "LATEX" ? "tex" : "md"}`,
+          : `${base}${portableExtension(page.title, page.format)}`,
         canvasPath: page.format === "CANVAS" ? `${base}.excalidraw` : null,
         assetsDirectory: `${base}.assets`,
         relativeAssetsDirectory: `${segment}.assets`,

@@ -14,6 +14,8 @@ export async function activePageShare(token: string, now = new Date()) {
           title: true,
           slug: true,
           format: true,
+          fileMime: true,
+          fileSize: true,
           createdById: true,
           createdBy: { select: { language: true } },
         },

@@ -1,6 +1,7 @@
 import * as Y from "yjs";
+import { initializeTodoBoard } from "@/lib/todo-board";
 
-export type CollaborationPageFormat = "MARKDOWN" | "LATEX" | "CANVAS";
+export type CollaborationPageFormat = "MARKDOWN" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TODO" | "TEXT" | "FILE";
 export type CollaborationLanguage = "en" | "de";
 
 const TEXT_NAME = "markdown";
@@ -23,6 +24,11 @@ export function initialCollaborationContent(
   language: CollaborationLanguage,
 ) {
   if (format === "CANVAS") return "";
+  if (format === "TEXT" || format === "FILE" || format === "TODO") return "";
+  if (format === "MERMAID") return "flowchart LR\n  Start --> Ende\n";
+  if (format === "GANTT") return language === "de"
+    ? "gantt\n  title Projektplan\n  dateFormat YYYY-MM-DD\n  axisFormat %d.%m.\n  section Planung\n  Anforderungen :done, anforderungen, 2026-09-01, 5d\n  Umsetzung     :active, umsetzung, after anforderungen, 10d\n  Abnahme       : abnahme, after umsetzung, 3d\n"
+    : "gantt\n  title Project timeline\n  dateFormat YYYY-MM-DD\n  axisFormat %b %d\n  section Planning\n  Requirements :done, requirements, 2026-09-01, 5d\n  Implementation :active, implementation, after requirements, 10d\n  Review : review, after implementation, 3d\n";
   const heading = language === "de" ? "Überschrift" : "Headline";
   if (format === "LATEX") {
     return `\\documentclass{article}
@@ -50,6 +56,7 @@ export function initializeCollaborationDocument(
     settings.set("viewBackgroundColor", "#fbfaf7");
     return true;
   }
+  if (format === "TODO") return initializeTodoBoard(document);
   const text = document.getText(TEXT_NAME);
   if (text.length > 0) return false;
 
@@ -64,6 +71,16 @@ export function createInitialCollaborationState(
   const document = new Y.Doc();
   try {
     initializeCollaborationDocument(document, format, language);
+    return Y.encodeStateAsUpdate(document);
+  } finally {
+    document.destroy();
+  }
+}
+
+export function createTextCollaborationState(content: string) {
+  const document = new Y.Doc();
+  try {
+    if (content) document.getText(TEXT_NAME).insert(0, content);
     return Y.encodeStateAsUpdate(document);
   } finally {
     document.destroy();

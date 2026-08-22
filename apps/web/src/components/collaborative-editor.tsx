@@ -13,6 +13,8 @@ import ReactMarkdown, { type Components as MarkdownComponents } from "react-mark
 import remarkGfm from "remark-gfm";
 import * as Y from "yjs";
 import { CollaborativeCanvas } from "@/components/collaborative-canvas";
+import { CollaborativeMermaid } from "@/components/collaborative-mermaid";
+import { CollaborativeTodoBoard } from "@/components/collaborative-todo-board";
 import {
   HybridMarkdownDocument,
   HybridModeToggle,
@@ -22,6 +24,7 @@ import { LatexPreview } from "@/components/latex-preview";
 import { usePreferences } from "@/components/preferences-provider";
 import { useDialogEscape } from "@/components/use-dialog-escape";
 import { PageShareDialog } from "@/components/page-share-dialog";
+import { UnsupportedFileViewer } from "@/components/unsupported-file-viewer";
 import {
   applySlashCommand, continueMarkdownList, editableTableAt, editTable, editTextIndentation, formatMarkdownInline, markdownDocumentSegments,
   replaceHybridTextSegment,
@@ -49,9 +52,19 @@ import {
 } from "@/lib/collaborative-text";
 import { createVisibleSnapshot, restoreVisibleSnapshot } from "@/lib/version-snapshot";
 import { sharedPageImageUrl } from "@/lib/shared-page-images";
+import { downloadableFileName } from "@/lib/page-file";
+import { serializeTodoBoard } from "@/lib/todo-board";
 
-type PageItem = { id: string; title: string; slug: string; parentId: string | null; format: "MARKDOWN" | "LATEX" | "CANVAS" };
-type Tab = "write" | "preview" | "canvas";
+type PageItem = {
+  id: string;
+  title: string;
+  slug: string;
+  parentId: string | null;
+  format: "MARKDOWN" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TODO" | "TEXT" | "FILE";
+  fileMime?: string | null;
+  fileSize?: number | null;
+};
+type Tab = "write" | "preview" | "canvas" | "diagram" | "todo";
 type Connection = "connecting" | "connected" | "disconnected";
 type PageVersion = {
   id: string;
@@ -78,6 +91,20 @@ type LocalCursorSurface = { kind: "text" } | {
   column: number;
 };
 type PublicShareAccess = { token: string; permission: "VIEW" | "EDIT" };
+type EditorProps = {
+  page: PageItem;
+  headerCenter?: ReactNode;
+  publicShare?: PublicShareAccess;
+  canManageShares?: boolean;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    role: "ADMIN" | "MEMBER";
+    hasAvatar: boolean;
+    avatarVersion: number;
+  };
+};
 
 // React development mode replays effects (setup -> cleanup -> setup). A lease
 // lets the second setup cancel destruction of the same memoized documents while
@@ -99,26 +126,20 @@ const SLASH_COMMANDS: { id: SlashCommandId; title: [string, string]; description
   { id: "link", title: ["Link", "Link"], description: ["Insert a Markdown link", "Markdown-Link einfügen"] },
 ];
 
-export function CollaborativeEditor({
+export function CollaborativeEditor(props: EditorProps) {
+  if (props.page.format === "FILE") {
+    return <UnsupportedFileViewer page={props.page} headerCenter={props.headerCenter} publicShare={props.publicShare} />;
+  }
+  return <CollaborativeDocumentEditor {...props} />;
+}
+
+function CollaborativeDocumentEditor({
   page,
   user,
   headerCenter,
   publicShare,
   canManageShares = false,
-}: {
-  page: PageItem;
-  headerCenter?: ReactNode;
-  publicShare?: PublicShareAccess;
-  canManageShares?: boolean;
-  user: {
-    id: string;
-    name: string;
-    email: string;
-    role: "ADMIN" | "MEMBER";
-    hasAvatar: boolean;
-    avatarVersion: number;
-  };
-}) {
+}: EditorProps) {
   const { preferences, text } = usePreferences();
   const ydoc = useMemo(() => new Y.Doc(), [page.id]);
   const ytext = useMemo(() => ydoc.getText("markdown"), [ydoc]);
@@ -130,6 +151,12 @@ export function CollaborativeEditor({
   const [tab, setTab] = useState<Tab>(
     page.format === "CANVAS"
       ? "canvas"
+      : page.format === "MERMAID" || page.format === "GANTT"
+        ? "diagram"
+      : page.format === "TODO"
+        ? "todo"
+      : page.format === "TEXT"
+        ? "write"
       : publicShare?.permission === "VIEW" ? "preview" : preferences.defaultEditorView,
   );
   const [status, setStatus] = useState<Connection>("connecting");
@@ -151,6 +178,7 @@ export function CollaborativeEditor({
     historyOpen,
   );
   const [cursorIndex, setCursorIndex] = useState(0);
+  const [localCursorMarkerVisible, setLocalCursorMarkerVisible] = useState(false);
   const [imageBusy, setImageBusy] = useState(false);
   const [editorNotice, setEditorNotice] = useState("");
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
@@ -430,6 +458,7 @@ export function CollaborativeEditor({
   function publishCursorPayload(cursor: CollaborativeCursor) {
     localCursorRef.current = cursor;
     setCursorIndex(cursor.index);
+    setLocalCursorMarkerVisible(true);
     providerRef.current?.setAwarenessField("cursor", cursor);
   }
 
@@ -444,6 +473,7 @@ export function CollaborativeEditor({
           && stage.contains(active))
       ) return;
       localCursorRef.current = null;
+      setLocalCursorMarkerVisible(false);
       providerRef.current?.setAwarenessField("cursor", null);
     });
   }
@@ -863,7 +893,7 @@ export function CollaborativeEditor({
       setTitle(result.title);
       setVersionBusy(false);
       await saveVersion(result.version, result.title);
-      setTab(page.format === "CANVAS" ? "canvas" : "write");
+      setTab(page.format === "CANVAS" ? "canvas" : page.format === "MERMAID" || page.format === "GANTT" ? "diagram" : page.format === "TODO" ? "todo" : "write");
     } catch (error) {
       setVersionNotice(error instanceof Error ? error.message : text("The version could not be restored.", "Die Version konnte nicht wiederhergestellt werden."));
       setVersionBusy(false);
@@ -883,12 +913,23 @@ export function CollaborativeEditor({
       URL.revokeObjectURL(url);
       return;
     }
+    if (page.format === "TODO") {
+      const url = URL.createObjectURL(new Blob([serializeTodoBoard(ydoc)], { type: "application/json;charset=utf-8" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = downloadableFileName(page.title, page.format);
+      link.click();
+      URL.revokeObjectURL(url);
+      return;
+    }
     const isLatex = page.format === "LATEX";
-    const blob = new Blob([markdown], { type: `${isLatex ? "application/x-tex" : "text/markdown"};charset=utf-8` });
+    const isPlainText = page.format === "TEXT";
+    const isMermaid = page.format === "MERMAID" || page.format === "GANTT";
+    const blob = new Blob([markdown], { type: `${isLatex ? "application/x-tex" : isMermaid ? "text/vnd.mermaid" : isPlainText ? "text/plain" : "text/markdown"};charset=utf-8` });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${page.slug}.${isLatex ? "tex" : "md"}`;
+    link.download = downloadableFileName(page.title, page.format);
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -906,7 +947,7 @@ export function CollaborativeEditor({
   }), [page.id, publicShare]);
 
   return (
-    <div className={`editor-shell ${headerCenter ? "editor-shell-with-center" : ""} ${page.format === "CANVAS" ? "canvas-file-editor" : ""}`}>
+    <div className={`editor-shell ${headerCenter ? "editor-shell-with-center" : ""} ${page.format === "CANVAS" || page.format === "MERMAID" || page.format === "GANTT" || page.format === "TODO" ? "canvas-file-editor" : ""} ${page.format === "TEXT" ? "text-file-editor" : ""}`}>
       <header className={`editor-header ${headerCenter ? "editor-header-with-center" : ""}`}>
         <div className="title-wrap">
           <input
@@ -916,7 +957,7 @@ export function CollaborativeEditor({
             onBlur={saveTitle}
             onKeyDown={(event) => event.key === "Enter" && event.currentTarget.blur()}
             readOnly={readOnly || Boolean(publicShare)}
-            aria-label={page.format === "CANVAS" ? text("Canvas title", "Canvas-Titel") : text("Page title", "Seitentitel")}
+            aria-label={page.format === "CANVAS" ? text("Canvas title", "Canvas-Titel") : page.format === "MERMAID" ? text("Mermaid diagram title", "Mermaid-Diagrammtitel") : page.format === "GANTT" ? text("Gantt timeline title", "Gantt-Zeitstrahl-Titel") : page.format === "TODO" ? text("Todo board title", "Todo-Board-Titel") : text("Page title", "Seitentitel")}
           />
         </div>
         {headerCenter && <div className="editor-header-center">{headerCenter}</div>}
@@ -970,28 +1011,44 @@ export function CollaborativeEditor({
               ? text("Download Excalidraw file", "Excalidraw-Datei herunterladen")
               : page.format === "LATEX"
                 ? text("Download LaTeX file", "LaTeX-Datei herunterladen")
+                : page.format === "MERMAID"
+                  ? text("Download Mermaid file", "Mermaid-Datei herunterladen")
+                : page.format === "GANTT"
+                    ? text("Download Gantt file", "Gantt-Datei herunterladen")
+                    : page.format === "TODO"
+                      ? text("Download Todo board", "Todo-Board herunterladen")
+                    : page.format === "TEXT"
+                  ? text("Download text file", "Textdatei herunterladen")
                 : text("Download Markdown", "Markdown herunterladen")}
             aria-label={page.format === "CANVAS"
               ? text("Download Excalidraw file", "Excalidraw-Datei herunterladen")
               : page.format === "LATEX"
                 ? text("Download LaTeX file", "LaTeX-Datei herunterladen")
+                : page.format === "MERMAID"
+                  ? text("Download Mermaid file", "Mermaid-Datei herunterladen")
+                : page.format === "GANTT"
+                    ? text("Download Gantt file", "Gantt-Datei herunterladen")
+                    : page.format === "TODO"
+                      ? text("Download Todo board", "Todo-Board herunterladen")
+                    : page.format === "TEXT"
+                  ? text("Download text file", "Textdatei herunterladen")
                 : text("Download Markdown", "Markdown herunterladen")}
           >
             <Download size={17} />
           </button>
         </div>
       </header>
-      {page.format !== "CANVAS" && (
+        {page.format !== "CANVAS" && page.format !== "MERMAID" && page.format !== "GANTT" && page.format !== "TODO" && page.format !== "TEXT" && (
         <nav className="editor-tabs">
           <button className={tab === "write" ? "active" : ""} onClick={() => setTab("write")}><Pencil size={15} /> {page.format === "LATEX" ? text("Source", "Quelltext") : text("Write", "Schreiben")}</button>
           <button className={tab === "preview" ? "active" : ""} onClick={() => setTab("preview")}><Eye size={15} /> {text("Preview", "Vorschau")}</button>
         </nav>
       )}
       <section className="editor-body">
-        {page.format !== "CANVAS" && tab === "write" && (
+        {page.format !== "CANVAS" && page.format !== "MERMAID" && page.format !== "GANTT" && page.format !== "TODO" && tab === "write" && (
           <div className={`markdown-editor ${page.format === "LATEX" ? "latex-source-editor" : ""}`}>
             <div className="markdown-gutter">
-              <FileText size={16} /><span>{page.format === "LATEX" ? "LATEX" : "MARKDOWN"}</span>
+              <FileText size={16} /><span>{page.format === "LATEX" ? "LATEX" : page.format === "TEXT" ? text("Text", "Text") : "MARKDOWN"}</span>
               {page.format === "MARKDOWN" && <small>{publicShare
                 ? text("Shared content · images are managed by Atlas members", "Geteilter Inhalt · Bilder verwalten Atlas-Mitglieder")
                 : text("Type / for commands · paste images with Ctrl+V", "/ für Befehle · Bilder mit Strg+V einfügen")}</small>}
@@ -1067,7 +1124,11 @@ export function CollaborativeEditor({
                   onScroll={() => setScrollRevision((value) => value + 1)}
                   readOnly={readOnly}
                   spellCheck
-                  aria-label={page.format === "LATEX" ? text("LaTeX content", "LaTeX-Inhalt") : text("Markdown content", "Markdown-Inhalt")}
+                  aria-label={page.format === "LATEX"
+                    ? text("LaTeX content", "LaTeX-Inhalt")
+                    : page.format === "TEXT"
+                      ? text("Text content", "Textinhalt")
+                      : text("Markdown content", "Markdown-Inhalt")}
                 />
               )}
               {activeSlash && matchingCommands.length > 0 && (
@@ -1107,6 +1168,14 @@ export function CollaborativeEditor({
                   ><Minus size={13} /> {text("Column", "Spalte")}</button>
                 </div>
               )}
+              <CurrentLineMarker
+                editorStageRef={editorStageRef}
+                textareaRef={textareaRef}
+                markdown={markdown}
+                cursorIndex={cursorIndex}
+                active={localCursorMarkerVisible}
+                segments={showHybridTables ? documentSegments : []}
+              />
               <div className="remote-cursors" aria-hidden="true">
                 {remoteCursors.map((person) => (
                   showHybridTables ? (
@@ -1133,7 +1202,7 @@ export function CollaborativeEditor({
             </div>
           </div>
         )}
-        {page.format !== "CANVAS" && tab === "preview" && (page.format === "LATEX"
+        {page.format !== "CANVAS" && page.format !== "MERMAID" && page.format !== "GANTT" && page.format !== "TODO" && page.format !== "TEXT" && tab === "preview" && (page.format === "LATEX"
           ? <LatexPreview source={markdown} />
           : <article className="markdown-preview"><ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{markdown}</ReactMarkdown></article>)}
         {page.format === "CANVAS" && (
@@ -1141,6 +1210,26 @@ export function CollaborativeEditor({
             <CollaborativeCanvas ydoc={ydoc} readOnly={readOnly} />
           </div>
         )}
+        {page.format === "MERMAID" && (
+          <CollaborativeMermaid
+            source={markdown}
+            readOnly={readOnly}
+            onChange={(value, cursor, anchor) => changeMarkdown(value, cursor, anchor, { kind: "text" })}
+            onCursor={(textarea) => publishCursor(textarea)}
+            onBlur={clearLocalCursor}
+          />
+        )}
+        {page.format === "GANTT" && (
+          <CollaborativeMermaid
+            source={markdown}
+            readOnly={readOnly}
+            kind="gantt"
+            onChange={(value, cursor, anchor) => changeMarkdown(value, cursor, anchor, { kind: "text" })}
+            onCursor={(textarea) => publishCursor(textarea)}
+            onBlur={clearLocalCursor}
+          />
+        )}
+        {page.format === "TODO" && <CollaborativeTodoBoard document={ydoc} readOnly={readOnly} />}
       </section>
       {historyOpen && (
         <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !historyLoading && !versionBusy && setHistoryOpen(false)}>
@@ -1190,10 +1279,63 @@ export function CollaborativeEditor({
         <button className="atlas-toast editor-toast" onClick={() => setEditorNotice("")}>{editorNotice}<X size={14} /></button>
       )}
       {shareDialogOpen && !publicShare && (
-        <PageShareDialog pageId={page.id} pageTitle={title} onClose={() => setShareDialogOpen(false)} />
+        <PageShareDialog pageId={page.id} pageTitle={title} pageFormat={page.format} onClose={() => setShareDialogOpen(false)} />
       )}
     </div>
   );
+}
+
+function CurrentLineMarker({
+  editorStageRef,
+  textareaRef,
+  markdown,
+  cursorIndex,
+  active,
+  segments,
+}: {
+  editorStageRef: RefObject<HTMLDivElement | null>;
+  textareaRef: RefObject<HTMLTextAreaElement | null>;
+  markdown: string;
+  cursorIndex: number;
+  active: boolean;
+  segments: MarkdownDocumentSegment[];
+}) {
+  const [position, setPosition] = useState<{ top: number; visible: boolean } | null>(null);
+
+  useLayoutEffect(() => {
+    const stage = editorStageRef.current;
+    if (!stage) return;
+    const update = () => {
+      const cursor = Math.min(cursorIndex, markdown.length);
+      const segment = segments.find((item) => item.type === "text" && cursor >= item.start && cursor <= item.end);
+      const textarea = segment?.type === "text"
+        ? stage.querySelector<HTMLTextAreaElement>(`textarea[data-markdown-start="${segment.start}"]`)
+        : textareaRef.current;
+      if (!textarea) {
+        setPosition(null);
+        return;
+      }
+      const offset = segment?.type === "text" ? segment.start : 0;
+      const caret = caretPosition(textarea, Math.max(0, cursor - offset));
+      const stageRect = stage.getBoundingClientRect();
+      const textareaRect = textarea.getBoundingClientRect();
+      const top = textareaRect.top - stageRect.top + caret.top;
+      setPosition({
+        top,
+        visible: caret.visible && top >= 0 && top <= stage.clientHeight,
+      });
+    };
+    update();
+    window.addEventListener("resize", update);
+    stage.addEventListener("scroll", update, { capture: true, passive: true });
+    return () => {
+      window.removeEventListener("resize", update);
+      stage.removeEventListener("scroll", update, { capture: true });
+    };
+  }, [cursorIndex, editorStageRef, markdown, segments, textareaRef]);
+
+  if (!active || !position?.visible) return null;
+  return <span className="local-cursor-line" style={{ top: position.top }} aria-hidden="true" />;
 }
 
 function HybridRemoteCursor({

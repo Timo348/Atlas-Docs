@@ -48,6 +48,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
   const parsed = createSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) return apiErrorResponse("PAGE_SHARE_INVALID", 400);
+  if (access.page.format === "FILE" && parsed.data.permission === "EDIT") {
+    return apiErrorResponse("FILE_READ_ONLY", 400);
+  }
   const expiresAt = parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null;
   if (expiresAt && expiresAt <= new Date()) return apiErrorResponse("PAGE_SHARE_INVALID", 400);
   const activeCount = await db.pageShare.count({

@@ -22,6 +22,11 @@ enum PageFormat {
   MARKDOWN
   LATEX
   CANVAS
+  MERMAID
+  GANTT
+  TODO
+  TEXT
+  FILE
 }
 
 enum PageSharePermission {
@@ -161,6 +166,9 @@ model Page {
   parentId                     String?
   folderId                     String?
   format                       PageFormat    @default(MARKDOWN)
+  fileData                     Bytes?
+  fileMime                     String?
+  fileSize                     Int?
   sortOrder                    Int           @default(0)
   versionCounter               Int           @default(0)
   legacyCanvasMigrationVersion Int           @default(1)

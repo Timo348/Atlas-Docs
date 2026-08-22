@@ -1,0 +1,1 @@
+ALTER TYPE "PageFormat" ADD VALUE 'GANTT';

@@ -23,6 +23,11 @@ test("portable paths are safe, nested, and collision resistant", () => {
       { id: "page-1", title: "Restore", slug: "restore", folderId: "folder-c", parentId: null, format: "MARKDOWN", sortOrder: 0 },
       { id: "page-2", title: "Formula", slug: "formula", folderId: null, parentId: null, format: "LATEX", sortOrder: 0 },
       { id: "page-3", title: "Flow", slug: "flow", folderId: null, parentId: null, format: "CANVAS", sortOrder: 1 },
+      { id: "page-4", title: "README", slug: "readme", folderId: null, parentId: null, format: "TEXT", sortOrder: 2 },
+      { id: "page-5", title: "data.bin", slug: "data-bin", folderId: null, parentId: null, format: "FILE", sortOrder: 3 },
+      { id: "page-6", title: "architecture.mmd", slug: "architecture", folderId: null, parentId: null, format: "MERMAID", sortOrder: 4 },
+      { id: "page-7", title: "roadmap", slug: "roadmap", folderId: null, parentId: null, format: "GANTT", sortOrder: 5 },
+      { id: "page-8", title: "tasks", slug: "tasks", folderId: null, parentId: null, format: "TODO", sortOrder: 6 },
     ],
   }]);
 
@@ -31,6 +36,11 @@ test("portable paths are safe, nested, and collision resistant", () => {
   assert.equal(layout.pagePaths.get("page-2")?.canvasPath, null);
   assert.equal(layout.pagePaths.get("page-3")?.sourcePath, null);
   assert.equal(layout.pagePaths.get("page-3")?.canvasPath, "spaces/operations/flow.excalidraw");
+  assert.equal(layout.pagePaths.get("page-4")?.sourcePath, "spaces/operations/readme");
+  assert.equal(layout.pagePaths.get("page-5")?.sourcePath, "spaces/operations/data-bin.bin");
+  assert.equal(layout.pagePaths.get("page-6")?.sourcePath, "spaces/operations/architecture.mmd");
+  assert.equal(layout.pagePaths.get("page-7")?.sourcePath, "spaces/operations/roadmap.gantt");
+  assert.equal(layout.pagePaths.get("page-8")?.sourcePath, "spaces/operations/tasks.todos.json");
   assert.notEqual(layout.folderPaths.get("folder-a"), layout.folderPaths.get("folder-b"));
   assert.equal(sanitizePathSegment("../../Überblick"), "uberblick");
   assert.equal(sanitizePathSegment("CON"), "con-item");

@@ -23,6 +23,10 @@ export const API_ERROR_MESSAGES = {
     en: "The collaboration server is not configured.",
     de: "Der Kollaborationsserver ist nicht konfiguriert.",
   },
+  COLLABORATION_UNSUPPORTED_FILE: {
+    en: "This file type cannot be edited collaboratively.",
+    de: "Dieser Dateityp kann nicht kollaborativ bearbeitet werden.",
+  },
   COLLABORATION_CONFIG_INVALID: {
     en: "The collaboration configuration is invalid.",
     de: "Die Kollaborationskonfiguration ist ungültig.",
@@ -74,6 +78,22 @@ export const API_ERROR_MESSAGES = {
   IMAGE_SAVE_FAILED: {
     en: "The image could not be saved.",
     de: "Das Bild konnte nicht gespeichert werden.",
+  },
+  FILE_IMPORT_INVALID: {
+    en: "Choose a valid file to import.",
+    de: "Wähle eine gültige Datei zum Importieren aus.",
+  },
+  FILE_TOO_LARGE: {
+    en: "The file may not exceed 25 MB.",
+    de: "Die Datei darf maximal 25 MB groß sein.",
+  },
+  FILE_NOT_FOUND: {
+    en: "The file could not be found.",
+    de: "Die Datei wurde nicht gefunden.",
+  },
+  FILE_READ_ONLY: {
+    en: "Unsupported files can only be shared read-only.",
+    de: "Nicht unterstützte Dateien können nur schreibgeschützt geteilt werden.",
   },
   VERSION_INVALID: {
     en: "The submitted version is invalid.",

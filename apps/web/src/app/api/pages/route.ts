@@ -11,7 +11,7 @@ const schema = z.object({
   spaceId: z.string().min(1),
   parentId: z.string().min(1).nullable().optional(),
   folderId: z.string().min(1).nullable().optional(),
-  format: z.enum(["MARKDOWN", "LATEX", "CANVAS"]).default("MARKDOWN"),
+  format: z.enum(["MARKDOWN", "LATEX", "CANVAS", "MERMAID", "GANTT", "TODO", "TEXT"]).default("MARKDOWN"),
 });
 
 export async function POST(request: Request) {

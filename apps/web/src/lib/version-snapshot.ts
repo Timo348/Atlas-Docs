@@ -1,7 +1,8 @@
 import * as Y from "yjs";
+import { copyTodoBoard } from "@/lib/todo-board";
 
 const MAP_NAMES = ["canvas-elements", "canvas-files", "canvas-settings"] as const;
-export type SnapshotFormat = "MARKDOWN" | "LATEX" | "CANVAS";
+export type SnapshotFormat = "MARKDOWN" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TODO" | "TEXT" | "FILE";
 
 export function createVisibleSnapshot(source: Y.Doc, format: SnapshotFormat) {
   const snapshot = new Y.Doc();
@@ -11,6 +12,8 @@ export function createVisibleSnapshot(source: Y.Doc, format: SnapshotFormat) {
       const targetMap = snapshot.getMap<unknown>(name);
       for (const [key, value] of sourceMap.entries()) targetMap.set(key, clone(value));
     }
+  } else if (format === "TODO") {
+    copyTodoBoard(source, snapshot);
   } else {
     const sourceText = source.getText("markdown").toString();
     if (sourceText) snapshot.getText("markdown").insert(0, sourceText);
@@ -32,6 +35,8 @@ export function restoreVisibleSnapshot(target: Y.Doc, update: Uint8Array, format
           targetMap.set(key, clone(value));
         }
       }
+    } else if (format === "TODO") {
+      copyTodoBoard(snapshot, target);
     } else {
       const targetText = target.getText("markdown");
       targetText.delete(0, targetText.length);

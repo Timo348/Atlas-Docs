@@ -18,7 +18,12 @@ type PageShareRow = {
   createdBy: { name: string | null; email: string };
 };
 
-export function PageShareDialog({ pageId, pageTitle, onClose }: { pageId: string; pageTitle: string; onClose: () => void }) {
+export function PageShareDialog({ pageId, pageTitle, pageFormat, onClose }: {
+  pageId: string;
+  pageTitle: string;
+  pageFormat: "MARKDOWN" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TODO" | "TEXT" | "FILE";
+  onClose: () => void;
+}) {
   const { preferences, text } = usePreferences();
   const [shares, setShares] = useState<PageShareRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,6 +34,7 @@ export function PageShareDialog({ pageId, pageTitle, onClose }: { pageId: string
   const [expiry, setExpiry] = useState("30");
   const [createdUrl, setCreatedUrl] = useState("");
   const [copied, setCopied] = useState(false);
+  const fileReadOnly = pageFormat === "FILE";
   useDialogEscape(onClose, busy, true);
 
   useEffect(() => {
@@ -148,7 +154,7 @@ export function PageShareDialog({ pageId, pageTitle, onClose }: { pageId: string
             <div className="page-share-section-title"><div><span>01</span><strong>{text("Create a new link", "Neuen Link erstellen")}</strong></div><small>{text("The full link is shown once.", "Der vollständige Link wird einmal angezeigt.")}</small></div>
             <div className="page-share-create-grid">
               <label><span>{text("Label", "Bezeichnung")}</span><input value={label} maxLength={80} onChange={(event) => setLabel(event.target.value)} /></label>
-              <label><span>{text("Access", "Zugriff")}</span><select value={permission} onChange={(event) => setPermission(event.target.value as "VIEW" | "EDIT")}><option value="VIEW">{text("View only", "Nur lesen")}</option><option value="EDIT">{text("Edit content", "Inhalt bearbeiten")}</option></select></label>
+              <label><span>{text("Access", "Zugriff")}</span><select value={permission} disabled={fileReadOnly} onChange={(event) => setPermission(event.target.value as "VIEW" | "EDIT")}><option value="VIEW">{text("View only", "Nur lesen")}</option>{!fileReadOnly && <option value="EDIT">{text("Edit content", "Inhalt bearbeiten")}</option>}</select></label>
               <label><span>{text("Expires", "Läuft ab")}</span><select value={expiry} onChange={(event) => setExpiry(event.target.value)}><option value="7">{text("In 7 days", "In 7 Tagen")}</option><option value="30">{text("In 30 days", "In 30 Tagen")}</option><option value="90">{text("In 90 days", "In 90 Tagen")}</option><option value="never">{text("Never", "Nie")}</option></select></label>
               <button className="button primary-button" disabled={busy || !label.trim()} onClick={() => void createShare()}>{busy ? <LoaderCircle size={15} className="spin" /> : <Link2 size={15} />}{text("Create link", "Link erstellen")}</button>
             </div>
@@ -171,7 +177,7 @@ export function PageShareDialog({ pageId, pageTitle, onClose }: { pageId: string
                 <article className="page-share-row" key={share.id}>
                   <span className="page-share-link-icon"><Link2 size={15} /></span>
                   <div><strong>{share.label}</strong><small>#{share.tokenPrefix} · {text("created", "erstellt")} {formatDate(share.createdAt, preferences.language)} · {share.expiresAt ? text(`expires ${formatDate(share.expiresAt, preferences.language)}`, `bis ${formatDate(share.expiresAt, preferences.language)}`) : text("no expiry", "ohne Ablaufdatum")}</small></div>
-                  <select disabled={busy} value={share.permission} aria-label={text(`Access for ${share.label}`, `Zugriff für ${share.label}`)} onChange={(event) => void updatePermission(share, event.target.value as "VIEW" | "EDIT")}><option value="VIEW">{text("View", "Lesen")}</option><option value="EDIT">{text("Edit", "Bearbeiten")}</option></select>
+                  <select disabled={busy || fileReadOnly} value={share.permission} aria-label={text(`Access for ${share.label}`, `Zugriff für ${share.label}`)} onChange={(event) => void updatePermission(share, event.target.value as "VIEW" | "EDIT")}><option value="VIEW">{text("View", "Lesen")}</option>{!fileReadOnly && <option value="EDIT">{text("Edit", "Bearbeiten")}</option>}</select>
                   <button className="icon-button danger-icon" disabled={busy} onClick={() => void revokeShare(share)} title={text("Revoke link", "Link widerrufen")} aria-label={text(`Revoke ${share.label}`, `${share.label} widerrufen`)}><Trash2 size={15} /></button>
                 </article>
               ))}

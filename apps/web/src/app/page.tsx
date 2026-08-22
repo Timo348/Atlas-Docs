@@ -57,7 +57,7 @@ export default async function Home(props: { searchParams: Promise<{ page?: strin
         orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       },
       pages: {
-        select: { id: true, title: true, parentId: true, folderId: true, spaceId: true, slug: true, format: true, sortOrder: true },
+        select: { id: true, title: true, parentId: true, folderId: true, spaceId: true, slug: true, format: true, fileMime: true, fileSize: true, sortOrder: true },
         orderBy: [{ sortOrder: "asc" }, { title: "asc" }],
       },
     },

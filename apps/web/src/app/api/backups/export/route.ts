@@ -13,6 +13,7 @@ import {
   type PortableSpace,
 } from "@/lib/portable-backup";
 import { createZipStream, type ZipEntry } from "@/lib/zip-stream";
+import { serializeTodoBoardState } from "@/lib/todo-board";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -90,6 +91,8 @@ async function loadSpaces(userId: string, scope: ExportScope, now: Date): Promis
           folderId: true,
           parentId: true,
           format: true,
+          fileData: true,
+          fileMime: true,
           sortOrder: true,
         },
         orderBy: [{ sortOrder: "asc" }, { title: "asc" }],
@@ -143,6 +146,15 @@ async function* createExportEntries(
       if (!pageLayout) continue;
 
       try {
+        if (page.format === "FILE") {
+          if (!pageLayout.sourcePath || !page.fileData) throw new Error("Uploaded file data is missing.");
+          yield {
+            name: pageLayout.sourcePath,
+            data: page.fileData,
+            compress: false,
+          };
+          continue;
+        }
         const [storedDocument, imageMetadata] = await Promise.all([
           db.collabDocument.findUnique({
             where: { name: `page:${page.id}` },
@@ -154,6 +166,10 @@ async function* createExportEntries(
             orderBy: { createdAt: "asc" },
           }),
         ]);
+        if (page.format === "TODO") {
+          if (pageLayout.sourcePath) yield { name: pageLayout.sourcePath, data: serializeTodoBoardState(storedDocument?.data) };
+          continue;
+        }
         const current = decodeCollaborationDocument(
           storedDocument?.data || null,
           page.format === "CANVAS",
@@ -226,7 +242,7 @@ Scope: ${scope}
 Spaces: ${spaceCount}
 Pages: ${pageCount}
 
-Open the \`spaces\` directory as an Obsidian vault or as a normal folder in VS Code. Markdown and LaTeX files contain the current persisted document text. Referenced page images use relative paths. Canvas files are stored as standard \`.excalidraw\` JSON and can be opened with the Obsidian Excalidraw plugin or another compatible editor.
+Open the \`spaces\` directory as an Obsidian vault or as a normal folder in VS Code. Markdown, LaTeX, Mermaid, Gantt, and plain-text files contain their current text. Todo boards are exported as \`.todos.json\` files. Referenced page images use relative paths. Canvas files are stored as standard \`.excalidraw\` JSON and can be opened with the Obsidian Excalidraw plugin or another compatible editor. Uploaded unsupported files are included unchanged.
 
 This portable emergency export intentionally excludes Atlas accounts, permissions, sessions, profile images, space cover images, and document version history. Use the PostgreSQL server backup for a complete operational restore.
 ${warningSection}

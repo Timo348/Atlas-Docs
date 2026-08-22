@@ -18,6 +18,7 @@ export async function POST(request: Request) {
   if (!parsed.success) return apiErrorResponse("ACCESS_DENIED", 403);
   const share = await activePageShare(parsed.data.token);
   if (!share) return apiErrorResponse("ACCESS_DENIED", 403);
+  if (share.page.format === "FILE") return apiErrorResponse("COLLABORATION_UNSUPPORTED_FILE", 400);
 
   const secret = process.env.COLLAB_SECRET;
   if (!secret || secret.length < 32) return apiErrorResponse("COLLABORATION_NOT_CONFIGURED", 500);

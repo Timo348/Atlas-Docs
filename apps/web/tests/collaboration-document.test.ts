@@ -13,6 +13,9 @@ import {
 test("creates the existing localized Markdown and LaTeX templates", () => {
   assert.equal(initialCollaborationContent("MARKDOWN", "en"), "# Headline\n");
   assert.equal(initialCollaborationContent("MARKDOWN", "de"), "# Überschrift\n");
+  assert.equal(initialCollaborationContent("TEXT", "en"), "");
+  assert.equal(initialCollaborationContent("MERMAID", "en"), "flowchart LR\n  Start --> Ende\n");
+  assert.match(initialCollaborationContent("GANTT", "de"), /^gantt\n  title Projektplan\n/m);
   assert.equal(
     initialCollaborationContent("LATEX", "en"),
     "\\documentclass{article}\n\\begin{document}\n\\section{Headline}\n\\end{document}\n",
@@ -40,6 +43,17 @@ test("creates an initialized canvas document without page text", () => {
 
   assert.equal(document.getText("markdown").toString(), "");
   assert.equal(document.getMap("canvas-settings").get("viewBackgroundColor"), "#fbfaf7");
+  assert.equal(collaborationStateNeedsInitialization(state), false);
+  document.destroy();
+});
+
+test("creates a Todo board without document text", () => {
+  const state = createInitialCollaborationState("TODO", "de");
+  const document = new Y.Doc();
+  Y.applyUpdate(document, state);
+
+  assert.equal(document.getText("markdown").toString(), "");
+  assert.equal(document.getMap("todo-board").get("version"), 1);
   assert.equal(collaborationStateNeedsInitialization(state), false);
   document.destroy();
 });

@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { type DragEvent, useEffect, useState } from "react";
+import { type DragEvent, useEffect, useRef, useState } from "react";
 import {
-  BookOpen, ChevronDown, ChevronRight, FileCode2, FilePlus2, FileText, Folder,
+  AlertTriangle, BookOpen, ChevronDown, ChevronRight, FileCode2, FilePlus2, FileText, Folder,
   FolderPlus, GripVertical, LogOut, MoreHorizontal, PanelLeftClose, PanelLeftOpen,
-  Network, Pencil, Plus, Search, Settings2, ShieldCheck, Trash2, Users, X,
+  ChartGantt, ListTodo, Network, Pencil, Plus, Search, Settings2, ShieldCheck, Trash2, Upload, Users, Workflow, X,
 } from "lucide-react";
 import { CollaborativeEditor } from "@/components/collaborative-editor";
 import { usePreferences } from "@/components/preferences-provider";
@@ -21,7 +21,7 @@ import { spaceNavigationHref } from "@/lib/space-navigation";
 import { spaceRoleLabel } from "@/lib/space-role";
 import { workspaceShortcut } from "@/lib/workspace-shortcuts";
 
-type PageFormat = "MARKDOWN" | "LATEX" | "CANVAS";
+type PageFormat = "MARKDOWN" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TODO" | "TEXT" | "FILE";
 type PageItem = {
   id: string;
   title: string;
@@ -30,6 +30,8 @@ type PageItem = {
   parentId: string | null;
   folderId: string | null;
   format: PageFormat;
+  fileMime?: string | null;
+  fileSize?: number | null;
   sortOrder: number;
 };
 type FolderItem = { id: string; name: string; parentId: string | null; sortOrder: number };
@@ -80,6 +82,7 @@ export function WorkspaceShell({
   const [busy, setBusy] = useState(false);
   const [dragItem, setDragItem] = useState<DragItem | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
   const activeSpace = spaces.find((space) => space.id === selectedSpaceId) || spaces[0] || null;
   const canWrite = activeSpace?.role === "OWNER" || activeSpace?.role === "EDITOR";
 
@@ -126,6 +129,32 @@ export function WorkspaceShell({
         router.refresh();
       },
     });
+  }
+
+  async function importFile(file: File) {
+    if (!activeSpace || !canWrite || busy) return;
+    setBusy(true);
+    setNotice("");
+    try {
+      const form = new FormData();
+      form.set("file", file);
+      form.set("spaceId", activeSpace.id);
+      const response = await fetch("/api/pages/import", { method: "POST", body: form });
+      const data = await response.json().catch(() => null) as { id?: string } | null;
+      if (!response.ok || !data?.id) {
+        setNotice(apiErrorMessage(data, text, {
+          en: "The file could not be imported.",
+          de: "Die Datei konnte nicht importiert werden.",
+        }));
+        return;
+      }
+      router.push(`/?space=${activeSpace.id}&page=${data.id}`);
+      router.refresh();
+    } catch {
+      setNotice(text("The file could not be imported.", "Die Datei konnte nicht importiert werden."));
+    } finally {
+      setBusy(false);
+    }
   }
 
   function createFolder(spaceId: string, parentId: string | null = null) {
@@ -367,10 +396,21 @@ export function WorkspaceShell({
               />
             </div>
             <nav className="page-tree">
+              <input
+                ref={importInputRef}
+                className="visually-hidden"
+                type="file"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  if (file) void importFile(file);
+                }}
+              />
               {canWrite && (
                 <div className="tree-actions">
                   <button disabled={busy} onClick={() => createPage(activeSpace.id)} title={text("New file (Ctrl+Shift+N)", "Neue Datei (Strg+Umschalt+N)")} aria-keyshortcuts="Control+Shift+N Meta+Shift+N"><FilePlus2 size={15} /> {text("File", "Datei")}</button>
                   <button disabled={busy} onClick={() => createFolder(activeSpace.id)}><FolderPlus size={15} /> {text("Folder", "Ordner")}</button>
+                  <button disabled={busy} onClick={() => importInputRef.current?.click()}><Upload size={15} /> {text("Import", "Importieren")}</button>
                 </div>
               )}
               <FolderTree
@@ -711,7 +751,8 @@ function RootPages({
             </span>
           )}
           <Link className="page-link" href={`/?space=${page.spaceId}&page=${page.id}`}>
-            {page.format === "CANVAS" ? <Network size={14} /> : page.format === "LATEX" ? <FileCode2 size={14} /> : <FileText size={14} />}<span>{page.title}</span>
+            {page.format === "CANVAS" ? <Network size={14} /> : page.format === "MERMAID" ? <Workflow size={14} /> : page.format === "GANTT" ? <ChartGantt size={14} /> : page.format === "TODO" ? <ListTodo size={14} /> : page.format === "LATEX" ? <FileCode2 size={14} /> : <FileText size={14} />}<span>{page.title}</span>
+            {page.format === "FILE" && <span className="file-unsupported-marker" title={text("Unsupported file type — download only", "Nicht unterstützter Dateityp — nur Download")} aria-label={text("Unsupported file type", "Nicht unterstützter Dateityp")}><AlertTriangle size={12} /></span>}
           </Link>
           {canWrite && <button onClick={() => onMovePage(page)} title={text("Move file", "Datei verschieben")} aria-label={text(`Move ${page.title}`, `${page.title} verschieben`)}><MoreHorizontal size={15} /></button>}
           {canWrite && <button onClick={() => onDeletePage(page)} title={text("Delete file", "Datei löschen")} aria-label={text(`Delete ${page.title}`, `${page.title} löschen`)}><Trash2 size={14} /></button>}
@@ -794,7 +835,11 @@ function ActionDialog({
           {dialog.kind === "page" && (
             <div className="format-picker">
               <button className={format === "MARKDOWN" ? "active" : ""} onClick={() => setFormat("MARKDOWN")}><FileText size={20} /><span><strong>Markdown</strong><small>{text("Flexible documentation with preview", "Flexible Dokumentation mit Vorschau")}</small></span></button>
+              <button className={format === "TEXT" ? "active" : ""} onClick={() => setFormat("TEXT")}><FileText size={20} /><span><strong>{text("Plain text", "Klartext")}</strong><small>{text("Simple editable text without formatting", "Einfacher editierbarer Text ohne Formatierung")}</small></span></button>
               <button className={format === "LATEX" ? "active" : ""} onClick={() => setFormat("LATEX")}><FileCode2 size={20} /><span><strong>LaTeX</strong><small>{text("Scientific documents and formulas", "Wissenschaftliche Dokumente und Formeln")}</small></span></button>
+              <button className={format === "MERMAID" ? "active" : ""} onClick={() => setFormat("MERMAID")}><Workflow size={20} /><span><strong>{text("Mermaid", "Mermaid")}</strong><small>{text("Diagram source with a local preview", "Diagramm-Quelltext mit lokaler Vorschau")}</small></span></button>
+              <button className={format === "GANTT" ? "active" : ""} onClick={() => setFormat("GANTT")}><ChartGantt size={20} /><span><strong>{text("Gantt timeline", "Gantt-Zeitstrahl")}</strong><small>{text("Project planning with a local timeline", "Projektplanung mit lokalem Zeitstrahl")}</small></span></button>
+              <button className={format === "TODO" ? "active" : ""} onClick={() => setFormat("TODO")}><ListTodo size={20} /><span><strong>{text("Todo board", "Todo-Board")}</strong><small>{text("Prioritized project tasks with deadlines", "Priorisierte Projektaufgaben mit Fristen")}</small></span></button>
               <button className={format === "CANVAS" ? "active" : ""} onClick={() => setFormat("CANVAS")}><Network size={20} /><span><strong>Canvas</strong><small>{text("Visual workspace with Excalidraw", "Visueller Arbeitsbereich mit Excalidraw")}</small></span></button>
             </div>
           )}
