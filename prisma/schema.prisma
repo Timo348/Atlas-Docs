@@ -49,6 +49,7 @@ model User {
   editorFont        String        @default("mono")
   fontSize          String        @default("medium")
   defaultEditorView String        @default("write")
+  fileViewDefaults  Json          @default("{\"markdown\":\"write\",\"latex\":\"write\",\"mermaid\":\"source-and-diagram\",\"gantt\":\"source-and-diagram\"}") @db.JsonB
   defaultSpaceId    String?
   compactMode       Boolean       @default(false)
   role              UserRole      @default(MEMBER)

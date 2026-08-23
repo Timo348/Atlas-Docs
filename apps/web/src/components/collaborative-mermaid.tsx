@@ -3,6 +3,7 @@
 import { AlertCircle, LoaderCircle } from "lucide-react";
 import { type SyntheticEvent, useEffect, useId, useRef, useState } from "react";
 import { usePreferences } from "@/components/preferences-provider";
+import type { MermaidView } from "@/lib/mermaid-view";
 
 export function CollaborativeMermaid({
   source,
@@ -11,6 +12,7 @@ export function CollaborativeMermaid({
   onCursor,
   onBlur,
   kind = "mermaid",
+  view = "source-and-diagram",
 }: {
   source: string;
   readOnly: boolean;
@@ -18,6 +20,7 @@ export function CollaborativeMermaid({
   onCursor: (textarea: HTMLTextAreaElement) => void;
   onBlur: () => void;
   kind?: "mermaid" | "gantt";
+  view?: MermaidView;
 }) {
   const { preferences, text } = usePreferences();
   const [dark, setDark] = useState(false);
@@ -82,8 +85,8 @@ export function CollaborativeMermaid({
 
   const publishCursor = (event: SyntheticEvent<HTMLTextAreaElement>) => onCursor(event.currentTarget);
   return (
-    <div className="mermaid-editor">
-      <section className="mermaid-source-pane">
+    <div className={`mermaid-editor ${view === "diagram" ? "mermaid-diagram-only" : ""}`}>
+      {view === "source-and-diagram" && <section className="mermaid-source-pane">
         <header><strong>{isGantt ? text("Gantt timeline", "Gantt-Zeitstrahl") : "Mermaid"}</strong><small>{text("Rendered locally", "Lokal gerendert")}</small></header>
         <textarea
           value={source}
@@ -104,7 +107,7 @@ export function CollaborativeMermaid({
           onFocus={publishCursor}
           onBlur={onBlur}
         />
-      </section>
+      </section>}
       <section className="mermaid-preview-pane" aria-live="polite">
         <header><strong>{text("Preview", "Vorschau")}</strong><small>{text("No external services", "Keine externen Dienste")}</small></header>
         <div className="mermaid-preview" ref={previewRef} />

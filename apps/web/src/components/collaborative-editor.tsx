@@ -2,7 +2,7 @@
 
 import { HocuspocusProvider } from "@hocuspocus/provider";
 import {
-  Bold, Code2, Download, Eye, FileText, History, ImagePlus, Italic, Link2, LoaderCircle, Minus,
+  Bold, Code2, Download, Eye, FileText, History, ImagePlus, Italic, Link2, LoaderCircle, Maximize2, Minimize2, Minus,
   Pencil, Plus, RotateCcw, Save as SaveIcon, Share2, Strikethrough, Table2, Users, X,
 } from "lucide-react";
 import {
@@ -53,6 +53,7 @@ import {
 import { createVisibleSnapshot, restoreVisibleSnapshot } from "@/lib/version-snapshot";
 import { sharedPageImageUrl } from "@/lib/shared-page-images";
 import { downloadableFileName } from "@/lib/page-file";
+import { initialEditorTab, type InitialEditorTab } from "@/lib/file-opening-view";
 import { serializeTodoBoard } from "@/lib/todo-board";
 
 type PageItem = {
@@ -64,7 +65,7 @@ type PageItem = {
   fileMime?: string | null;
   fileSize?: number | null;
 };
-type Tab = "write" | "preview" | "canvas" | "diagram" | "todo";
+type Tab = InitialEditorTab;
 type Connection = "connecting" | "connected" | "disconnected";
 type PageVersion = {
   id: string;
@@ -91,11 +92,14 @@ type LocalCursorSurface = { kind: "text" } | {
   column: number;
 };
 type PublicShareAccess = { token: string; permission: "VIEW" | "EDIT" };
+
 type EditorProps = {
   page: PageItem;
   headerCenter?: ReactNode;
   publicShare?: PublicShareAccess;
   canManageShares?: boolean;
+  fullscreen?: boolean;
+  onFullscreenChange?: (fullscreen: boolean) => void;
   user: {
     id: string;
     name: string;
@@ -128,7 +132,13 @@ const SLASH_COMMANDS: { id: SlashCommandId; title: [string, string]; description
 
 export function CollaborativeEditor(props: EditorProps) {
   if (props.page.format === "FILE") {
-    return <UnsupportedFileViewer page={props.page} headerCenter={props.headerCenter} publicShare={props.publicShare} />;
+    return <UnsupportedFileViewer
+      page={props.page}
+      headerCenter={props.headerCenter}
+      publicShare={props.publicShare}
+      fullscreen={props.fullscreen}
+      onFullscreenChange={props.onFullscreenChange}
+    />;
   }
   return <CollaborativeDocumentEditor {...props} />;
 }
@@ -139,6 +149,8 @@ function CollaborativeDocumentEditor({
   headerCenter,
   publicShare,
   canManageShares = false,
+  fullscreen = false,
+  onFullscreenChange,
 }: EditorProps) {
   const { preferences, text } = usePreferences();
   const ydoc = useMemo(() => new Y.Doc(), [page.id]);
@@ -148,17 +160,7 @@ function CollaborativeDocumentEditor({
     markdown: textBinding.value,
     revision: 0,
   });
-  const [tab, setTab] = useState<Tab>(
-    page.format === "CANVAS"
-      ? "canvas"
-      : page.format === "MERMAID" || page.format === "GANTT"
-        ? "diagram"
-      : page.format === "TODO"
-        ? "todo"
-      : page.format === "TEXT"
-        ? "write"
-      : publicShare?.permission === "VIEW" ? "preview" : preferences.defaultEditorView,
-  );
+  const [tab, setTab] = useState<Tab>(() => initialEditorTab(page.format, preferences, publicShare?.permission));
   const [status, setStatus] = useState<Connection>("connecting");
   const [awarenessStates, setAwarenessStates] = useState<unknown[]>([]);
   const [scrollRevision, setScrollRevision] = useState(0);
@@ -893,7 +895,7 @@ function CollaborativeDocumentEditor({
       setTitle(result.title);
       setVersionBusy(false);
       await saveVersion(result.version, result.title);
-      setTab(page.format === "CANVAS" ? "canvas" : page.format === "MERMAID" || page.format === "GANTT" ? "diagram" : page.format === "TODO" ? "todo" : "write");
+      setTab(initialEditorTab(page.format, preferences, publicShare?.permission));
     } catch (error) {
       setVersionNotice(error instanceof Error ? error.message : text("The version could not be restored.", "Die Version konnte nicht wiederhergestellt werden."));
       setVersionBusy(false);
@@ -947,7 +949,7 @@ function CollaborativeDocumentEditor({
   }), [page.id, publicShare]);
 
   return (
-    <div className={`editor-shell ${headerCenter ? "editor-shell-with-center" : ""} ${page.format === "CANVAS" || page.format === "MERMAID" || page.format === "GANTT" || page.format === "TODO" ? "canvas-file-editor" : ""} ${page.format === "TEXT" ? "text-file-editor" : ""}`}>
+    <div className={`editor-shell ${headerCenter ? "editor-shell-with-center" : ""} ${fullscreen ? "editor-shell-fullscreen" : ""} ${page.format === "CANVAS" || page.format === "TODO" ? "canvas-file-editor" : ""} ${page.format === "TEXT" ? "text-file-editor" : ""}`}>
       <header className={`editor-header ${headerCenter ? "editor-header-with-center" : ""}`}>
         <div className="title-wrap">
           <input
@@ -962,6 +964,17 @@ function CollaborativeDocumentEditor({
         </div>
         {headerCenter && <div className="editor-header-center">{headerCenter}</div>}
         <div className="editor-actions">
+          {onFullscreenChange && (
+            <button
+              type="button"
+              className="icon-button bordered"
+              onClick={() => onFullscreenChange(!fullscreen)}
+              title={fullscreen ? text("Exit fullscreen", "Vollbild verlassen") : text("Open fullscreen", "Vollbild öffnen")}
+              aria-label={fullscreen ? text("Exit fullscreen", "Vollbild verlassen") : text("Open fullscreen", "Vollbild öffnen")}
+            >
+              {fullscreen ? <Minimize2 size={17} /> : <Maximize2 size={17} />}
+            </button>
+          )}
           <span className={`connection ${status}`}>
             {status === "connecting" && <LoaderCircle size={13} className="spin" />}
             {status === "connected"
@@ -1042,6 +1055,12 @@ function CollaborativeDocumentEditor({
         <nav className="editor-tabs">
           <button className={tab === "write" ? "active" : ""} onClick={() => setTab("write")}><Pencil size={15} /> {page.format === "LATEX" ? text("Source", "Quelltext") : text("Write", "Schreiben")}</button>
           <button className={tab === "preview" ? "active" : ""} onClick={() => setTab("preview")}><Eye size={15} /> {text("Preview", "Vorschau")}</button>
+        </nav>
+      )}
+      {(page.format === "MERMAID" || page.format === "GANTT") && (
+        <nav className="editor-tabs" role="tablist" aria-label={page.format === "GANTT" ? text("Gantt view", "Gantt-Ansicht") : text("Mermaid view", "Mermaid-Ansicht")}>
+          <button type="button" role="tab" aria-selected={tab === "diagram"} className={tab === "diagram" ? "active" : ""} onClick={() => setTab("diagram")}><Eye size={15} /> {page.format === "GANTT" ? text("Timeline", "Zeitstrahl") : text("Diagram", "Diagramm")}</button>
+          <button type="button" role="tab" aria-selected={tab === "source-and-diagram"} className={tab === "source-and-diagram" ? "active" : ""} onClick={() => setTab("source-and-diagram")}><Code2 size={15} /> {page.format === "GANTT" ? text("Text + timeline", "Text + Zeitstrahl") : text("Text + diagram", "Text + Diagramm")}</button>
         </nav>
       )}
       <section className="editor-body">
@@ -1214,6 +1233,7 @@ function CollaborativeDocumentEditor({
           <CollaborativeMermaid
             source={markdown}
             readOnly={readOnly}
+            view={tab === "diagram" ? "diagram" : "source-and-diagram"}
             onChange={(value, cursor, anchor) => changeMarkdown(value, cursor, anchor, { kind: "text" })}
             onCursor={(textarea) => publishCursor(textarea)}
             onBlur={clearLocalCursor}
@@ -1224,6 +1244,7 @@ function CollaborativeDocumentEditor({
             source={markdown}
             readOnly={readOnly}
             kind="gantt"
+            view={tab === "diagram" ? "diagram" : "source-and-diagram"}
             onChange={(value, cursor, anchor) => changeMarkdown(value, cursor, anchor, { kind: "text" })}
             onCursor={(textarea) => publishCursor(textarea)}
             onBlur={clearLocalCursor}

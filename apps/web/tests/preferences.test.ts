@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DEFAULT_PREFERENCES, normalizePreferences, resolveLanguage } from "../src/lib/preferences";
+import {
+  DEFAULT_PREFERENCES,
+  fileViewDefaultsForDefaultEditorView,
+  normalizePreferences,
+  resolveLanguage,
+} from "../src/lib/preferences";
 
 test("accepts Helvetica as a persisted interface font", () => {
   assert.equal(normalizePreferences({ ...DEFAULT_PREFERENCES, uiFont: "helvetica" }).uiFont, "helvetica");
@@ -8,6 +13,39 @@ test("accepts Helvetica as a persisted interface font", () => {
 
 test("accepts a persisted default document view", () => {
   assert.equal(normalizePreferences({ ...DEFAULT_PREFERENCES, defaultEditorView: "preview" }).defaultEditorView, "preview");
+});
+
+test("persists individual opening views for configurable file types", () => {
+  const preferences = normalizePreferences({
+    ...DEFAULT_PREFERENCES,
+    fileViewDefaults: {
+      markdown: "preview",
+      latex: "write",
+      mermaid: "diagram",
+      gantt: "source-and-diagram",
+    },
+  });
+  assert.deepEqual(preferences.fileViewDefaults, {
+    markdown: "preview",
+    latex: "write",
+    mermaid: "diagram",
+    gantt: "source-and-diagram",
+  });
+});
+
+test("maps the legacy global view to equivalent per-file defaults", () => {
+  assert.deepEqual(fileViewDefaultsForDefaultEditorView("write"), {
+    markdown: "write",
+    latex: "write",
+    mermaid: "source-and-diagram",
+    gantt: "source-and-diagram",
+  });
+  assert.deepEqual(fileViewDefaultsForDefaultEditorView("preview"), {
+    markdown: "preview",
+    latex: "preview",
+    mermaid: "diagram",
+    gantt: "diagram",
+  });
 });
 
 test("accepts a nullable default landing space", () => {

@@ -195,6 +195,22 @@ export const API_ERROR_MESSAGES = {
     en: "You may only change your own profile image.",
     de: "Du darfst nur dein eigenes Profilbild ändern.",
   },
+  PROFILE_INVALID: {
+    en: "Enter a display name between 2 and 100 characters.",
+    de: "Gib einen Anzeigenamen mit 2 bis 100 Zeichen ein.",
+  },
+  PASSWORD_INVALID: {
+    en: "Enter a new password with 12 to 128 characters.",
+    de: "Gib ein neues Passwort mit 12 bis 128 Zeichen ein.",
+  },
+  PASSWORD_CURRENT_INVALID: {
+    en: "Your current password is incorrect.",
+    de: "Dein aktuelles Passwort ist nicht korrekt.",
+  },
+  PASSWORD_MANAGED_EXTERNALLY: {
+    en: "This password is managed by your identity provider.",
+    de: "Dieses Passwort wird von deinem Identity Provider verwaltet.",
+  },
 } as const;
 
 export type ApiErrorCode = keyof typeof API_ERROR_MESSAGES;

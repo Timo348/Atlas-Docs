@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import { requireApiUser, spaceAccess } from "@/lib/access";
 import { apiErrorResponse, readJsonBody } from "@/lib/api-errors";
 import { db } from "@/lib/db";
-import { preferencesSchema } from "@/lib/preferences";
+import { preferencesUpdateSchema } from "@/lib/preferences";
 
 export async function PATCH(request: Request) {
   const user = await requireApiUser();
   if (!user) return apiErrorResponse("AUTH_REQUIRED", 401);
-  const parsed = preferencesSchema.safeParse(await readJsonBody(request));
+  const parsed = preferencesUpdateSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) return apiErrorResponse("PREFERENCES_INVALID", 400);
   if (parsed.data.defaultSpaceId && !(await spaceAccess(user.id, parsed.data.defaultSpaceId))) {
     return apiErrorResponse("PREFERENCES_INVALID", 400);
@@ -22,6 +22,7 @@ export async function PATCH(request: Request) {
       editorFont: true,
       fontSize: true,
       defaultEditorView: true,
+      fileViewDefaults: true,
       defaultSpaceId: true,
       compactMode: true,
     },

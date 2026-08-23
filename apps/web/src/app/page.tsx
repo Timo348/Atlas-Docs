@@ -95,6 +95,7 @@ export default async function Home(props: { searchParams: Promise<{ page?: strin
     editorFont: user.editorFont,
     fontSize: user.fontSize,
     defaultEditorView: user.defaultEditorView,
+    fileViewDefaults: user.fileViewDefaults,
     defaultSpaceId: spaces.some((space) => space.id === user.defaultSpaceId) ? user.defaultSpaceId : null,
     compactMode: user.compactMode,
   });

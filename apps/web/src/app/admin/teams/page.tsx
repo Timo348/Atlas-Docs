@@ -33,6 +33,7 @@ export default async function TeamsPage() {
     editorFont: current.editorFont,
     fontSize: current.fontSize,
     defaultEditorView: current.defaultEditorView,
+    fileViewDefaults: current.fileViewDefaults,
     defaultSpaceId: current.defaultSpaceId,
     compactMode: current.compactMode,
   });

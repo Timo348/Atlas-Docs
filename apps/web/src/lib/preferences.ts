@@ -1,4 +1,32 @@
 import { z } from "zod";
+import type { MermaidView } from "@/lib/mermaid-view";
+
+export const fileViewDefaultsSchema = z.object({
+  markdown: z.enum(["write", "preview"]),
+  latex: z.enum(["write", "preview"]),
+  mermaid: z.enum(["diagram", "source-and-diagram"]),
+  gantt: z.enum(["diagram", "source-and-diagram"]),
+});
+
+export type FileViewDefaults = z.infer<typeof fileViewDefaultsSchema>;
+
+export const DEFAULT_FILE_VIEW_DEFAULTS: FileViewDefaults = {
+  markdown: "write",
+  latex: "write",
+  mermaid: "source-and-diagram",
+  gantt: "source-and-diagram",
+};
+
+export function fileViewDefaultsForDefaultEditorView(defaultEditorView: "write" | "preview"): FileViewDefaults {
+  return defaultEditorView === "preview"
+    ? {
+      markdown: "preview",
+      latex: "preview",
+      mermaid: "diagram",
+      gantt: "diagram",
+    }
+    : { ...DEFAULT_FILE_VIEW_DEFAULTS };
+}
 
 export const preferencesSchema = z.object({
   language: z.enum(["en", "de"]),
@@ -7,11 +35,20 @@ export const preferencesSchema = z.object({
   editorFont: z.enum(["mono", "sans"]),
   fontSize: z.enum(["small", "medium", "large"]),
   defaultEditorView: z.enum(["write", "preview"]),
+  fileViewDefaults: fileViewDefaultsSchema,
   defaultSpaceId: z.string().cuid().nullable(),
   compactMode: z.boolean(),
 });
 
 export type Preferences = z.infer<typeof preferencesSchema>;
+
+export const preferencesUpdateSchema = preferencesSchema
+  .omit({ fileViewDefaults: true })
+  .extend({ fileViewDefaults: fileViewDefaultsSchema.optional() })
+  .transform((value): Preferences => ({
+    ...value,
+    fileViewDefaults: value.fileViewDefaults ?? fileViewDefaultsForDefaultEditorView(value.defaultEditorView),
+  }));
 
 export const DEFAULT_PREFERENCES: Preferences = {
   language: "en",
@@ -20,6 +57,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   editorFont: "mono",
   fontSize: "medium",
   defaultEditorView: "write",
+  fileViewDefaults: { ...DEFAULT_FILE_VIEW_DEFAULTS },
   defaultSpaceId: null,
   compactMode: false,
 };

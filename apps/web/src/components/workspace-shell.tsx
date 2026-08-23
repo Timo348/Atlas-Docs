@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 import { CollaborativeEditor } from "@/components/collaborative-editor";
 import { usePreferences } from "@/components/preferences-provider";
-import { ProfileDialog } from "@/components/profile-dialog";
 import { SpacePermissionsDialog } from "@/components/space-permissions-dialog";
 import { SidebarSpaceIdentity, SpacePicker } from "@/components/space-picker";
 import { useDialogEscape } from "@/components/use-dialog-escape";
@@ -20,6 +19,7 @@ import { pageAfterDeletion } from "@/lib/page-deletion";
 import { spaceNavigationHref } from "@/lib/space-navigation";
 import { spaceRoleLabel } from "@/lib/space-role";
 import { workspaceShortcut } from "@/lib/workspace-shortcuts";
+import { filePreviewKind } from "@/lib/file-preview";
 
 type PageFormat = "MARKDOWN" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TODO" | "TEXT" | "FILE";
 type PageItem = {
@@ -75,9 +75,9 @@ export function WorkspaceShell({
   const [spacePickerOpen, setSpacePickerOpen] = useState(false);
   const [pageQuery, setPageQuery] = useState("");
   const [permissionsOpen, setPermissionsOpen] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
   const [dialog, setDialog] = useState<ActionDialogState | null>(null);
   const [notice, setNotice] = useState("");
+  const [fullscreen, setFullscreen] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(() => new Set());
   const [busy, setBusy] = useState(false);
   const [dragItem, setDragItem] = useState<DragItem | null>(null);
@@ -85,6 +85,10 @@ export function WorkspaceShell({
   const importInputRef = useRef<HTMLInputElement>(null);
   const activeSpace = spaces.find((space) => space.id === selectedSpaceId) || spaces[0] || null;
   const canWrite = activeSpace?.role === "OWNER" || activeSpace?.role === "EDITOR";
+
+  useEffect(() => {
+    setFullscreen(false);
+  }, [selectedPage?.id]);
 
   useEffect(() => {
     function handleKeyDown(event: globalThis.KeyboardEvent) {
@@ -98,7 +102,7 @@ export function WorkspaceShell({
         isComposing: event.isComposing,
         repeat: event.repeat,
       });
-      if (!shortcut || busy || dialog || permissionsOpen || profileOpen || spacePickerOpen) return;
+      if (!shortcut || fullscreen || busy || dialog || permissionsOpen || spacePickerOpen) return;
       if (shortcut === "new-file") {
         if (!activeSpace || !canWrite) return;
         event.preventDefault();
@@ -112,7 +116,7 @@ export function WorkspaceShell({
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [activeSpace, busy, canWrite, dialog, permissionsOpen, profileOpen, spacePickerOpen, spaces.length, text]);
+  }, [activeSpace, busy, canWrite, dialog, fullscreen, permissionsOpen, spacePickerOpen, spaces.length, text]);
 
   function request<T extends { id: string }>(url: string, method: string, body: unknown) {
     return jsonRequest<T>(url, method, body, text);
@@ -353,6 +357,21 @@ export function WorkspaceShell({
     />
   );
 
+  if (fullscreen && selectedPage) {
+    return (
+      <main className="fullscreen-page">
+        <CollaborativeEditor
+          key={`fullscreen:${selectedPage.id}`}
+          page={selectedPage}
+          user={user}
+          canManageShares={user.role === "ADMIN" || activeSpace?.role === "OWNER"}
+          fullscreen
+          onFullscreenChange={setFullscreen}
+        />
+      </main>
+    );
+  }
+
   return (
     <main className={`workspace ${sidebar ? "" : "sidebar-closed"}`}>
       <aside className="sidebar">
@@ -476,10 +495,10 @@ export function WorkspaceShell({
           {user.role === "ADMIN" && <Link className="footer-link" href="/admin/users"><ShieldCheck size={17} /> {text("User management", "Benutzerverwaltung")}</Link>}
           {user.role === "ADMIN" && <Link className="footer-link" href="/admin/teams"><Users size={17} /> {text("Team management", "Teamverwaltung")}</Link>}
           <button className="footer-link" onClick={() => signOut({ callbackUrl: "/signin" })}><LogOut size={17} /> {text("Sign out", "Abmelden")}</button>
-          <button className="user-chip user-chip-button" onClick={() => setProfileOpen(true)}>
+          <Link className="user-chip user-chip-button" href="/settings">
             <span>{user.hasAvatar ? <img src={`/api/users/${user.id}/avatar?v=${user.avatarVersion}`} alt="" /> : initials(user.name)}</span>
             <div><strong>{user.name}</strong><small>{user.email}</small></div>
-          </button>
+          </Link>
         </div>
       </aside>
       <section className="content">
@@ -500,6 +519,7 @@ export function WorkspaceShell({
             user={user}
             headerCenter={spacePicker}
             canManageShares={user.role === "ADMIN" || activeSpace?.role === "OWNER"}
+            onFullscreenChange={setFullscreen}
           />
         ) : (
           <div style={{ display: "grid", gridTemplateRows: "70px minmax(0, 1fr)", height: "100%" }}>
@@ -534,11 +554,6 @@ export function WorkspaceShell({
           }}
         />
       )}
-      {profileOpen && <ProfileDialog
-        user={user}
-        spaces={spaces.map(({ id, name }) => ({ id, name }))}
-        onClose={() => { setProfileOpen(false); router.refresh(); }}
-      />}
       {dialog && <ActionDialog key={`${dialog.kind}:${dialog.title}`} dialog={dialog} busy={busy} onBusy={setBusy} onClose={() => setDialog(null)} />}
       {notice && <button className="atlas-toast" onClick={() => setNotice("")}>{notice}<X size={14} /></button>}
     </main>
@@ -752,7 +767,7 @@ function RootPages({
           )}
           <Link className="page-link" href={`/?space=${page.spaceId}&page=${page.id}`}>
             {page.format === "CANVAS" ? <Network size={14} /> : page.format === "MERMAID" ? <Workflow size={14} /> : page.format === "GANTT" ? <ChartGantt size={14} /> : page.format === "TODO" ? <ListTodo size={14} /> : page.format === "LATEX" ? <FileCode2 size={14} /> : <FileText size={14} />}<span>{page.title}</span>
-            {page.format === "FILE" && <span className="file-unsupported-marker" title={text("Unsupported file type — download only", "Nicht unterstützter Dateityp — nur Download")} aria-label={text("Unsupported file type", "Nicht unterstützter Dateityp")}><AlertTriangle size={12} /></span>}
+            {page.format === "FILE" && !filePreviewKind(page.fileMime) && <span className="file-unsupported-marker" title={text("Unsupported file type — download only", "Nicht unterstützter Dateityp — nur Download")} aria-label={text("Unsupported file type", "Nicht unterstützter Dateityp")}><AlertTriangle size={12} /></span>}
           </Link>
           {canWrite && <button onClick={() => onMovePage(page)} title={text("Move file", "Datei verschieben")} aria-label={text(`Move ${page.title}`, `${page.title} verschieben`)}><MoreHorizontal size={15} /></button>}
           {canWrite && <button onClick={() => onDeletePage(page)} title={text("Delete file", "Datei löschen")} aria-label={text(`Delete ${page.title}`, `${page.title} löschen`)}><Trash2 size={14} /></button>}

@@ -27,6 +27,7 @@ export default async function UsersPage() {
     editorFont: current.editorFont,
     fontSize: current.fontSize,
     defaultEditorView: current.defaultEditorView,
+    fileViewDefaults: current.fileViewDefaults,
     defaultSpaceId: current.defaultSpaceId,
     compactMode: current.compactMode,
   });
