@@ -4,6 +4,7 @@ import { Download, FileWarning, LockKeyhole, Maximize2, Minimize2 } from "lucide
 import { type ReactNode } from "react";
 import { usePreferences } from "@/components/preferences-provider";
 import { filePreviewKind } from "@/lib/file-preview";
+import { publicShareResourceBase, type PublicShareAccess } from "@/lib/public-share";
 
 export function UnsupportedFileViewer({
   page,
@@ -14,13 +15,13 @@ export function UnsupportedFileViewer({
 }: {
   page: { id: string; title: string; fileMime?: string | null; fileSize?: number | null };
   headerCenter?: ReactNode;
-  publicShare?: { token: string; permission: "VIEW" | "EDIT" };
+  publicShare?: PublicShareAccess;
   fullscreen?: boolean;
   onFullscreenChange?: (fullscreen: boolean) => void;
 }) {
   const { text } = usePreferences();
   const downloadUrl = publicShare
-    ? `/api/public/shares/${encodeURIComponent(publicShare.token)}/file`
+    ? `${publicShareResourceBase(publicShare, page.id)}/file`
     : `/api/pages/${encodeURIComponent(page.id)}/file`;
   const previewKind = filePreviewKind(page.fileMime);
   const previewUrl = previewKind ? `${downloadUrl}?preview=1` : null;

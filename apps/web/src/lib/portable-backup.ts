@@ -10,7 +10,7 @@ export type PortablePage = {
   slug: string;
   folderId: string | null;
   parentId: string | null;
-  format: "MARKDOWN" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TODO" | "TEXT" | "FILE";
+  format: "MARKDOWN" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TODO" | "TEXT" | "FILE" | "PDF";
   fileData?: Uint8Array | null;
   fileMime?: string | null;
   sortOrder: number;
@@ -164,6 +164,32 @@ export function rewriteImageReferences(
     return `./${relativeAssetsDirectory}/${imageId}.${imageExtension(image.mime)}`;
   });
   return { source: rewritten, referencedImageIds: Array.from(referencedImageIds) };
+}
+
+export function rewriteAttachmentReferences(
+  source: string,
+  pageId: string,
+  relativeAssetsDirectory: string,
+  attachments: { id: string; name: string }[],
+) {
+  const available = new Map(attachments.map((attachment) => [attachment.id, attachment]));
+  const referencedAssetIds = new Set<string>();
+  const escapedPageId = escapeRegularExpression(pageId);
+  const pattern = new RegExp(
+    `(?:https?:\\/\\/[^\\s/)<>'"]+)?\\/api\\/pages\\/${escapedPageId}\\/attachments\\/([a-zA-Z0-9_-]+)(?:\\?[^\\s)<>'"]*)?`,
+    "g",
+  );
+  const rewritten = source.replace(pattern, (original, assetId: string) => {
+    const attachment = available.get(assetId);
+    if (!attachment) return original;
+    referencedAssetIds.add(assetId);
+    return `./${relativeAssetsDirectory}/${attachmentExportName(assetId, attachment.name)}`;
+  });
+  return { source: rewritten, referencedAssetIds: Array.from(referencedAssetIds) };
+}
+
+export function attachmentExportName(id: string, name: string) {
+  return `${id}-${sanitizePathSegment(name, "attachment.pdf")}`;
 }
 
 export function imageExtension(mime: string) {

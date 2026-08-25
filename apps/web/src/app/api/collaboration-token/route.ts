@@ -18,7 +18,9 @@ export async function GET(request: NextRequest) {
 
   const page = await pageAccess(user.id, pageId);
   if (!page) return apiErrorResponse("ACCESS_DENIED", 403);
-  if (page.format === "FILE") return apiErrorResponse("COLLABORATION_UNSUPPORTED_FILE", 400);
+  if (page.format === "FILE" || page.format === "PDF") {
+    return apiErrorResponse("COLLABORATION_UNSUPPORTED_FILE", 400);
+  }
 
   const secret = process.env.COLLAB_SECRET;
   if (!secret || secret.length < 32) {

@@ -1,83 +1,149 @@
 import { NextResponse } from "next/server";
 import { canEdit, requireApiUser, spaceAccess } from "@/lib/access";
-import { apiErrorResponse } from "@/lib/api-errors";
+import { apiErrorResponse, isCodedApiError } from "@/lib/api-errors";
 import { collaborationDocumentName, createTextCollaborationState } from "@/lib/collaboration-document";
 import { db } from "@/lib/db";
-import { isGanttImportName, isMermaidImportName, isPlainTextImportName, MAX_IMPORTED_FILE_BYTES } from "@/lib/page-file";
+import { readImportedFile } from "@/lib/file-import";
+import { isGanttImportName, isMermaidImportName, isPlainTextImportName } from "@/lib/page-file";
 import { slugify } from "@/lib/slug";
 
 export const runtime = "nodejs";
+
+type ImportedPage =
+  | { format: "MARKDOWN" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TEXT"; name: string; collaborationState: Uint8Array }
+  | { format: "PDF"; name: string; bytes: Uint8Array }
+  | { format: "FILE"; name: string; bytes: Uint8Array; mime: string };
 
 export async function POST(request: Request) {
   const user = await requireApiUser();
   if (!user) return apiErrorResponse("AUTH_REQUIRED", 401);
 
-  const form = await request.formData().catch(() => null);
-  const file = form?.get("file");
-  const spaceIdValue = form?.get("spaceId");
-  const spaceId = typeof spaceIdValue === "string" ? spaceIdValue : "";
-  const folderIdValue = form?.get("folderId");
-  const folderId = typeof folderIdValue === "string" && folderIdValue ? folderIdValue : null;
-  if (!(file instanceof File) || !spaceId || !file.name || file.name.length > 160) {
-    return apiErrorResponse("FILE_IMPORT_INVALID", 400);
-  }
-  if (file.size > MAX_IMPORTED_FILE_BYTES) return apiErrorResponse("FILE_TOO_LARGE", 413);
+  try {
+    const form = await request.formData();
+    const file = form.get("file");
+    const spaceId = stringField(form, "spaceId");
+    const folderId = nullableStringField(form, "folderId");
+    if (!(file instanceof File)) return apiErrorResponse("FILE_MISSING", 400);
 
-  const role = await spaceAccess(user.id, spaceId);
-  if (!canEdit(role)) return apiErrorResponse("WRITE_ACCESS_REQUIRED", 403);
-  if (folderId) {
-    const folder = await db.folder.findFirst({ where: { id: folderId, spaceId }, select: { id: true } });
-    if (!folder) return apiErrorResponse("FOLDER_INVALID", 400);
-  }
+    const title = (stringField(form, "title") || file.name || "file").trim();
+    if (!title || title.length > 160 || !spaceId) return apiErrorResponse("INVALID_INPUT", 400);
 
-  const data = Buffer.from(await file.arrayBuffer());
-  const sourceText = decodeImportedText(file.name, data);
-  const format = sourceText === null ? "FILE" : isGanttImportName(file.name) ? "GANTT" : isMermaidImportName(file.name) ? "MERMAID" : "TEXT";
-  const baseSlug = slugify(file.name);
-  const exists = await db.page.findUnique({
-    where: { spaceId_slug: { spaceId, slug: baseSlug } },
-    select: { id: true },
-  });
-  const slug = exists ? `${baseSlug}-${crypto.randomUUID().slice(0, 6)}` : baseSlug;
-  const lastPage = await db.page.aggregate({
-    where: { spaceId, folderId },
-    _max: { sortOrder: true },
-  });
-  const page = await db.$transaction(async (transaction) => {
-    const created = await transaction.page.create({
-      data: {
-        title: file.name,
-        slug,
-        spaceId,
-        folderId,
-        format,
-        sortOrder: (lastPage?._max?.sortOrder ?? -1) + 1,
-        createdById: user.id,
-        ...(format === "FILE" ? {
-          fileData: data,
-          fileMime: file.type || "application/octet-stream",
-          fileSize: file.size,
-        } : {}),
-      },
+    const role = await spaceAccess(user.id, spaceId);
+    if (!canEdit(role)) return apiErrorResponse("WRITE_ACCESS_REQUIRED", 403);
+    if (folderId) {
+      const folder = await db.folder.findFirst({ where: { id: folderId, spaceId }, select: { id: true } });
+      if (!folder) return apiErrorResponse("FOLDER_INVALID", 400);
+    }
+
+    const imported = await readImportedPage(file);
+    const baseSlug = slugify(title);
+    const exists = await db.page.findUnique({
+      where: { spaceId_slug: { spaceId, slug: baseSlug } },
+      select: { id: true },
     });
-    if (sourceText !== null) {
-      await transaction.collabDocument.create({
+    const slug = exists ? `${baseSlug}-${crypto.randomUUID().slice(0, 6)}` : baseSlug;
+    const lastPage = await db.page.aggregate({ where: { spaceId, folderId }, _max: { sortOrder: true } });
+
+    const page = await db.$transaction(async (transaction) => {
+      const created = await transaction.page.create({
         data: {
-          name: collaborationDocumentName(created.id),
-          data: Buffer.from(createTextCollaborationState(sourceText)),
+          title,
+          slug,
+          spaceId,
+          folderId,
+          format: imported.format,
+          sortOrder: (lastPage._max.sortOrder ?? -1) + 1,
+          createdById: user.id,
+          ...(imported.format === "FILE" ? {
+            fileData: Buffer.from(imported.bytes),
+            fileMime: imported.mime,
+            fileSize: imported.bytes.byteLength,
+          } : {}),
         },
       });
+
+      if (imported.format === "PDF") {
+        await transaction.pageAsset.create({
+          data: {
+            pageId: created.id,
+            createdById: user.id,
+            kind: "DOCUMENT",
+            name: imported.name,
+            mime: "application/pdf",
+            size: imported.bytes.byteLength,
+            data: Buffer.from(imported.bytes),
+          },
+        });
+      } else if (imported.format !== "FILE") {
+        await transaction.collabDocument.create({
+          data: {
+            name: collaborationDocumentName(created.id),
+            data: Buffer.from(imported.collaborationState),
+          },
+        });
+      }
+      return created;
+    });
+    return NextResponse.json(page, { status: 201 });
+  } catch (error) {
+    if (isCodedApiError(error)) {
+      return apiErrorResponse(error.code, error.code === "FILE_TOO_LARGE" ? 413 : 400);
     }
-    return created;
-  });
-  return NextResponse.json(page, { status: 201 });
+    console.error("[atlas-api] File import failed.", error);
+    return apiErrorResponse("FILE_SAVE_FAILED", 500);
+  }
 }
 
-function decodeImportedText(name: string, data: Buffer) {
+async function readImportedPage(file: File): Promise<ImportedPage> {
+  try {
+    const imported = await readImportedFile(file);
+    return imported;
+  } catch (error) {
+    if (!isCodedApiError(error) || error.code !== "FILE_INVALID_TYPE") throw error;
+
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const text = decodeOptionalText(file.name, bytes);
+    if (text !== null) {
+      const format = isGanttImportName(file.name)
+        ? "GANTT"
+        : isMermaidImportName(file.name)
+          ? "MERMAID"
+          : "TEXT";
+      return {
+        format,
+        name: cleanFileName(file.name),
+        collaborationState: createTextCollaborationState(text),
+      };
+    }
+    return {
+      format: "FILE",
+      name: cleanFileName(file.name),
+      bytes,
+      mime: file.type || "application/octet-stream",
+    };
+  }
+}
+
+function decodeOptionalText(name: string, bytes: Uint8Array) {
   if (!isPlainTextImportName(name) && !isMermaidImportName(name) && !isGanttImportName(name)) return null;
   try {
-    return new TextDecoder("utf-8", { fatal: true }).decode(data);
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes).replace(/^\uFEFF/, "");
   } catch {
     return null;
   }
+}
+
+function cleanFileName(name: string) {
+  const leaf = name.replace(/\\/g, "/").split("/").pop()?.trim() || "file";
+  return leaf.replace(/[\u0000-\u001f\u007f]/g, "").slice(0, 180) || "file";
+}
+
+function stringField(form: FormData, key: string) {
+  const value = form.get(key);
+  return typeof value === "string" && value ? value : null;
+}
+
+function nullableStringField(form: FormData, key: string) {
+  const value = form.get(key);
+  return typeof value === "string" && value ? value : null;
 }

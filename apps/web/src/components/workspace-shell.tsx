@@ -7,9 +7,11 @@ import { type DragEvent, useEffect, useRef, useState } from "react";
 import {
   AlertTriangle, BookOpen, ChevronDown, ChevronRight, FileCode2, FilePlus2, FileText, Folder,
   FolderPlus, GripVertical, LogOut, MoreHorizontal, PanelLeftClose, PanelLeftOpen,
-  ChartGantt, ChartNoAxesCombined, ListTodo, Network, Pencil, Plus, Search, Settings2, ShieldCheck, Trash2, Upload, Users, Workflow, X,
+  ChartGantt, ChartNoAxesCombined, ListTodo, Network, Pencil, Plus, Search, Settings2, Share2, ShieldCheck, Trash2, Upload, Users, Workflow, X,
 } from "lucide-react";
 import { CollaborativeEditor } from "@/components/collaborative-editor";
+import { FolderShareDialog } from "@/components/page-share-dialog";
+import { PdfDocument } from "@/components/pdf-document";
 import { usePreferences } from "@/components/preferences-provider";
 import { SpacePermissionsDialog } from "@/components/space-permissions-dialog";
 import { SidebarSpaceIdentity, SpacePicker } from "@/components/space-picker";
@@ -21,7 +23,7 @@ import { spaceRoleLabel } from "@/lib/space-role";
 import { workspaceShortcut } from "@/lib/workspace-shortcuts";
 import { filePreviewKind } from "@/lib/file-preview";
 
-type PageFormat = "MARKDOWN" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TODO" | "TEXT" | "FILE";
+type PageFormat = "MARKDOWN" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TODO" | "TEXT" | "FILE" | "PDF";
 type PageItem = {
   id: string;
   title: string;
@@ -43,7 +45,7 @@ type DropTarget =
   | { kind: "page"; id: string; edge: "before" | "after" };
 type ActionDialogState =
   | { kind: "text"; title: string; label: string; initial: string; submit: (value: string) => Promise<void> }
-  | { kind: "page"; title: string; label: string; initial: string; submit: (value: string, format: PageFormat) => Promise<void> }
+  | { kind: "page"; title: string; label: string; initial: string; submit: (value: string, format: Exclude<PageFormat, "PDF">, importFile: File | null) => Promise<void> }
   | { kind: "confirm"; title: string; message: string; submit: () => Promise<void> }
   | { kind: "move"; title: string; folders: FlatFolder[]; currentFolderId: string | null; submit: (folderId: string | null) => Promise<void> };
 type Space = {
@@ -63,11 +65,13 @@ export function WorkspaceShell({
   selectedSpaceId,
   selectedPage,
   user,
+  uploadLimitMb,
 }: {
   spaces: Space[];
   selectedSpaceId: string | null;
   selectedPage: PageItem | null;
   user: { id: string; name: string; email: string; role: "ADMIN" | "MEMBER"; hasAvatar: boolean; avatarVersion: number };
+  uploadLimitMb: number;
 }) {
   const { preferences, text } = usePreferences();
   const router = useRouter();
@@ -75,6 +79,7 @@ export function WorkspaceShell({
   const [spacePickerOpen, setSpacePickerOpen] = useState(false);
   const [pageQuery, setPageQuery] = useState("");
   const [permissionsOpen, setPermissionsOpen] = useState(false);
+  const [folderShareTarget, setFolderShareTarget] = useState<FolderItem | null>(null);
   const [dialog, setDialog] = useState<ActionDialogState | null>(null);
   const [notice, setNotice] = useState("");
   const [fullscreen, setFullscreen] = useState(false);
@@ -85,6 +90,7 @@ export function WorkspaceShell({
   const importInputRef = useRef<HTMLInputElement>(null);
   const activeSpace = spaces.find((space) => space.id === selectedSpaceId) || spaces[0] || null;
   const canWrite = activeSpace?.role === "OWNER" || activeSpace?.role === "EDITOR";
+  const canManageShares = user.role === "ADMIN" || activeSpace?.role === "OWNER";
 
   useEffect(() => {
     setFullscreen(false);
@@ -102,7 +108,7 @@ export function WorkspaceShell({
         isComposing: event.isComposing,
         repeat: event.repeat,
       });
-      if (!shortcut || fullscreen || busy || dialog || permissionsOpen || spacePickerOpen) return;
+      if (!shortcut || fullscreen || busy || dialog || permissionsOpen || folderShareTarget || spacePickerOpen) return;
       if (shortcut === "new-file") {
         if (!activeSpace || !canWrite) return;
         event.preventDefault();
@@ -116,7 +122,7 @@ export function WorkspaceShell({
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [activeSpace, busy, canWrite, dialog, fullscreen, permissionsOpen, spacePickerOpen, spaces.length, text]);
+  }, [activeSpace, busy, canWrite, dialog, folderShareTarget, fullscreen, permissionsOpen, spacePickerOpen, spaces.length, text]);
 
   function request<T extends { id: string }>(url: string, method: string, body: unknown) {
     return jsonRequest<T>(url, method, body, text);
@@ -125,8 +131,10 @@ export function WorkspaceShell({
   function createPage(spaceId: string, folderId: string | null = null) {
     setDialog({
       kind: "page", title: text("New file", "Neue Datei"), label: text("Title", "Titel"), initial: "",
-      submit: async (title, format) => {
-        const response = await request("/api/pages", "POST", { title, spaceId, folderId, format });
+      submit: async (title, format, importFile) => {
+        const response = importFile
+          ? await importPage<PageItem>(importFile, title, spaceId, folderId, text)
+          : await request("/api/pages", "POST", { title, spaceId, folderId, format });
         if (!response.ok) return setNotice(response.error);
         setDialog(null);
         router.push(`/?space=${spaceId}&page=${response.data.id}`);
@@ -360,14 +368,25 @@ export function WorkspaceShell({
   if (fullscreen && selectedPage) {
     return (
       <main className="fullscreen-page">
-        <CollaborativeEditor
-          key={`fullscreen:${selectedPage.id}`}
-          page={selectedPage}
-          user={user}
-          canManageShares={user.role === "ADMIN" || activeSpace?.role === "OWNER"}
-          fullscreen
-          onFullscreenChange={setFullscreen}
-        />
+        {isCollaborativePage(selectedPage) ? (
+          <CollaborativeEditor
+            key={`fullscreen:${selectedPage.id}`}
+            page={selectedPage}
+            user={user}
+            canManageShares={Boolean(canManageShares)}
+            fullscreen
+            onFullscreenChange={setFullscreen}
+          />
+        ) : (
+          <PdfDocument
+            key={`fullscreen:${selectedPage.id}`}
+            page={selectedPage}
+            canWrite={Boolean(canWrite)}
+            canManageShares={Boolean(canManageShares)}
+            fullscreen
+            onFullscreenChange={setFullscreen}
+          />
+        )}
       </main>
     );
   }
@@ -439,12 +458,14 @@ export function WorkspaceShell({
                 selectedPageId={selectedPage?.id || null}
                 expanded={expandedFolders}
                 canWrite={Boolean(canWrite)}
+                canManageShares={Boolean(canManageShares)}
                 busy={busy}
                 onToggle={toggleFolder}
                 onCreatePage={createPage}
                 onCreateFolder={createFolder}
                 onRenameFolder={renameFolder}
                 onDeleteFolder={deleteFolder}
+                onShareFolder={setFolderShareTarget}
                 onMovePage={movePage}
                 onDeletePage={deletePage}
                 dragItem={dragItem}
@@ -514,14 +535,25 @@ export function WorkspaceShell({
           </button>
         )}
         {selectedPage ? (
-          <CollaborativeEditor
-            key={selectedPage.id}
-            page={selectedPage}
-            user={user}
-            headerCenter={spacePicker}
-            canManageShares={user.role === "ADMIN" || activeSpace?.role === "OWNER"}
-            onFullscreenChange={setFullscreen}
-          />
+          !isCollaborativePage(selectedPage) ? (
+            <PdfDocument
+              key={selectedPage.id}
+              page={selectedPage}
+              headerCenter={spacePicker}
+              canWrite={Boolean(canWrite)}
+              canManageShares={Boolean(canManageShares)}
+              onFullscreenChange={setFullscreen}
+            />
+          ) : (
+            <CollaborativeEditor
+              key={selectedPage.id}
+              page={selectedPage}
+              user={user}
+              headerCenter={spacePicker}
+              canManageShares={Boolean(canManageShares)}
+              onFullscreenChange={setFullscreen}
+            />
+          )
         ) : (
           <div style={{ display: "grid", gridTemplateRows: "70px minmax(0, 1fr)", height: "100%" }}>
             <header style={{ alignItems: "center", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "center", padding: "0 28px" }}>
@@ -544,6 +576,7 @@ export function WorkspaceShell({
         <SpacePermissionsDialog
           spaceId={activeSpace.id}
           currentUserId={user.id}
+          uploadLimitMb={uploadLimitMb}
           onClose={() => {
             setPermissionsOpen(false);
             router.refresh();
@@ -555,7 +588,12 @@ export function WorkspaceShell({
           }}
         />
       )}
-      {dialog && <ActionDialog key={`${dialog.kind}:${dialog.title}`} dialog={dialog} busy={busy} onBusy={setBusy} onClose={() => setDialog(null)} />}
+      {folderShareTarget && <FolderShareDialog
+        folderId={folderShareTarget.id}
+        folderName={folderShareTarget.name}
+        onClose={() => setFolderShareTarget(null)}
+      />}
+      {dialog && <ActionDialog key={`${dialog.kind}:${dialog.title}`} dialog={dialog} busy={busy} uploadLimitMb={uploadLimitMb} onBusy={setBusy} onClose={() => setDialog(null)} />}
       {notice && <button className="atlas-toast" onClick={() => setNotice("")}>{notice}<X size={14} /></button>}
     </main>
   );
@@ -568,12 +606,14 @@ function FolderTree({
   selectedPageId,
   expanded,
   canWrite,
+  canManageShares,
   busy,
   onToggle,
   onCreatePage,
   onCreateFolder,
   onRenameFolder,
   onDeleteFolder,
+  onShareFolder,
   onMovePage,
   onDeletePage,
   dragItem,
@@ -589,12 +629,14 @@ function FolderTree({
   selectedPageId: string | null;
   expanded: Set<string>;
   canWrite: boolean;
+  canManageShares: boolean;
   busy: boolean;
   onToggle: (id: string) => void;
   onCreatePage: (spaceId: string, folderId: string | null) => void;
   onCreateFolder: (spaceId: string, parentId: string | null) => void;
   onRenameFolder: (folder: FolderItem) => void;
   onDeleteFolder: (folder: FolderItem) => void;
+  onShareFolder: (folder: FolderItem) => void;
   onMovePage: (page: PageItem) => void;
   onDeletePage: (page: PageItem) => void;
   dragItem: DragItem | null;
@@ -648,12 +690,13 @@ function FolderTree({
                 {isOpen ? <Folder size={15} /> : <Folder size={15} />}
                 <span>{folder.name}</span>
               </button>
-              {canWrite && (
+              {(canWrite || canManageShares) && (
                 <div className="node-actions">
-                  <button disabled={busy} onClick={() => onCreatePage(space.id, folder.id)} title={text("File in folder", "Datei im Ordner")} aria-label={text(`Create file in ${folder.name}`, `Datei in ${folder.name} anlegen`)}><FilePlus2 size={14} /></button>
-                  <button disabled={busy} onClick={() => onCreateFolder(space.id, folder.id)} title={text("Subfolder", "Unterordner")} aria-label={text(`Create subfolder in ${folder.name}`, `Unterordner in ${folder.name} anlegen`)}><FolderPlus size={14} /></button>
-                  <button disabled={busy} onClick={() => onRenameFolder(folder)} title={text("Rename", "Umbenennen")} aria-label={text(`Rename ${folder.name}`, `${folder.name} umbenennen`)}><Pencil size={13} /></button>
-                  <button disabled={busy} onClick={() => onDeleteFolder(folder)} title={text("Delete", "Löschen")} aria-label={text(`Delete ${folder.name}`, `${folder.name} löschen`)}><Trash2 size={13} /></button>
+                  {canWrite && <button disabled={busy} onClick={() => onCreatePage(space.id, folder.id)} title={text("File in folder", "Datei im Ordner")} aria-label={text(`Create file in ${folder.name}`, `Datei in ${folder.name} anlegen`)}><FilePlus2 size={14} /></button>}
+                  {canWrite && <button disabled={busy} onClick={() => onCreateFolder(space.id, folder.id)} title={text("Subfolder", "Unterordner")} aria-label={text(`Create subfolder in ${folder.name}`, `Unterordner in ${folder.name} anlegen`)}><FolderPlus size={14} /></button>}
+                  {canManageShares && <button disabled={busy} onClick={() => onShareFolder(folder)} title={text("Share folder", "Ordner freigeben")} aria-label={text(`Share ${folder.name}`, `${folder.name} freigeben`)}><Share2 size={13} /></button>}
+                  {canWrite && <button disabled={busy} onClick={() => onRenameFolder(folder)} title={text("Rename", "Umbenennen")} aria-label={text(`Rename ${folder.name}`, `${folder.name} umbenennen`)}><Pencil size={13} /></button>}
+                  {canWrite && <button disabled={busy} onClick={() => onDeleteFolder(folder)} title={text("Delete", "Löschen")} aria-label={text(`Delete ${folder.name}`, `${folder.name} löschen`)}><Trash2 size={13} /></button>}
                 </div>
               )}
             </div>
@@ -666,12 +709,14 @@ function FolderTree({
                   selectedPageId={selectedPageId}
                   expanded={expanded}
                   canWrite={canWrite}
+                  canManageShares={canManageShares}
                   busy={busy}
                   onToggle={onToggle}
                   onCreatePage={onCreatePage}
                   onCreateFolder={onCreateFolder}
                   onRenameFolder={onRenameFolder}
                   onDeleteFolder={onDeleteFolder}
+                  onShareFolder={onShareFolder}
                   onMovePage={onMovePage}
                   onDeletePage={onDeletePage}
                   dragItem={dragItem}
@@ -769,6 +814,7 @@ function RootPages({
           <Link className="page-link" href={`/?space=${page.spaceId}&page=${page.id}`}>
             {page.format === "CANVAS" ? <Network size={14} /> : page.format === "MERMAID" ? <Workflow size={14} /> : page.format === "GANTT" ? <ChartGantt size={14} /> : page.format === "TODO" ? <ListTodo size={14} /> : page.format === "LATEX" ? <FileCode2 size={14} /> : <FileText size={14} />}<span>{page.title}</span>
             {page.format === "FILE" && !filePreviewKind(page.fileMime) && <span className="file-unsupported-marker" title={text("Unsupported file type — download only", "Nicht unterstützter Dateityp — nur Download")} aria-label={text("Unsupported file type", "Nicht unterstützter Dateityp")}><AlertTriangle size={12} /></span>}
+            {page.format === "PDF" && <small className="page-format-tag">{text("PDF", "PDF")}</small>}
           </Link>
           {canWrite && <button onClick={() => onMovePage(page)} title={text("Move file", "Datei verschieben")} aria-label={text(`Move ${page.title}`, `${page.title} verschieben`)}><MoreHorizontal size={15} /></button>}
           {canWrite && <button onClick={() => onDeletePage(page)} title={text("Delete file", "Datei löschen")} aria-label={text(`Delete ${page.title}`, `${page.title} löschen`)}><Trash2 size={14} /></button>}
@@ -815,24 +861,28 @@ function initials(name: string) {
 function ActionDialog({
   dialog,
   busy,
+  uploadLimitMb,
   onBusy,
   onClose,
 }: {
   dialog: ActionDialogState;
   busy: boolean;
+  uploadLimitMb: number;
   onBusy: (busy: boolean) => void;
   onClose: () => void;
 }) {
   const { text } = usePreferences();
   const [value, setValue] = useState(dialog.kind === "text" || dialog.kind === "page" ? dialog.initial : dialog.kind === "move" ? dialog.currentFolderId || "" : "");
-  const [format, setFormat] = useState<PageFormat>("MARKDOWN");
+  const [format, setFormat] = useState<Exclude<PageFormat, "PDF">>("MARKDOWN");
+  const [pageMode, setPageMode] = useState<"create" | "import">("create");
+  const [importFile, setImportFile] = useState<File | null>(null);
   useDialogEscape(onClose, busy);
   async function submit() {
     if (busy) return;
     onBusy(true);
     try {
       if (dialog.kind === "text") await dialog.submit(value.trim());
-      else if (dialog.kind === "page") await dialog.submit(value.trim(), format);
+      else if (dialog.kind === "page") await dialog.submit(value.trim(), format, pageMode === "import" ? importFile : null);
       else if (dialog.kind === "move") await dialog.submit(value || null);
       else await dialog.submit();
     } finally {
@@ -847,9 +897,15 @@ function ActionDialog({
           <button className="icon-button" disabled={busy} onClick={onClose} aria-label={text("Close", "Schließen")}><X size={18} /></button>
         </header>
         <div className="action-dialog-body">
-          {(dialog.kind === "text" || dialog.kind === "page") && <label>{dialog.label}<input autoFocus value={value} onChange={(event) => setValue(event.target.value)} onKeyDown={(event) => event.key === "Enter" && value.trim() && void submit()} /></label>}
           {dialog.kind === "page" && (
-            <div className="format-picker">
+            <div className="file-dialog-mode" role="tablist" aria-label={text("File action", "Dateiaktion")}>
+              <button className={pageMode === "create" ? "active" : ""} onClick={() => setPageMode("create")}><FilePlus2 size={15} /> {text("Create", "Erstellen")}</button>
+              <button className={pageMode === "import" ? "active" : ""} onClick={() => setPageMode("import")}><Upload size={15} /> {text("Import", "Importieren")}</button>
+            </div>
+          )}
+          {(dialog.kind === "text" || dialog.kind === "page") && <label>{dialog.label}<input autoFocus value={value} onChange={(event) => setValue(event.target.value)} onKeyDown={(event) => event.key === "Enter" && value.trim() && (dialog.kind !== "page" || pageMode === "create" || importFile) && void submit()} /></label>}
+          {dialog.kind === "page" && (
+            pageMode === "create" ? <div className="format-picker">
               <button className={format === "MARKDOWN" ? "active" : ""} onClick={() => setFormat("MARKDOWN")}><FileText size={20} /><span><strong>Markdown</strong><small>{text("Flexible documentation with preview", "Flexible Dokumentation mit Vorschau")}</small></span></button>
               <button className={format === "TEXT" ? "active" : ""} onClick={() => setFormat("TEXT")}><FileText size={20} /><span><strong>{text("Plain text", "Klartext")}</strong><small>{text("Simple editable text without formatting", "Einfacher editierbarer Text ohne Formatierung")}</small></span></button>
               <button className={format === "LATEX" ? "active" : ""} onClick={() => setFormat("LATEX")}><FileCode2 size={20} /><span><strong>LaTeX</strong><small>{text("Scientific documents and formulas", "Wissenschaftliche Dokumente und Formeln")}</small></span></button>
@@ -857,6 +913,21 @@ function ActionDialog({
               <button className={format === "GANTT" ? "active" : ""} onClick={() => setFormat("GANTT")}><ChartGantt size={20} /><span><strong>{text("Gantt timeline", "Gantt-Zeitstrahl")}</strong><small>{text("Project planning with a local timeline", "Projektplanung mit lokalem Zeitstrahl")}</small></span></button>
               <button className={format === "TODO" ? "active" : ""} onClick={() => setFormat("TODO")}><ListTodo size={20} /><span><strong>{text("Todo board", "Todo-Board")}</strong><small>{text("Prioritized project tasks with deadlines", "Priorisierte Projektaufgaben mit Fristen")}</small></span></button>
               <button className={format === "CANVAS" ? "active" : ""} onClick={() => setFormat("CANVAS")}><Network size={20} /><span><strong>Canvas</strong><small>{text("Visual workspace with Excalidraw", "Visueller Arbeitsbereich mit Excalidraw")}</small></span></button>
+            </div> : <div className="file-import-picker">
+              <label className="file-picker"><Upload size={16} /> {importFile ? importFile.name : text("Choose a file", "Datei auswählen")}
+                <input
+                  type="file"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0] || null;
+                    setImportFile(file);
+                    if (file && !value.trim()) setValue(importTitle(file.name));
+                  }}
+                />
+              </label>
+              <small>{text(
+                `Any file up to ${uploadLimitMb} MB. Supported document types open with their native editor or preview.`,
+                `Alle Dateien bis ${uploadLimitMb} MB. Unterstützte Dokumenttypen öffnen im passenden Editor oder in der Vorschau.`,
+              )}</small>
             </div>
           )}
           {dialog.kind === "confirm" && <p>{dialog.message}</p>}
@@ -873,8 +944,8 @@ function ActionDialog({
           <span />
           <div>
             <button className="button secondary-button compact" disabled={busy} onClick={onClose}>{text("Cancel", "Abbrechen")}</button>
-            <button className={`button compact ${dialog.kind === "confirm" ? "danger-button" : "primary-button"}`} disabled={busy || ((dialog.kind === "text" || dialog.kind === "page") && !value.trim())} onClick={() => void submit()}>
-              {busy ? text("Please wait…", "Bitte warten…") : dialog.kind === "confirm" ? text("Delete", "Löschen") : text("Save", "Speichern")}
+            <button className={`button compact ${dialog.kind === "confirm" ? "danger-button" : "primary-button"}`} disabled={busy || ((dialog.kind === "text" || dialog.kind === "page") && !value.trim()) || (dialog.kind === "page" && pageMode === "import" && !importFile)} onClick={() => void submit()}>
+              {busy ? text("Please wait…", "Bitte warten…") : dialog.kind === "confirm" ? text("Delete", "Löschen") : dialog.kind === "page" && pageMode === "import" ? text("Import", "Importieren") : text("Save", "Speichern")}
             </button>
           </div>
         </footer>
@@ -906,4 +977,37 @@ async function jsonRequest<T extends { id: string }>(
           de: "Die Aktion konnte nicht abgeschlossen werden.",
         }),
       };
+}
+
+function isCollaborativePage(page: PageItem): page is PageItem & { format: Exclude<PageFormat, "PDF"> } {
+  return page.format !== "PDF";
+}
+
+async function importPage<T extends { id: string }>(
+  file: File,
+  title: string,
+  spaceId: string,
+  folderId: string | null,
+  text: (english: string, german: string) => string,
+): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
+  const form = new FormData();
+  form.set("file", file);
+  form.set("title", title);
+  form.set("spaceId", spaceId);
+  if (folderId) form.set("folderId", folderId);
+  const response = await fetch("/api/pages/import", { method: "POST", body: form });
+  const data = await response.json();
+  return response.ok
+    ? { ok: true, data: data as T }
+    : {
+        ok: false,
+        error: apiErrorMessage(data, text, {
+          en: "The file could not be imported.",
+          de: "Die Datei konnte nicht importiert werden.",
+        }),
+      };
+}
+
+function importTitle(name: string) {
+  return name.replace(/\.[^.]+$/, "").trim().slice(0, 160);
 }

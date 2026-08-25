@@ -15,13 +15,15 @@ if (!databaseUrl || !secret || secret.length < 32) {
 }
 
 const prisma = new PrismaClient();
+type PublicShareContext = {
+  kind: "page" | "folder";
+  id: string;
+  pageId: string;
+  permission: "VIEW" | "EDIT";
+};
 type CollaborationContext = {
   user?: { id: string; name: string };
-  pageShare?: {
-    id: string;
-    pageId: string;
-    permission: "VIEW" | "EDIT";
-  };
+  publicShare?: PublicShareContext;
 };
 
 const PAGE_SHARE_REVALIDATE_MS = 60_000;
@@ -65,21 +67,17 @@ const server = new Server<CollaborationContext>({
   ],
   async onAuthenticate({ token, documentName, connectionConfig }) {
     const claims = await verifyCollaborationToken(token, secret, documentName);
-    if (claims.shareId) {
-      const share = await prisma.pageShare.findFirst({
-        where: {
-          id: claims.shareId,
-          pageId: claims.pageId,
-          revokedAt: null,
-          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
-        },
-        select: { permission: true },
-      });
-      if (!share) throw new Error("Page share is no longer active.");
-      connectionConfig.readOnly = claims.readOnly || share.permission !== "EDIT";
+    if (claims.shareId || claims.folderShareId) {
+      const kind = claims.folderShareId ? "folder" : "page";
+      const id = claims.folderShareId ?? claims.shareId!;
+      const permission = kind === "folder"
+        ? await activeFolderSharePermission(id, claims.pageId)
+        : await activePageSharePermission(id, claims.pageId);
+      if (!permission) throw new Error("Public share is no longer active.");
+      connectionConfig.readOnly = claims.readOnly || permission !== "EDIT";
       return {
         user: { id: claims.sub, name: claims.name },
-        pageShare: { id: claims.shareId, pageId: claims.pageId, permission: share.permission },
+        publicShare: { kind, id, pageId: claims.pageId, permission },
       };
     } else {
       connectionConfig.readOnly = claims.readOnly;
@@ -87,23 +85,17 @@ const server = new Server<CollaborationContext>({
     return { user: { id: claims.sub, name: claims.name } };
   },
   async connected({ context, connection }) {
-    const pageShare = context.pageShare;
-    if (!pageShare) return;
+    const publicShare = context.publicShare;
+    if (!publicShare) return;
     let checking = false;
     const timer = setInterval(async () => {
       if (checking) return;
       checking = true;
       try {
-        const current = await prisma.pageShare.findFirst({
-          where: {
-            id: pageShare.id,
-            pageId: pageShare.pageId,
-            revokedAt: null,
-            OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
-          },
-          select: { permission: true },
-        });
-        if (!current || current.permission !== pageShare.permission) connection.close();
+        const permission = publicShare.kind === "folder"
+          ? await activeFolderSharePermission(publicShare.id, publicShare.pageId)
+          : await activePageSharePermission(publicShare.id, publicShare.pageId);
+        if (!permission || permission !== publicShare.permission) connection.close();
       } catch (error) {
         console.error("[atlas-collab] Page-share revalidation failed closed.", error);
         connection.close();
@@ -146,6 +138,45 @@ const server = new Server<CollaborationContext>({
 });
 
 await server.listen();
+
+async function activePageSharePermission(id: string, pageId: string) {
+  const share = await prisma.pageShare.findFirst({
+    where: {
+      id,
+      pageId,
+      revokedAt: null,
+      OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+    },
+    select: { permission: true },
+  });
+  return share?.permission ?? null;
+}
+
+async function activeFolderSharePermission(id: string, pageId: string) {
+  const share = await prisma.folderShare.findFirst({
+    where: {
+      id,
+      revokedAt: null,
+      OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+    },
+    select: { folderId: true, permission: true },
+  });
+  if (!share) return null;
+  const page = await prisma.page.findUnique({ where: { id: pageId }, select: { folderId: true } });
+  if (!page?.folderId) return null;
+  let currentId: string | null = page.folderId;
+  const visited = new Set<string>();
+  while (currentId && !visited.has(currentId)) {
+    if (currentId === share.folderId) return share.permission;
+    visited.add(currentId);
+    const folder: { parentId: string | null } | null = await prisma.folder.findUnique({
+      where: { id: currentId },
+      select: { parentId: true },
+    });
+    currentId = folder?.parentId ?? null;
+  }
+  return null;
+}
 
 async function shutdown() {
   await server.destroy();

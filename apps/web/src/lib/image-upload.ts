@@ -1,6 +1,7 @@
 import { CodedApiError } from "@/lib/api-errors";
+import { uploadLimitBytes } from "@/lib/upload-limit";
 
-export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+export const MAX_IMAGE_BYTES = uploadLimitBytes();
 
 export function detectImageMime(bytes: Uint8Array): "image/jpeg" | "image/png" | "image/webp" | "image/gif" | null {
   if (

@@ -44,6 +44,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   if (!page || !canEdit(page.accessRole)) {
     return apiErrorResponse("WRITE_ACCESS_REQUIRED", 403);
   }
+  if (page.format === "PDF") return apiErrorResponse("VERSION_INVALID", 400);
   const parsed = createSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) return apiErrorResponse("VERSION_INVALID", 400);
 

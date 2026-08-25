@@ -68,8 +68,8 @@ export const API_ERROR_MESSAGES = {
     de: "Die Bilddatei ist leer.",
   },
   IMAGE_TOO_LARGE: {
-    en: "The image may not exceed 5 MB.",
-    de: "Das Bild darf maximal 5 MB groß sein.",
+    en: "The image exceeds the configured upload limit.",
+    de: "Das Bild überschreitet das konfigurierte Upload-Limit.",
   },
   IMAGE_INVALID_TYPE: {
     en: "Only valid PNG, JPEG, WebP, and GIF images are allowed.",
@@ -83,10 +83,6 @@ export const API_ERROR_MESSAGES = {
     en: "Choose a valid file to import.",
     de: "Wähle eine gültige Datei zum Importieren aus.",
   },
-  FILE_TOO_LARGE: {
-    en: "The file may not exceed 25 MB.",
-    de: "Die Datei darf maximal 25 MB groß sein.",
-  },
   FILE_NOT_FOUND: {
     en: "The file could not be found.",
     de: "Die Datei wurde nicht gefunden.",
@@ -94,6 +90,30 @@ export const API_ERROR_MESSAGES = {
   FILE_READ_ONLY: {
     en: "Unsupported files can only be shared read-only.",
     de: "Nicht unterstützte Dateien können nur schreibgeschützt geteilt werden.",
+  },
+  FILE_MISSING: {
+    en: "A file is required.",
+    de: "Eine Datei ist erforderlich.",
+  },
+  FILE_EMPTY: {
+    en: "The file is empty.",
+    de: "Die Datei ist leer.",
+  },
+  FILE_TOO_LARGE: {
+    en: "The file exceeds the configured upload limit.",
+    de: "Die Datei überschreitet das konfigurierte Upload-Limit.",
+  },
+  FILE_INVALID_TYPE: {
+    en: "The file type is not supported.",
+    de: "Der Dateityp wird nicht unterstützt.",
+  },
+  FILE_INVALID_CONTENT: {
+    en: "The file content is invalid or does not match the selected file type.",
+    de: "Der Dateiinhalt ist ungültig oder entspricht nicht dem ausgewählten Dateityp.",
+  },
+  FILE_SAVE_FAILED: {
+    en: "The file could not be saved.",
+    de: "Die Datei konnte nicht gespeichert werden.",
   },
   VERSION_INVALID: {
     en: "The submitted version is invalid.",
@@ -118,6 +138,18 @@ export const API_ERROR_MESSAGES = {
   PAGE_SHARE_NOT_FOUND: {
     en: "The page link was not found.",
     de: "Der Seitenlink wurde nicht gefunden.",
+  },
+  FOLDER_SHARE_MANAGE_REQUIRED: {
+    en: "Only space owners and administrators may manage folder links.",
+    de: "Nur Bereichseigentümer und Administratoren dürfen Ordnerlinks verwalten.",
+  },
+  FOLDER_SHARE_INVALID: {
+    en: "The folder link settings are invalid.",
+    de: "Die Einstellungen des Ordnerlinks sind ungültig.",
+  },
+  FOLDER_SHARE_NOT_FOUND: {
+    en: "The folder link was not found.",
+    de: "Der Ordnerlink wurde nicht gefunden.",
   },
   SPACE_NOT_FOUND: {
     en: "The space was not found.",
