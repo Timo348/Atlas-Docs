@@ -107,6 +107,7 @@ or a straightforward Docker-based operating model.
 
 - Local accounts, generic OpenID Connect, or both authentication methods at once.
 - Administrator interfaces for users and teams.
+- Administrator instance dashboard plus a bearer-protected Prometheus endpoint for Grafana dashboards.
 - English and German interfaces.
 - Per-user theme, interface and editor fonts, text size, compact navigation, and
   profile image preferences, plus configurable default document and start-space
@@ -150,6 +151,9 @@ content can still be requested by the reader's browser.
 - Atlas application containers run as a non-root user. Compose drops Linux
   capabilities and enables `no-new-privileges` for the web, collaboration, and
   migration services.
+- The optional `/api/metrics` endpoint is disabled until a separate
+  `PROMETHEUS_METRICS_TOKEN` is configured. It exposes aggregate operational
+  counts only and requires `Authorization: Bearer <token>` on every scrape.
 - Permissions can be granted directly or through teams; the strongest active
   grant applies, and expired team memberships provide no access.
 

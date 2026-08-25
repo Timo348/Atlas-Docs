@@ -31,3 +31,9 @@ test("file endpoints only serve classified previews inline", () => {
     assert.match(routeSource, /Content-Security-Policy/);
   }
 });
+
+test("PDF previews omit redundant file metadata below the document", () => {
+  const viewer = readFileSync(fileURLToPath(new URL("../src/components/unsupported-file-viewer.tsx", import.meta.url)), "utf8");
+  assert.match(viewer, /previewKind === "pdf" \? "unsupported-file-body-pdf"/);
+  assert.match(viewer, /previewKind !== "pdf" &&/);
+});

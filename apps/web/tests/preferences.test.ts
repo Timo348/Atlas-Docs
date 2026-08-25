@@ -4,6 +4,7 @@ import {
   DEFAULT_PREFERENCES,
   fileViewDefaultsForDefaultEditorView,
   normalizePreferences,
+  preferencesUpdateSchema,
   resolveLanguage,
 } from "../src/lib/preferences";
 
@@ -38,13 +39,49 @@ test("maps the legacy global view to equivalent per-file defaults", () => {
     markdown: "write",
     latex: "write",
     mermaid: "source-and-diagram",
-    gantt: "source-and-diagram",
+    gantt: "diagram",
   });
   assert.deepEqual(fileViewDefaultsForDefaultEditorView("preview"), {
     markdown: "preview",
     latex: "preview",
     mermaid: "diagram",
     gantt: "diagram",
+  });
+});
+
+test("keeps Gantt appearance defaults compatible with existing saved preferences", () => {
+  const { ganttAppearance: _ganttAppearance, ...legacy } = DEFAULT_PREFERENCES;
+  const preferences = normalizePreferences(legacy);
+  assert.equal(preferences.ganttAppearance.dimPastDates, true);
+  assert.deepEqual(preferences.ganttAppearance.statuses.active, { label: "", color: "#9b6cc4" });
+});
+
+test("accepts existing preference API payloads without Gantt appearance data", () => {
+  const { ganttAppearance: _ganttAppearance, ...legacy } = DEFAULT_PREFERENCES;
+  const parsed = preferencesUpdateSchema.parse(legacy);
+  assert.equal(parsed.ganttAppearance.dimPastDates, true);
+});
+
+test("persists custom Gantt state meanings and colors", () => {
+  const preferences = normalizePreferences({
+    ...DEFAULT_PREFERENCES,
+    ganttAppearance: {
+      ...DEFAULT_PREFERENCES.ganttAppearance,
+      dimPastDates: false,
+      statuses: {
+        ...DEFAULT_PREFERENCES.ganttAppearance.statuses,
+        done: { label: "Approved", color: "#1a7f55" },
+      },
+    },
+  });
+  assert.deepEqual(preferences.ganttAppearance, {
+    dimPastDates: false,
+    statuses: {
+      none: { label: "", color: "#3480c8" },
+      active: { label: "", color: "#9b6cc4" },
+      done: { label: "Approved", color: "#1a7f55" },
+      crit: { label: "", color: "#cf5b4e" },
+    },
   });
 });
 

@@ -13,6 +13,7 @@ import ReactMarkdown, { type Components as MarkdownComponents } from "react-mark
 import remarkGfm from "remark-gfm";
 import * as Y from "yjs";
 import { CollaborativeCanvas } from "@/components/collaborative-canvas";
+import { CollaborativeGantt } from "@/components/collaborative-gantt";
 import { CollaborativeMermaid } from "@/components/collaborative-mermaid";
 import { CollaborativeTodoBoard } from "@/components/collaborative-todo-board";
 import {
@@ -949,7 +950,7 @@ function CollaborativeDocumentEditor({
   }), [page.id, publicShare]);
 
   return (
-    <div className={`editor-shell ${headerCenter ? "editor-shell-with-center" : ""} ${fullscreen ? "editor-shell-fullscreen" : ""} ${page.format === "CANVAS" || page.format === "TODO" ? "canvas-file-editor" : ""} ${page.format === "TEXT" ? "text-file-editor" : ""}`}>
+    <div className={`editor-shell ${headerCenter ? "editor-shell-with-center" : ""} ${fullscreen ? "editor-shell-fullscreen" : ""} ${page.format === "CANVAS" || page.format === "GANTT" || page.format === "TODO" ? "canvas-file-editor" : ""} ${page.format === "TEXT" ? "text-file-editor" : ""}`}>
       <header className={`editor-header ${headerCenter ? "editor-header-with-center" : ""}`}>
         <div className="title-wrap">
           <input
@@ -1057,10 +1058,10 @@ function CollaborativeDocumentEditor({
           <button className={tab === "preview" ? "active" : ""} onClick={() => setTab("preview")}><Eye size={15} /> {text("Preview", "Vorschau")}</button>
         </nav>
       )}
-      {(page.format === "MERMAID" || page.format === "GANTT") && (
-        <nav className="editor-tabs" role="tablist" aria-label={page.format === "GANTT" ? text("Gantt view", "Gantt-Ansicht") : text("Mermaid view", "Mermaid-Ansicht")}>
-          <button type="button" role="tab" aria-selected={tab === "diagram"} className={tab === "diagram" ? "active" : ""} onClick={() => setTab("diagram")}><Eye size={15} /> {page.format === "GANTT" ? text("Timeline", "Zeitstrahl") : text("Diagram", "Diagramm")}</button>
-          <button type="button" role="tab" aria-selected={tab === "source-and-diagram"} className={tab === "source-and-diagram" ? "active" : ""} onClick={() => setTab("source-and-diagram")}><Code2 size={15} /> {page.format === "GANTT" ? text("Text + timeline", "Text + Zeitstrahl") : text("Text + diagram", "Text + Diagramm")}</button>
+      {page.format === "MERMAID" && (
+        <nav className="editor-tabs" role="tablist" aria-label={text("Mermaid view", "Mermaid-Ansicht")}>
+          <button type="button" role="tab" aria-selected={tab === "diagram"} className={tab === "diagram" ? "active" : ""} onClick={() => setTab("diagram")}><Eye size={15} /> {text("Diagram", "Diagramm")}</button>
+          <button type="button" role="tab" aria-selected={tab === "source-and-diagram"} className={tab === "source-and-diagram" ? "active" : ""} onClick={() => setTab("source-and-diagram")}><Code2 size={15} /> {text("Text + diagram", "Text + Diagramm")}</button>
         </nav>
       )}
       <section className="editor-body">
@@ -1240,14 +1241,10 @@ function CollaborativeDocumentEditor({
           />
         )}
         {page.format === "GANTT" && (
-          <CollaborativeMermaid
+          <CollaborativeGantt
             source={markdown}
             readOnly={readOnly}
-            kind="gantt"
-            view={tab === "diagram" ? "diagram" : "source-and-diagram"}
             onChange={(value, cursor, anchor) => changeMarkdown(value, cursor, anchor, { kind: "text" })}
-            onCursor={(textarea) => publishCursor(textarea)}
-            onBlur={clearLocalCursor}
           />
         )}
         {page.format === "TODO" && <CollaborativeTodoBoard document={ydoc} readOnly={readOnly} />}

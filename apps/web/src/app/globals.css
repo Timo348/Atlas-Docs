@@ -401,6 +401,7 @@ a { color: inherit; text-decoration: none; }
 .unsupported-file-title { font-family: var(--font-serif), serif; font-size: 26px; font-weight: 550; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .unsupported-file-body { align-content: center; display: grid; justify-items: center; margin: 0 auto; max-width: 510px; padding: 40px 28px; text-align: center; }
 .unsupported-file-body-with-preview { align-content: stretch; grid-template-rows: minmax(220px, 1fr) auto; justify-items: stretch; margin: 0; max-width: none; min-height: 0; padding: 20px 28px 16px; text-align: left; }
+.unsupported-file-body-pdf { grid-template-rows: minmax(0, 1fr); padding-bottom: 20px; }
 .unsupported-file-preview { align-items: center; background: var(--paper-2); border: 1px solid var(--line); border-radius: 10px; display: flex; justify-content: center; min-height: 0; overflow: hidden; }
 .unsupported-file-preview-frame { border: 0; height: 100%; min-height: 220px; width: 100%; }
 .unsupported-file-preview-image { display: block; height: 100%; max-height: 100%; max-width: 100%; object-fit: contain; width: auto; }
@@ -587,6 +588,147 @@ a { color: inherit; text-decoration: none; }
 .todo-deadline-overdue { color: var(--danger-text); font-weight: 750; }
 .todo-deadline-today { color: #a66300; font-weight: 750; }
 
+/* Visual Gantt planner */
+.gantt-planner { background: var(--bg); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: 100%; min-height: 0; overflow: hidden; }
+.gantt-planner-header { align-items: flex-end; border-bottom: 1px solid var(--line); display: flex; gap: 22px; justify-content: space-between; padding: 20px clamp(20px, 4vw, 50px) 17px; }
+.gantt-planner-kicker { color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; }
+.gantt-title-row { align-items: center; display: flex; flex-wrap: wrap; gap: 9px; margin: 3px 0 4px; }
+.gantt-plan-title { background: transparent; border: 1px solid transparent; border-radius: 6px; color: var(--ink); font-family: var(--font-serif), serif; font-size: 25px; font-weight: 580; line-height: 1.15; max-width: min(560px, 62vw); min-width: 0; padding: 2px 5px; }
+.gantt-plan-title:focus { background: var(--surface); border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus-ring); outline: 0; }
+.gantt-plan-title[readonly] { cursor: default; padding-left: 0; }
+.gantt-visual-badge { align-items: center; background: var(--accent-soft); border-radius: 999px; color: var(--accent); display: inline-flex; font-size: 9px; font-weight: 800; gap: 4px; letter-spacing: .25px; padding: 4px 8px; text-transform: uppercase; white-space: nowrap; }
+.gantt-planner-header p { color: var(--muted); font-size: 12px; margin: 0; }
+.gantt-create-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.gantt-create-actions .button { height: 36px; white-space: nowrap; }
+.gantt-add-section { align-items: center; display: flex; gap: 5px; }
+.gantt-add-section input { background: var(--control-bg); border: 1px solid var(--control-border); border-radius: 7px; color: var(--ink); font: inherit; font-size: 11px; height: 36px; outline: 0; padding: 0 9px; width: 132px; }
+.gantt-add-section input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus-ring); }
+.gantt-add-section .icon-button { height: 36px; width: 36px; }
+.gantt-planner-scroll { background: color-mix(in srgb, var(--bg) 80%, var(--paper)); min-height: 0; overflow: auto; }
+.gantt-planner-grid { display: grid; grid-template-columns: minmax(430px, 42%) max-content; min-width: 1060px; align-content: start; }
+.gantt-task-header, .gantt-timeline-header { align-items: center; background: var(--surface-raised); border-bottom: 1px solid var(--line); color: var(--muted); display: flex; font-size: 10px; font-weight: 800; height: 42px; letter-spacing: .65px; position: sticky; text-transform: uppercase; top: 0; z-index: 4; }
+.gantt-task-header { border-right: 1px solid var(--line); gap: 7px; padding: 0 16px; }
+.gantt-timeline-header { display: grid; grid-template-columns: repeat(var(--gantt-days), 30px); min-width: calc(var(--gantt-days) * 30px); overflow: hidden; padding: 0; }
+.gantt-timeline-header span { align-items: center; border-left: 1px solid color-mix(in srgb, var(--line) 70%, transparent); display: flex; font-size: 9px; justify-content: center; min-width: 0; overflow: hidden; padding: 0 2px; white-space: nowrap; }
+.gantt-section-label, .gantt-section-track { align-items: center; background: color-mix(in srgb, var(--accent-soft) 58%, var(--surface)); border-bottom: 1px solid var(--line); display: flex; height: 34px; min-width: 0; }
+.gantt-section-label { border-right: 1px solid var(--line); color: var(--ink); font-size: 10px; font-weight: 800; justify-content: space-between; letter-spacing: .45px; padding: 0 16px; text-transform: uppercase; }
+.gantt-section-label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gantt-section-label small { align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; color: var(--muted); display: inline-flex; font-size: 9px; justify-content: center; min-width: 20px; padding: 2px 5px; }
+.gantt-section-track { color: color-mix(in srgb, var(--accent) 72%, var(--muted)); display: grid; font-size: 9px; font-weight: 800; grid-template-columns: repeat(var(--gantt-days), 30px); letter-spacing: .35px; min-width: calc(var(--gantt-days) * 30px); overflow: hidden; padding: 0; text-transform: uppercase; }
+.gantt-section-track span { grid-column: 1 / -1; padding-left: 8px; }
+.gantt-task-card { background: var(--surface); border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); cursor: pointer; display: grid; gap: 7px; min-height: 138px; padding: 10px 14px 9px; }
+.gantt-task-card.selected { background: color-mix(in srgb, var(--accent-soft) 34%, var(--surface)); box-shadow: inset 3px 0 0 var(--accent); }
+.gantt-task-card:has(input:focus), .gantt-task-card:has(select:focus) { background: color-mix(in srgb, var(--accent-soft) 28%, var(--surface)); }
+.gantt-task-topline { align-items: center; display: flex; gap: 7px; min-width: 0; }
+.gantt-task-name { background: transparent; border: 1px solid transparent; border-radius: 5px; color: var(--ink); font: inherit; font-size: 12px; font-weight: 760; min-width: 0; padding: 4px 5px; width: 100%; }
+.gantt-task-name:focus { background: var(--surface-raised); border-color: var(--accent); box-shadow: 0 0 0 2px var(--focus-ring); outline: 0; }
+.gantt-task-name[readonly] { cursor: default; padding-left: 0; }
+.gantt-delete-button { background: transparent; border: 0; border-radius: 5px; color: var(--muted); cursor: pointer; display: inline-flex; flex: 0 0 auto; padding: 4px; }
+.gantt-delete-button:hover, .gantt-delete-button:focus-visible { background: var(--danger-bg); color: var(--danger-text); outline: 0; }
+.gantt-task-fields { display: grid; gap: 6px; grid-template-columns: 1.15fr .55fr 1fr; }
+.gantt-task-fields label, .gantt-task-footer label { display: grid; gap: 3px; min-width: 0; }
+.gantt-task-fields label > span, .gantt-task-footer label > span { color: var(--muted); font-size: 8px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase; }
+.gantt-task-fields input, .gantt-task-fields select, .gantt-task-footer select { background: var(--control-bg); border: 1px solid var(--control-border); border-radius: 5px; color: var(--ink); font: inherit; font-size: 10px; height: 27px; min-width: 0; outline: 0; padding: 0 5px; width: 100%; }
+.gantt-task-fields input:focus, .gantt-task-fields select:focus, .gantt-task-footer select:focus, .gantt-progress-field input:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 2px var(--focus-ring); outline: 0; }
+.gantt-task-fields input:disabled, .gantt-task-fields select:disabled, .gantt-task-footer select:disabled, .gantt-progress-field input:disabled { cursor: default; opacity: .72; }
+.gantt-task-footer { align-items: end; border-top: 1px solid var(--line); display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr) minmax(100px, .9fr); padding-top: 7px; }
+.gantt-progress-field > div { align-items: center; display: grid; gap: 5px; grid-template-columns: minmax(0, 1fr) 31px; }
+.gantt-progress-field input { accent-color: var(--accent); margin: 0; min-width: 0; width: 100%; }
+.gantt-progress-field output { color: var(--muted); font-size: 9px; font-weight: 750; text-align: right; }
+.gantt-timeline-row { background-color: color-mix(in srgb, var(--paper) 64%, var(--surface)); background-image: repeating-linear-gradient(90deg, transparent 0, transparent 29px, color-mix(in srgb, var(--line) 72%, transparent) 29px, color-mix(in srgb, var(--line) 72%, transparent) 30px); border-bottom: 1px solid var(--line); display: grid; grid-template-columns: repeat(var(--gantt-days), 30px); min-height: 138px; min-width: calc(var(--gantt-days) * 30px); padding: 0; position: relative; }
+.gantt-task-bar { align-self: center; background: #3480c8; border: 0; border-radius: 5px; box-shadow: 0 2px 6px rgb(26 73 120 / 20%); color: white; cursor: pointer; display: block; height: 30px; min-width: 7px; overflow: hidden; padding: 0; position: relative; text-align: left; }
+.gantt-task-bar i { background: rgb(0 0 0 / 23%); bottom: 0; display: block; left: 0; position: absolute; top: 0; }
+.gantt-task-bar span { display: block; font-size: 10px; font-weight: 750; line-height: 30px; overflow: hidden; padding: 0 8px; position: relative; text-overflow: ellipsis; white-space: nowrap; }
+.gantt-task-bar:hover, .gantt-task-bar:focus-visible, .gantt-task-bar.selected { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent); outline: 0; z-index: 2; }
+.gantt-task-active { background: #9b6cc4; }
+.gantt-task-done { background: #2f955f; }
+.gantt-task-crit { background: #cf5b4e; }
+.gantt-empty-task-list, .gantt-empty-timeline { background: var(--surface); border-bottom: 1px solid var(--line); color: var(--muted); display: grid; gap: 4px; min-height: 150px; padding: 18px; place-content: center; text-align: center; }
+.gantt-empty-task-list { border-right: 1px solid var(--line); }
+.gantt-empty-task-list strong { color: var(--ink); font-size: 13px; }
+.gantt-empty-task-list span, .gantt-empty-timeline span { font-size: 11px; }
+.gantt-empty-timeline { background-color: color-mix(in srgb, var(--paper) 64%, var(--surface)); background-image: repeating-linear-gradient(90deg, transparent 0, transparent 29px, color-mix(in srgb, var(--line) 72%, transparent) 29px, color-mix(in srgb, var(--line) 72%, transparent) 30px); min-width: calc(var(--gantt-days) * 30px); }
+.gantt-source-pane { border-top: 1px solid var(--line); display: grid; grid-template-rows: 40px minmax(100px, 210px); max-height: 255px; min-height: 0; }
+.gantt-source-pane > header { align-items: center; background: var(--paper-2); display: flex; gap: 12px; justify-content: space-between; min-width: 0; padding: 0 17px; }
+.gantt-source-pane > header > div { align-items: center; display: flex; gap: 6px; min-width: 0; }
+.gantt-source-pane strong { font-size: 10px; letter-spacing: .55px; text-transform: uppercase; }
+.gantt-source-pane small { color: var(--muted); font-size: 9px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gantt-source-pane textarea, .gantt-source-recovery textarea { background: var(--paper-2); border: 0; border-top: 1px solid var(--line); color: var(--ink); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; line-height: 1.65; min-height: 0; outline: 0; padding: 12px 17px; resize: none; width: 100%; }
+.gantt-source-pane textarea:focus, .gantt-source-recovery textarea:focus { box-shadow: inset 3px 0 0 var(--warm); }
+.gantt-source-recovery { background: var(--bg); display: grid; grid-template-rows: auto auto minmax(0, 1fr); height: 100%; min-height: 0; overflow: hidden; }
+.gantt-source-recovery > header { align-items: flex-start; background: var(--warning-bg); border-bottom: 1px solid var(--warning-border); color: var(--warning-text); display: flex; gap: 10px; padding: 18px clamp(18px, 4vw, 42px); }
+.gantt-source-recovery > header svg { flex: 0 0 auto; margin-top: 2px; }
+.gantt-source-recovery > header div { display: grid; gap: 4px; }
+.gantt-source-recovery > header strong { font-size: 13px; }
+.gantt-source-recovery > header p { font-size: 11px; line-height: 1.5; margin: 0; max-width: 800px; }
+.gantt-source-recovery > small { background: var(--surface); border-bottom: 1px solid var(--line); color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 10px; padding: 9px clamp(18px, 4vw, 42px); }
+
+/* Calendar-style Gantt planner */
+.gantt-calendar { background: var(--bg); display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100%; min-height: 0; overflow: hidden; }
+.gantt-calendar-toolbar { align-items: flex-end; background: var(--surface); border-bottom: 1px solid var(--line); display: flex; gap: 20px; justify-content: space-between; padding: 20px clamp(20px, 4vw, 50px) 17px; }
+.gantt-calendar-kicker { color: var(--muted); display: block; font-size: 9px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; }
+.gantt-calendar-toolbar h2 { color: var(--ink); font-family: var(--font-serif), serif; font-size: 25px; font-weight: 580; line-height: 1.12; margin: 4px 0 5px; }
+.gantt-calendar-toolbar p { color: var(--muted); font-size: 12px; line-height: 1.45; margin: 0; max-width: 680px; }
+.gantt-calendar-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.gantt-calendar-actions .button { min-height: 36px; white-space: nowrap; }
+.gantt-calendar-actions .button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.gantt-calendar-content { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; }
+.gantt-import-notice { background: var(--success-bg); border-bottom: 1px solid var(--success-border); color: var(--success-text); font-size: 11px; line-height: 1.45; margin: 0; padding: 8px clamp(18px, 4vw, 50px); }
+.gantt-calendar-scroll { background: color-mix(in srgb, var(--paper) 76%, var(--bg)); grid-row: 2; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.gantt-calendar-grid { align-content: start; display: grid; grid-template-columns: repeat(var(--gantt-days), var(--gantt-day-width)); min-width: calc(var(--gantt-days) * var(--gantt-day-width)); }
+.gantt-calendar-grid-single-section { grid-template-rows: 53px 32px minmax(160px, 1fr); min-height: 100%; }
+.gantt-calendar-header { background: var(--surface-raised); border-bottom: 1px solid var(--line); display: grid; grid-column: 1 / -1; grid-template-columns: repeat(var(--gantt-days), var(--gantt-day-width)); height: 53px; min-width: calc(var(--gantt-days) * var(--gantt-day-width)); position: sticky; top: 0; z-index: 5; }
+.gantt-calendar-header > div { align-items: center; border-left: 1px solid color-mix(in srgb, var(--line) 72%, transparent); color: var(--muted); display: grid; font-variant-numeric: tabular-nums; gap: 1px; justify-items: center; min-width: 0; padding: 5px 1px; }
+.gantt-calendar-header > div.month-start { background: color-mix(in srgb, var(--accent-soft) 56%, var(--surface-raised)); color: var(--accent); }
+.gantt-calendar-header small { font-size: 8px; font-weight: 800; letter-spacing: .35px; overflow: hidden; text-align: center; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; width: 100%; }
+.gantt-calendar-header strong { color: var(--ink); font-size: 12px; line-height: 1; }
+.gantt-calendar-grid.past-dates-dimmed .gantt-calendar-header > div.past-date { background: color-mix(in srgb, var(--paper-2) 82%, var(--surface-raised)); color: color-mix(in srgb, var(--muted) 72%, transparent); }
+.gantt-calendar-grid.past-dates-dimmed .gantt-calendar-header > div.past-date strong { color: color-mix(in srgb, var(--muted) 76%, transparent); }
+.gantt-calendar-section { border-bottom: 1px solid var(--line); display: contents; }
+.gantt-calendar-section > header { align-items: center; background: color-mix(in srgb, var(--accent-soft) 52%, var(--surface)); border-bottom: 1px solid var(--line); color: var(--ink); display: flex; font-size: 10px; font-weight: 800; grid-column: 1 / -1; justify-content: space-between; letter-spacing: .55px; min-height: 32px; padding: 0 13px; position: sticky; text-transform: uppercase; left: 0; z-index: 4; }
+.gantt-calendar-section > header small { align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; color: var(--muted); display: inline-flex; font-size: 9px; justify-content: center; min-width: 21px; padding: 2px 6px; }
+.gantt-calendar-lane { background-color: color-mix(in srgb, var(--paper) 62%, var(--surface)); background-image: repeating-linear-gradient(90deg, transparent 0, transparent calc(var(--gantt-day-width) - 1px), color-mix(in srgb, var(--line) 73%, transparent) calc(var(--gantt-day-width) - 1px), color-mix(in srgb, var(--line) 73%, transparent) var(--gantt-day-width)), repeating-linear-gradient(0deg, transparent 0, transparent 47px, color-mix(in srgb, var(--line) 62%, transparent) 47px, color-mix(in srgb, var(--line) 62%, transparent) 48px); display: grid; grid-column: 1 / -1; grid-template-columns: repeat(var(--gantt-days), var(--gantt-day-width)); grid-template-rows: repeat(var(--gantt-tracks), 48px); min-height: 64px; min-width: calc(var(--gantt-days) * var(--gantt-day-width)); padding: 8px 0; position: relative; }
+.gantt-calendar-grid.past-dates-dimmed .gantt-calendar-lane::before { background: color-mix(in srgb, var(--paper-2) 74%, transparent); content: ""; inset: 0 auto 0 0; pointer-events: none; position: absolute; width: var(--gantt-past-width); z-index: 1; }
+.gantt-calendar-lane > p { align-self: center; color: var(--muted); font-size: 11px; grid-column: 1 / -1; justify-self: center; margin: 0; pointer-events: none; position: relative; z-index: 2; }
+.gantt-calendar-event { align-self: center; background: var(--gantt-event-color, #3480c8); border: 0; border-radius: 6px; box-shadow: 0 2px 7px rgb(26 73 120 / 24%); color: #fff; cursor: grab; height: 31px; margin: 0 3px; min-width: 8px; overflow: hidden; padding: 0; position: relative; text-align: left; touch-action: none; z-index: 2; }
+.gantt-calendar-event:active, .gantt-calendar-event.dragging { cursor: grabbing; }
+.gantt-calendar-event > i { background: rgb(0 0 0 / 22%); bottom: 0; display: block; left: 0; position: absolute; top: 0; }
+.gantt-calendar-event > span { display: block; font-size: 10px; font-weight: 750; line-height: 31px; overflow: hidden; padding: 0 13px 0 9px; position: relative; text-overflow: ellipsis; white-space: nowrap; }
+.gantt-calendar-event:hover, .gantt-calendar-event:focus-visible { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent); outline: 0; z-index: 3; }
+.gantt-calendar-event.gantt-task-active { --gantt-event-color: #9b6cc4; }
+.gantt-calendar-event.gantt-task-done { --gantt-event-color: #2f955f; }
+.gantt-calendar-event.gantt-task-crit { --gantt-event-color: #cf5b4e; }
+.gantt-calendar-grid.past-dates-dimmed .gantt-calendar-event.past-event { filter: grayscale(.35); opacity: .58; }
+.gantt-calendar-resize { bottom: 0; cursor: ew-resize; position: absolute; right: 0; top: 0; width: 10px; z-index: 2; }
+.gantt-calendar-resize::after { background: rgb(255 255 255 / 68%); border-radius: 3px; content: ""; height: 12px; position: absolute; right: 3px; top: 10px; width: 2px; }
+.gantt-calendar-empty { align-items: center; color: var(--muted); display: grid; gap: 6px; justify-items: center; min-height: 250px; padding: 28px; text-align: center; }
+.gantt-calendar-empty svg { color: var(--accent); }
+.gantt-calendar-empty strong { color: var(--ink); font-size: 14px; }
+.gantt-calendar-empty span { font-size: 11px; line-height: 1.5; max-width: 360px; }
+.gantt-task-dialog { background: var(--paper); border: 1px solid var(--line); border-radius: 13px; box-shadow: 0 28px 80px var(--shadow); max-height: calc(100vh - 40px); overflow: auto; width: min(660px, 100%); }
+.gantt-task-dialog > header { align-items: flex-start; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; padding: 19px 22px; }
+.gantt-task-dialog > header > div { display: grid; gap: 3px; }
+.gantt-task-dialog > header span { color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: 1.1px; text-transform: uppercase; }
+.gantt-task-dialog h2 { font-family: var(--font-serif), serif; font-size: 25px; font-weight: 550; line-height: 1.1; margin: 0; }
+.gantt-task-dialog-body { display: grid; gap: 20px; padding: 22px; }
+.gantt-task-dialog label { color: var(--muted); display: grid; font-size: 10px; font-weight: 800; gap: 6px; letter-spacing: .45px; min-width: 0; text-transform: uppercase; }
+.gantt-task-dialog input, .gantt-task-dialog select { background: var(--control-bg); border: 1px solid var(--control-border); border-radius: 7px; color: var(--ink); font: inherit; font-size: 12px; height: 38px; min-width: 0; outline: 0; padding: 0 10px; text-transform: none; width: 100%; }
+.gantt-task-dialog input:focus, .gantt-task-dialog select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus-ring); }
+.gantt-dialog-title input { font-size: 15px; font-weight: 700; }
+.gantt-dialog-grid { display: grid; gap: 15px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.gantt-dialog-dependency, .gantt-dialog-progress { grid-column: 1 / -1; }
+.gantt-dialog-progress > div { align-items: center; display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) 42px; }
+.gantt-dialog-progress input { accent-color: var(--accent); height: auto; padding: 0; }
+.gantt-dialog-progress output { color: var(--ink); font-size: 11px; font-weight: 750; text-align: right; }
+.gantt-task-dialog > footer { align-items: center; border-top: 1px solid var(--line); display: flex; gap: 12px; justify-content: space-between; padding: 14px 22px; }
+.gantt-task-dialog > footer > div { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.gantt-import-recovery { align-content: center; background: var(--bg); color: var(--muted); display: grid; gap: 11px; height: 100%; justify-items: center; min-height: 0; padding: 42px; text-align: center; }
+.gantt-import-recovery > svg { color: var(--warning-text); }
+.gantt-import-recovery h2 { color: var(--ink); font-family: var(--font-serif), serif; font-size: clamp(22px, 4vw, 32px); font-weight: 550; margin: 0; max-width: 650px; }
+.gantt-import-recovery p { font-size: 12px; line-height: 1.55; margin: 0; max-width: 610px; }
+.gantt-import-recovery small { background: var(--warning-bg); border: 1px solid var(--warning-border); border-radius: 7px; color: var(--warning-text); font-size: 10px; line-height: 1.5; max-width: 610px; padding: 8px 10px; }
+.gantt-import-recovery .gantt-import-notice { border: 1px solid var(--success-border); border-radius: 7px; max-width: 610px; }
+
 /* Page sharing */
 .page-share-dialog { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 28px 80px var(--shadow); max-height: min(820px, calc(100vh - 42px)); overflow: hidden; width: min(860px, 100%); }
 .page-share-intro { align-items: flex-start; background: var(--success-bg); border-bottom: 1px solid var(--success-border); color: var(--success-text); display: flex; gap: 10px; padding: 12px 24px; }
@@ -661,6 +803,41 @@ a { color: inherit; text-decoration: none; }
 .status-pill.enabled { background: var(--success-bg); color: var(--success-text); }
 .status-pill.disabled { background: var(--danger-bg); color: var(--danger-text); }
 .row-actions { display: flex !important; gap: 6px !important; }
+.admin-dashboard-page { max-width: 1240px; }
+.admin-dashboard-header { align-items: flex-start; gap: 24px; }
+.admin-dashboard-header > div:first-child { display: grid; gap: 7px; }
+.admin-dashboard-header > div:first-child > p:last-child { color: var(--muted); font-size: 12px; line-height: 1.5; margin: 0; }
+.admin-header-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.admin-dashboard-cards { display: grid; gap: 14px; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 18px; }
+.admin-metric-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 10px 28px var(--shadow); display: grid; gap: 13px; grid-template-columns: 42px minmax(0, 1fr); min-width: 0; padding: 19px; }
+.admin-metric-card > span, .admin-dashboard-panel-icon { align-items: center; background: var(--accent-soft); border-radius: 10px; color: var(--accent); display: flex; height: 42px; justify-content: center; width: 42px; }
+.admin-metric-card > div { display: grid; gap: 3px; min-width: 0; }
+.admin-metric-card small { color: var(--muted); font-size: 10px; font-weight: 750; letter-spacing: .45px; text-transform: uppercase; }
+.admin-metric-card strong { font-family: var(--font-serif), serif; font-size: 29px; font-weight: 550; letter-spacing: -.5px; line-height: 1; }
+.admin-metric-card p { color: var(--muted); font-size: 10px; line-height: 1.4; margin: 0; }
+.admin-dashboard-grid { display: grid; gap: 18px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 18px; }
+.admin-dashboard-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 10px 28px var(--shadow); min-width: 0; padding: 22px; }
+.admin-dashboard-panel > header { align-items: flex-start; display: grid; gap: 13px; grid-template-columns: 42px minmax(0, 1fr); margin-bottom: 20px; }
+.admin-dashboard-panel > header > div { display: grid; gap: 5px; min-width: 0; }
+.admin-dashboard-panel h2 { font-family: var(--font-serif), serif; font-size: 22px; font-weight: 550; line-height: 1.1; margin: 0; }
+.admin-dashboard-panel header p, .admin-prometheus-body > p { color: var(--muted); font-size: 11px; line-height: 1.5; margin: 0; }
+.admin-format-list { display: grid; gap: 10px; }
+.admin-format-row { align-items: center; display: grid; gap: 10px; grid-template-columns: 88px minmax(60px, 1fr) 32px; }
+.admin-format-row > span:first-child { color: var(--muted); font-size: 10px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-format-row strong { font-size: 11px; text-align: right; }
+.admin-format-bar { background: var(--paper-2); border-radius: 999px; display: block; height: 8px; overflow: hidden; }
+.admin-format-bar i { background: var(--accent); border-radius: inherit; display: block; height: 100%; min-width: 0; }
+.admin-stat-list, .admin-endpoint-list { border-top: 1px solid var(--line); display: grid; margin: 0; }
+.admin-stat-list > div, .admin-endpoint-list > div { align-items: center; border-bottom: 1px solid var(--line); display: flex; gap: 12px; justify-content: space-between; min-height: 38px; }
+.admin-stat-list > div:last-child, .admin-endpoint-list > div:last-child { border-bottom: 0; }
+.admin-stat-list dt, .admin-endpoint-list dt { color: var(--muted); font-size: 11px; }
+.admin-stat-list dd, .admin-endpoint-list dd { font-size: 12px; font-weight: 750; margin: 0; text-align: right; }
+.admin-endpoint-list { margin-top: 14px; }
+.admin-endpoint-list dd { overflow-wrap: anywhere; }
+.admin-panel-title-row { align-items: flex-start; display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; }
+.admin-panel-title-row .status-pill { font-size: 8px; text-transform: uppercase; white-space: nowrap; }
+.admin-prometheus-body { display: grid; gap: 14px; }
+.admin-prometheus-config { background: var(--code-block); border-radius: 8px; color: var(--code-text); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; line-height: 1.55; margin: 0; overflow-x: auto; padding: 14px; tab-size: 2; }
 
 /* Settings */
 .settings-page { background: var(--paper); display: grid; grid-template-columns: minmax(250px, 300px) minmax(0, 1fr); min-height: 100vh; }
@@ -710,6 +887,20 @@ a { color: inherit; text-decoration: none; }
 .settings-checkbox span { display: grid; gap: 2px; }
 .settings-checkbox strong { color: var(--ink); font-size: 12px; }
 .settings-checkbox small { color: var(--muted); font-size: 10px; }
+.settings-gantt-appearance { border-top: 1px solid var(--line); display: grid; gap: 16px; padding-top: 21px; }
+.settings-gantt-status-list { border: 1px solid var(--line); border-radius: 10px; display: grid; overflow: hidden; }
+.settings-gantt-status { align-items: end; background: var(--surface); border-bottom: 1px solid var(--line); display: grid; gap: 12px; grid-template-columns: 22px minmax(108px, 1fr) minmax(140px, 1fr) 132px; padding: 13px; }
+.settings-gantt-status:last-child { border-bottom: 0; }
+.settings-gantt-status > div { align-self: center; display: grid; gap: 2px; min-width: 0; }
+.settings-gantt-status > div strong { color: var(--ink); font-size: 12px; }
+.settings-gantt-status > div small { color: var(--muted); font-size: 9px; }
+.settings-gantt-status-swatch { align-self: center; border: 2px solid var(--surface-raised); border-radius: 50%; box-shadow: 0 0 0 1px var(--line); display: block; height: 16px; width: 16px; }
+.settings-gantt-status label { color: var(--muted); display: grid; font-size: 9px; font-weight: 750; gap: 5px; min-width: 0; }
+.settings-gantt-status label input[type="text"] { background: var(--control-bg); border: 1px solid var(--control-border); border-radius: 7px; color: var(--ink); height: 36px; min-width: 0; outline: 0; padding: 0 9px; width: 100%; }
+.settings-gantt-status label input[type="text"]:focus, .settings-gantt-color-input:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus-ring); }
+.settings-gantt-color-input { align-items: center; background: var(--control-bg); border: 1px solid var(--control-border); border-radius: 7px; display: flex; height: 36px; min-width: 0; padding: 3px 6px; }
+.settings-gantt-color-input input[type="color"] { background: transparent; border: 0; cursor: pointer; height: 24px; padding: 0; width: 28px; }
+.settings-gantt-color-input code { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 9px; margin-left: auto; }
 .settings-card-footer { align-items: center; border-top: 1px solid var(--line); display: flex; gap: 14px; grid-column: 1 / -1; justify-content: space-between; margin: 2px -25px -25px; min-height: 65px; padding: 13px 25px; }
 .settings-card-footer > small { color: var(--muted); font-size: 10px; line-height: 1.45; max-width: 480px; }
 .settings-provider-card, .settings-export-card { align-items: flex-start; display: grid; gap: 16px; grid-template-columns: 44px minmax(0, 1fr); padding: 24px; }
@@ -731,6 +922,7 @@ html[data-compact="true"] .folder-toggle { padding-bottom: 3px; padding-top: 3px
 html[data-compact="true"] .sidebar-footer { padding-bottom: 8px; padding-top: 8px; }
 
 @media (max-width: 920px) {
+  .admin-dashboard-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .settings-page { grid-template-columns: 1fr; }
   .settings-sidebar { border-bottom: 1px solid var(--line); border-right: 0; gap: 11px; min-height: 0; padding: 15px 18px 16px; position: static; }
   .settings-identity { max-width: 340px; }
@@ -758,6 +950,9 @@ html[data-compact="true"] .sidebar-footer { padding-bottom: 8px; padding-top: 8p
   .markdown-editor { padding: 18px 22px; }
   .mermaid-editor { grid-template-columns: 1fr; grid-template-rows: minmax(220px, 42%) minmax(0, 1fr); }
   .mermaid-source-pane { border-bottom: 1px solid var(--line); border-right: 0; }
+  .gantt-calendar-toolbar { align-items: stretch; flex-direction: column; }
+  .gantt-calendar-actions { justify-content: flex-start; }
+  .gantt-task-dialog { max-height: calc(100vh - 20px); }
   .todo-board-header { align-items: stretch; flex-direction: column; }
   .todo-create-form { grid-template-columns: minmax(150px, 1fr) 100px 132px auto; max-width: none; width: 100%; }
   .todo-columns { grid-template-columns: repeat(4, minmax(225px, 1fr)); }
@@ -766,6 +961,10 @@ html[data-compact="true"] .sidebar-footer { padding-bottom: 8px; padding-top: 8p
   .format-picker { grid-template-columns: 1fr; }
   .editor-tabs { padding-left: 15px; }
   .admin-header { align-items: flex-start; gap: 20px; }
+  .admin-dashboard-header { flex-direction: column; }
+  .admin-header-actions { justify-content: flex-start; }
+  .admin-dashboard-cards, .admin-dashboard-grid { grid-template-columns: 1fr; }
+  .admin-dashboard-panel { padding: 18px; }
   .new-user-form { grid-template-columns: 1fr; }
   .user-table { overflow-x: auto; }
   .user-table-head, .user-table-row { min-width: 850px; }
@@ -803,6 +1002,8 @@ html[data-compact="true"] .sidebar-footer { padding-bottom: 8px; padding-top: 8p
   .settings-card-footer { align-items: stretch; flex-direction: column; gap: 10px; margin: 2px -18px -18px; padding: 12px 18px; }
   .settings-card-footer .button { width: 100%; }
   .settings-file-view { align-items: stretch; grid-template-columns: 1fr; gap: 9px; }
+  .settings-gantt-status { align-items: center; grid-template-columns: 22px minmax(0, 1fr); }
+  .settings-gantt-status > label { grid-column: 1 / -1; }
   .settings-provider-card, .settings-export-card { grid-template-columns: 38px minmax(0, 1fr); padding: 18px; }
   .settings-provider-icon { height: 38px; width: 38px; }
   .unsupported-file-body-with-preview { grid-template-rows: minmax(200px, 1fr) auto; padding: 12px 14px; }
@@ -831,6 +1032,17 @@ html[data-compact="true"] .sidebar-footer { padding-bottom: 8px; padding-top: 8p
 
 @media (max-width: 520px) {
   .editor-header-with-center .connection { display: none; }
+  .gantt-calendar-toolbar { padding: 17px 14px 14px; }
+  .gantt-calendar-toolbar h2 { font-size: 22px; }
+  .gantt-calendar-actions { align-items: stretch; }
+  .gantt-calendar-actions .button { flex: 1 1 145px; justify-content: center; }
+  .gantt-task-dialog > header, .gantt-task-dialog-body, .gantt-task-dialog > footer { padding-left: 16px; padding-right: 16px; }
+  .gantt-task-dialog > footer { align-items: stretch; flex-direction: column-reverse; }
+  .gantt-task-dialog > footer > div { display: grid; grid-template-columns: 1fr 1fr; }
+  .gantt-task-dialog > footer .danger-button { width: 100%; }
+  .gantt-dialog-grid { grid-template-columns: 1fr; }
+  .gantt-dialog-dependency, .gantt-dialog-progress { grid-column: auto; }
+  .gantt-import-recovery { padding: 25px 18px; }
   .todo-board-header { padding: 17px 14px 14px; }
   .todo-create-form { grid-template-columns: 1fr 1fr; }
   .todo-create-form > input { grid-column: 1 / -1; }

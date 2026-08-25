@@ -89,6 +89,7 @@ values; paste each result only into the indicated `.env` field:
 openssl rand -hex 32
 openssl rand -hex 32
 openssl rand -hex 24
+openssl rand -hex 32
 ```
 
 Use the results as follows:
@@ -101,6 +102,9 @@ Use the results as follows:
    `DATABASE_URL`.
 3. Put the third value in `ADMIN_PASSWORD`. The initial seed requires at least
    12 characters.
+4. Put the fourth value in `PROMETHEUS_METRICS_TOKEN` only when Prometheus
+   should scrape Atlas. It is a separate bearer credential and must not be
+   reused for another setting.
 
 Do not reuse these values and do not leave any placeholder from `.env.example`
 in a reachable installation.
@@ -119,6 +123,7 @@ At minimum, review every variable in this table:
 | `ATLAS_VERSION` | Exact tag used for `atlas-docs-web`, `atlas-docs-collab`, and `atlas-docs-migrate`. |
 | `AUTH_MODE` | `local`, `oidc`, or `both`. See [OIDC](#optional-openid-connect). |
 | `AUTH_SECRET` | Random value of at least 32 characters. Keep it stable across restarts. |
+| `PROMETHEUS_METRICS_TOKEN` | Optional, separate random bearer token of at least 32 characters. Enables the protected `/api/metrics` Prometheus endpoint; leave it empty to keep that endpoint disabled. |
 | `ADMIN_NAME` | Display name used only when the initial administrator is created. |
 | `ADMIN_EMAIL` | Email address of the initial administrator. |
 | `ADMIN_PASSWORD` | Password used only when that administrator does not already exist; minimum 12 characters. |
@@ -390,6 +395,50 @@ docker compose images
 docker compose stop web collab
 docker compose up -d web collab
 ```
+
+## Prometheus and Grafana
+
+Atlas exposes aggregate instance metrics at `/api/metrics` only when
+`PROMETHEUS_METRICS_TOKEN` is configured. The endpoint does not use a browser
+session and never returns the token, user names, email addresses, page titles,
+or share URLs. It reports account, space, page-format, collaboration, sharing,
+and storage counts as Prometheus gauges.
+
+Create a token with the command from the setup section, set it in `.env`, and
+recreate the web service:
+
+```bash
+docker compose up -d --force-recreate web
+```
+
+Store the same value in a file readable by Prometheus rather than embedding it
+in `prometheus.yml`. The current Prometheus configuration supports
+`authorization.credentials_file` for this purpose:
+
+```yaml
+scrape_configs:
+  - job_name: atlas-docs
+    metrics_path: /api/metrics
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/secrets/atlas_metrics_token
+    static_configs:
+      - targets: ["atlas.example.internal:30002"]
+```
+
+Replace the target with the real public hostname and port. Set `scheme: https`
+when Atlas is served through HTTPS. Verify the token without printing it in
+shell history by reading it from a protected file:
+
+```bash
+curl --fail --show-error --silent \
+  --header "Authorization: Bearer $(cat /etc/prometheus/secrets/atlas_metrics_token)" \
+  http://127.0.0.1:30002/api/metrics
+```
+
+The administrator dashboard at `/admin/dashboard` shows the same aggregate
+numbers and only reports whether the metrics token is configured. It never
+displays the secret.
 
 `restart` does not pull new images or run a release upgrade. Use the complete
 upgrade procedure below for that.

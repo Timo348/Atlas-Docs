@@ -14,7 +14,9 @@ export const DEFAULT_FILE_VIEW_DEFAULTS: FileViewDefaults = {
   markdown: "write",
   latex: "write",
   mermaid: "source-and-diagram",
-  gantt: "source-and-diagram",
+  // Retained only to read existing saved preferences. Gantt always opens in
+  // its planner, so this value no longer controls a user-facing view.
+  gantt: "diagram",
 };
 
 export function fileViewDefaultsForDefaultEditorView(defaultEditorView: "write" | "preview"): FileViewDefaults {
@@ -25,7 +27,47 @@ export function fileViewDefaultsForDefaultEditorView(defaultEditorView: "write" 
       mermaid: "diagram",
       gantt: "diagram",
     }
-    : { ...DEFAULT_FILE_VIEW_DEFAULTS };
+    : { ...DEFAULT_FILE_VIEW_DEFAULTS, gantt: "diagram" };
+}
+
+const ganttStatusAppearanceSchema = z.object({
+  // An empty label uses Atlas' localized built-in name for that state.
+  label: z.string().trim().max(40),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+});
+
+export const ganttAppearanceSchema = z.object({
+  dimPastDates: z.boolean(),
+  statuses: z.object({
+    none: ganttStatusAppearanceSchema,
+    active: ganttStatusAppearanceSchema,
+    done: ganttStatusAppearanceSchema,
+    crit: ganttStatusAppearanceSchema,
+  }),
+});
+
+export type GanttAppearance = z.infer<typeof ganttAppearanceSchema>;
+
+export const DEFAULT_GANTT_APPEARANCE: GanttAppearance = {
+  dimPastDates: true,
+  statuses: {
+    none: { label: "", color: "#3480c8" },
+    active: { label: "", color: "#9b6cc4" },
+    done: { label: "", color: "#2f955f" },
+    crit: { label: "", color: "#cf5b4e" },
+  },
+};
+
+export function copyGanttAppearance(value: GanttAppearance): GanttAppearance {
+  return {
+    dimPastDates: value.dimPastDates,
+    statuses: {
+      none: { ...value.statuses.none },
+      active: { ...value.statuses.active },
+      done: { ...value.statuses.done },
+      crit: { ...value.statuses.crit },
+    },
+  };
 }
 
 export const preferencesSchema = z.object({
@@ -36,6 +78,7 @@ export const preferencesSchema = z.object({
   fontSize: z.enum(["small", "medium", "large"]),
   defaultEditorView: z.enum(["write", "preview"]),
   fileViewDefaults: fileViewDefaultsSchema,
+  ganttAppearance: ganttAppearanceSchema.default(DEFAULT_GANTT_APPEARANCE),
   defaultSpaceId: z.string().cuid().nullable(),
   compactMode: z.boolean(),
 });
@@ -58,6 +101,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   fontSize: "medium",
   defaultEditorView: "write",
   fileViewDefaults: { ...DEFAULT_FILE_VIEW_DEFAULTS },
+  ganttAppearance: copyGanttAppearance(DEFAULT_GANTT_APPEARANCE),
   defaultSpaceId: null,
   compactMode: false,
 };

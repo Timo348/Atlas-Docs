@@ -7,7 +7,7 @@ import { type DragEvent, useEffect, useRef, useState } from "react";
 import {
   AlertTriangle, BookOpen, ChevronDown, ChevronRight, FileCode2, FilePlus2, FileText, Folder,
   FolderPlus, GripVertical, LogOut, MoreHorizontal, PanelLeftClose, PanelLeftOpen,
-  ChartGantt, ListTodo, Network, Pencil, Plus, Search, Settings2, ShieldCheck, Trash2, Upload, Users, Workflow, X,
+  ChartGantt, ChartNoAxesCombined, ListTodo, Network, Pencil, Plus, Search, Settings2, ShieldCheck, Trash2, Upload, Users, Workflow, X,
 } from "lucide-react";
 import { CollaborativeEditor } from "@/components/collaborative-editor";
 import { usePreferences } from "@/components/preferences-provider";
@@ -492,6 +492,7 @@ export function WorkspaceShell({
         )}
 
         <div className="sidebar-footer">
+          {user.role === "ADMIN" && <Link className="footer-link" href="/admin/dashboard"><ChartNoAxesCombined size={17} /> {text("Instance dashboard", "Instanz-Dashboard")}</Link>}
           {user.role === "ADMIN" && <Link className="footer-link" href="/admin/users"><ShieldCheck size={17} /> {text("User management", "Benutzerverwaltung")}</Link>}
           {user.role === "ADMIN" && <Link className="footer-link" href="/admin/teams"><Users size={17} /> {text("Team management", "Teamverwaltung")}</Link>}
           <button className="footer-link" onClick={() => signOut({ callbackUrl: "/signin" })}><LogOut size={17} /> {text("Sign out", "Abmelden")}</button>

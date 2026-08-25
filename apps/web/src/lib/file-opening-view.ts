@@ -14,7 +14,9 @@ export function initialEditorTab(
   if (format === "TEXT") return "write";
   if (format === "FILE") return "write";
   if (format === "MERMAID") return preferences.fileViewDefaults.mermaid;
-  if (format === "GANTT") return preferences.fileViewDefaults.gantt;
+  // The Gantt editor now has one intentional planner-only view. Keep the
+  // stored legacy preference readable without letting it select a removed UI.
+  if (format === "GANTT") return "diagram";
   if (publicPermission === "VIEW") return "preview";
   return format === "LATEX" ? preferences.fileViewDefaults.latex : preferences.fileViewDefaults.markdown;
 }

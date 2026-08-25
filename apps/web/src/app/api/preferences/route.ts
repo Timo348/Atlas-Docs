@@ -23,6 +23,7 @@ export async function PATCH(request: Request) {
       fontSize: true,
       defaultEditorView: true,
       fileViewDefaults: true,
+      ganttAppearance: true,
       defaultSpaceId: true,
       compactMode: true,
     },

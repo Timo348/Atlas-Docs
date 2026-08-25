@@ -25,6 +25,7 @@ const userFacingAttributes = new Set(["aria-label", "placeholder", "title"]);
 const codedErrorRouteExceptions = new Set([
   "auth/[...nextauth]/route.ts",
   "health/route.ts",
+  "metrics/route.ts",
 ]);
 
 function source(path: string) {
@@ -35,6 +36,7 @@ test("high-risk interface components do not contain untranslated visible copy", 
   const components = [
     "components/collaborative-canvas.tsx",
     "components/collaborative-editor.tsx",
+    "components/collaborative-gantt.tsx",
     "components/hybrid-markdown-document.tsx",
     "components/latex-preview.tsx",
     "components/page-share-dialog.tsx",
@@ -69,7 +71,7 @@ test("high-risk interface components do not contain untranslated visible copy", 
 });
 
 test("authenticated admin pages inherit the user's preferences", () => {
-  for (const page of ["app/admin/teams/page.tsx", "app/admin/users/page.tsx"]) {
+  for (const page of ["app/admin/dashboard/page.tsx", "app/admin/teams/page.tsx", "app/admin/users/page.tsx"]) {
     const content = source(page);
     assert.match(content, /normalizePreferences/);
     assert.match(content, /PreferencesProvider/);

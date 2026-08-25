@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { signOut } from "next-auth/react";
 import {
-  ArrowLeft, BookOpen, Camera, Download, FileCode2, KeyRound, LogOut, Palette,
+  ArrowLeft, BookOpen, Camera, ChartNoAxesCombined, Download, FileCode2, KeyRound, LogOut, Palette,
   ShieldCheck, UserRound, Users, Workflow,
 } from "lucide-react";
 import { type FormEvent, type ReactNode, useState } from "react";
 import { usePreferences } from "@/components/preferences-provider";
 import { apiErrorMessage } from "@/lib/api-errors";
-import type { FileViewDefaults, Preferences } from "@/lib/preferences";
+import { copyGanttAppearance, type FileViewDefaults, type Preferences } from "@/lib/preferences";
 
 type SettingsSection = "profile" | "security" | "appearance" | "workspace" | "files" | "export";
 type BusySection = SettingsSection | null;
@@ -22,8 +22,16 @@ type SettingsUser = {
   avatarVersion: number;
   canChangePassword: boolean;
 };
-type AppearanceDraft = Pick<Preferences, "colorTheme" | "uiFont" | "editorFont" | "fontSize" | "compactMode">;
+type AppearanceDraft = Pick<Preferences, "colorTheme" | "uiFont" | "editorFont" | "fontSize" | "compactMode" | "ganttAppearance">;
 type WorkspaceDraft = Pick<Preferences, "language" | "defaultSpaceId">;
+type GanttStatusKey = keyof Preferences["ganttAppearance"]["statuses"];
+
+const GANTT_STATUS_SETTINGS: { status: GanttStatusKey; english: string; german: string }[] = [
+  { status: "none", english: "Planned", german: "Geplant" },
+  { status: "active", english: "In progress", german: "In Arbeit" },
+  { status: "done", english: "Done", german: "Erledigt" },
+  { status: "crit", english: "Critical", german: "Kritisch" },
+];
 
 export function SettingsPage({
   user,
@@ -45,6 +53,7 @@ export function SettingsPage({
     editorFont: preferences.editorFont,
     fontSize: preferences.fontSize,
     compactMode: preferences.compactMode,
+    ganttAppearance: copyGanttAppearance(preferences.ganttAppearance),
   }));
   const [workspaceDraft, setWorkspaceDraft] = useState<WorkspaceDraft>(() => ({
     language: preferences.language,
@@ -64,6 +73,19 @@ export function SettingsPage({
     setSection(nextSection);
     setError("");
     setNotice("");
+  }
+
+  function updateGanttStatus(status: GanttStatusKey, patch: Partial<Preferences["ganttAppearance"]["statuses"][GanttStatusKey]>) {
+    setAppearanceDraft((current) => ({
+      ...current,
+      ganttAppearance: {
+        ...current.ganttAppearance,
+        statuses: {
+          ...current.ganttAppearance.statuses,
+          [status]: { ...current.ganttAppearance.statuses[status], ...patch },
+        },
+      },
+    }));
   }
 
   async function persistPreferences(next: Preferences, target: Exclude<BusySection, null>, saved: { en: string; de: string }) {
@@ -218,6 +240,7 @@ export function SettingsPage({
           </SettingsNavGroup>
           {user.role === "ADMIN" && (
             <SettingsNavGroup label={text("Administration", "Administration")}>
+              <SettingsNavLink href="/admin/dashboard" icon={<ChartNoAxesCombined size={17} />}>{text("Instance dashboard", "Instanz-Dashboard")}</SettingsNavLink>
               <SettingsNavLink href="/admin/users" icon={<ShieldCheck size={17} />}>{text("User management", "Benutzerverwaltung")}</SettingsNavLink>
               <SettingsNavLink href="/admin/teams" icon={<Users size={17} />}>{text("Team management", "Teamverwaltung")}</SettingsNavLink>
             </SettingsNavGroup>
@@ -379,6 +402,57 @@ export function SettingsPage({
                   <input type="checkbox" checked={appearanceDraft.compactMode} disabled={busy} onChange={(event) => setAppearanceDraft({ ...appearanceDraft, compactMode: event.target.checked })} />
                   <span><strong>{text("Compact navigation", "Kompakte Navigation")}</strong><small>{text("Show more items in the workspace sidebar.", "Zeige mehr Einträge in der Seitenleiste des Workspaces.")}</small></span>
                 </label>
+                <section className="settings-gantt-appearance" aria-labelledby="gantt-appearance-title">
+                  <div className="settings-card-copy">
+                    <h2 id="gantt-appearance-title">{text("Gantt planner", "Gantt-Planer")}</h2>
+                    <p>{text("Define the meaning and color of each task state. Empty names use Atlas' localized defaults.", "Lege Bedeutung und Farbe für jeden Aufgabenstatus fest. Leere Namen verwenden die Atlas-Standardbezeichnungen.")}</p>
+                  </div>
+                  <label className="settings-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={appearanceDraft.ganttAppearance.dimPastDates}
+                      disabled={busy}
+                      onChange={(event) => setAppearanceDraft((current) => ({
+                        ...current,
+                        ganttAppearance: { ...current.ganttAppearance, dimPastDates: event.target.checked },
+                      }))}
+                    />
+                    <span><strong>{text("Dim past dates by default", "Vergangene Termine standardmäßig ausgrauen")}</strong><small>{text("People can still toggle this directly in an open planner.", "In einem geöffneten Planer kann dies weiterhin direkt umgeschaltet werden.")}</small></span>
+                  </label>
+                  <div className="settings-gantt-status-list">
+                    {GANTT_STATUS_SETTINGS.map((entry) => {
+                      const value = appearanceDraft.ganttAppearance.statuses[entry.status];
+                      const defaultLabel = text(entry.english, entry.german);
+                      return <div className="settings-gantt-status" key={entry.status}>
+                        <span className="settings-gantt-status-swatch" style={{ backgroundColor: value.color }} aria-hidden="true" />
+                        <div><strong>{defaultLabel}</strong><small>{text("Task state", "Aufgabenstatus")}</small></div>
+                        <label>
+                          <span>{text("Meaning", "Bedeutung")}</span>
+                          <input
+                            value={value.label}
+                            maxLength={40}
+                            disabled={busy}
+                            placeholder={defaultLabel}
+                            onChange={(event) => updateGanttStatus(entry.status, { label: event.target.value })}
+                          />
+                        </label>
+                        <label>
+                          <span>{text("Color", "Farbe")}</span>
+                          <div className="settings-gantt-color-input">
+                            <input
+                              type="color"
+                              value={value.color}
+                              disabled={busy}
+                              aria-label={text(`${defaultLabel} color`, `Farbe für ${defaultLabel}`)}
+                              onChange={(event) => updateGanttStatus(entry.status, { color: event.target.value })}
+                            />
+                            <code>{value.color.toUpperCase()}</code>
+                          </div>
+                        </label>
+                      </div>;
+                    })}
+                  </div>
+                </section>
                 <footer className="settings-card-footer">
                   <span />
                   <button
@@ -486,20 +560,9 @@ export function SettingsPage({
                     ]}
                     onChange={(value) => setFileViewDraft({ ...fileViewDraft, mermaid: value as FileViewDefaults["mermaid"] })}
                   />
-                  <FileViewSetting
-                    title={text("Gantt", "Gantt")}
-                    description={text("Open the timeline alone or together with its source.", "Öffne den Zeitstrahl allein oder zusammen mit dem Quelltext.")}
-                    value={fileViewDraft.gantt}
-                    disabled={busy}
-                    options={[
-                      { value: "diagram", label: text("Timeline", "Zeitstrahl") },
-                      { value: "source-and-diagram", label: text("Text + timeline", "Text + Zeitstrahl") },
-                    ]}
-                    onChange={(value) => setFileViewDraft({ ...fileViewDraft, gantt: value as FileViewDefaults["gantt"] })}
-                  />
                 </div>
                 <footer className="settings-card-footer">
-                  <small>{text("Canvas, Todo, text, and uploaded files keep their only meaningful view.", "Canvas, Todo, Text und hochgeladene Dateien behalten ihre einzige sinnvolle Ansicht.")}</small>
+                  <small>{text("Canvas, Gantt, Todo, text, and uploaded files keep their only meaningful view.", "Canvas, Gantt, Todo, Text und hochgeladene Dateien behalten ihre einzige sinnvolle Ansicht.")}</small>
                   <button
                     className="button compact primary-button"
                     disabled={busy}
@@ -543,6 +606,7 @@ export function SettingsPage({
                       <a className="button compact secondary-button" href="/api/backups/export?scope=instance" onClick={() => setNotice(text("Complete instance export started.", "Kompletter Instanz-Export gestartet."))}>
                         <Download size={15} /> {text("Export complete instance", "Komplette Instanz exportieren")}
                       </a>
+                      <Link className="button compact secondary-button" href="/admin/dashboard"><ChartNoAxesCombined size={15} /> {text("Open instance dashboard", "Instanz-Dashboard öffnen")}</Link>
                       <Link className="button compact secondary-button" href="/admin/users"><ShieldCheck size={15} /> {text("Manage users", "Benutzer verwalten")}</Link>
                       <Link className="button compact secondary-button" href="/admin/teams"><Users size={15} /> {text("Manage teams", "Teams verwalten")}</Link>
                     </div>
