@@ -66,7 +66,7 @@ release archive, then enter its root. The value below is the currently published
 tag; replace it when deploying a newer release:
 
 ```bash
-ATLAS_RELEASE=v2.1.0
+ATLAS_RELEASE=v3.0.0
 git clone --branch "$ATLAS_RELEASE" --depth 1 https://github.com/Timo348/Atlas-Docs.git
 cd Atlas-Docs
 cp .env.example .env
@@ -119,7 +119,7 @@ At minimum, review every variable in this table:
 | `WEB_PORT` | Host port mapped to port `3000` in the web container. The shipped default is `30002`. |
 | `COLLAB_PORT` | Host port mapped to port `1234` in the collaboration container. It is also the default browser-facing WebSocket port when `COLLAB_PUBLIC_URL` is empty. The shipped default is `30003`. |
 | `COLLAB_PUBLIC_URL` | Optional exact browser-facing `ws://` or `wss://` URL. Set it when a reverse proxy uses a different WebSocket host, port, or URL. Leave it empty only when host derivation plus `COLLAB_PORT` describes the public endpoint correctly. |
-| `ATLAS_IMAGE_REGISTRY` | Registry namespace containing the three Atlas images. The release template selects Docker Hub; the commented alternative selects GHCR. |
+| `ATLAS_IMAGE_REGISTRY` | Registry namespace containing the three Atlas images. The release template selects the official GHCR namespace `ghcr.io/timo348`; replace it only with a tested mirror that contains all three matching images. |
 | `ATLAS_VERSION` | Exact tag used for `atlas-docs-web`, `atlas-docs-collab`, and `atlas-docs-migrate`. |
 | `ATLAS_UPLOAD_MAX_MB` | Positive whole-MB upload limit shared by profile/space images, imported files, and PDF attachments. Defaults to `25` when omitted. |
 | `AUTH_MODE` | `local`, `oidc`, or `both`. See [OIDC](#optional-openid-connect). |
@@ -456,6 +456,46 @@ Read the target release notes and compare its `.env.example`, `compose.yml`, and
 Compose overlays with the installed copies. Preserve `.env` separately, merge
 new variables deliberately, and keep a record of the currently deployed
 `ATLAS_VERSION`.
+
+### Upgrade to 3.0.0
+
+Atlas 3.0.0 is a major workspace release. First follow the backup and
+maintenance-window steps in [Standard safe upgrade](#standard-safe-upgrade).
+Then replace the Compose files with the copies from tag `v3.0.0`, keep the
+existing secret `.env`, and merge these values before starting the target:
+
+```dotenv
+# Official 3.0.0 images
+ATLAS_IMAGE_REGISTRY=ghcr.io/timo348
+ATLAS_VERSION=3.0.0
+
+# Optional: enable only when Prometheus scrapes /api/metrics.
+# Generate a separate random value of at least 32 characters.
+PROMETHEUS_METRICS_TOKEN=
+```
+
+`PROMETHEUS_METRICS_TOKEN` is new in 3.0.0. Leave it empty when metrics are
+not needed; it disables the endpoint. `ATLAS_UPLOAD_MAX_MB` remains the same
+setting introduced in 2.1.0 and does not need to be changed merely to upgrade.
+The released Compose template now defaults to GHCR, so installations that keep
+an internal registry must explicitly retain their tested namespace instead.
+
+After the upgrade backup has completed and `web` plus `collab` are stopped,
+validate and start the matching set:
+
+```bash
+docker compose config --quiet
+docker compose pull
+docker compose up -d --no-build
+docker compose ps -a
+docker compose logs --no-color migrate
+```
+
+The migration service adds the new text, uploaded-file, Mermaid, Gantt, Todo,
+per-file opening-view, and Gantt-appearance data. It also normalizes older PDF
+metadata so existing files continue to be served through the current file
+workflow. These are database changes, not a reversible image-tag change; use
+the pre-upgrade database backup for rollback.
 
 ### Standard safe upgrade
 

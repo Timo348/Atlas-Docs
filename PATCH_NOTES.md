@@ -1,5 +1,76 @@
 # Atlas Docs Patch Notes
 
+## 3.0.0 – Central settings, visual planning, and observability
+
+Released on August 25, 2026.
+
+[GitHub release](https://github.com/Timo348/Atlas-Docs/releases/tag/v3.0.0) ·
+[Setup and upgrade guide](SETUP.md#upgrade-to-300) · [End-user guide](UsageGuide.md)
+
+Atlas Docs 3.0.0 combines the 2.1 file and sharing workflow with a substantially
+broader workspace experience:
+
+- **Central Settings page:** Account profile and local-password management,
+  design choices, workspace defaults, per-file opening views, Gantt appearance,
+  and personal/admin exports are collected under `/settings`.
+- **File-specific behavior:** Markdown and LaTeX can open in writing/source or
+  preview mode; Mermaid and Gantt files open in their relevant diagram/planner
+  view. The setting applies when a file is next opened.
+- **More first-class files:** Markdown, LaTeX, Canvas, Mermaid, Gantt, Todo,
+  plain text, PDFs, and other uploaded files coexist in one workspace. Browser-
+  native previews keep PDFs, images, audio, and video viewable without changing
+  the original data.
+- **Focused file work:** Every file viewer supports the same full-screen mode;
+  the workspace navigation disappears and the control turns into the matching
+  exit action.
+- **Visual Gantt planner:** Create tasks without Mermaid syntax, set inclusive
+  start and end dates, drag or resize bars, double-click to edit, import a
+  Mermaid Gantt plan, jump to today, and configure status labels/colors plus
+  past-date dimming in Settings.
+- **Instance operations:** Administrators receive an instance dashboard. A
+  separate bearer-protected `/api/metrics` endpoint exposes aggregate Prometheus
+  data for Grafana without exposing workspace content or user secrets.
+
+### Upgrade notes from 2.1.0
+
+1. Schedule a maintenance window, create an `upgrade` backup, and stop `web`
+   and `collab` as described in [the safe upgrade procedure](SETUP.md#standard-safe-upgrade).
+2. Replace the release deployment files with the copies from tag `v3.0.0`.
+   Keep the existing secret `.env`; never overwrite it with `.env.example`.
+3. Merge the Compose changes into `.env` before starting the target:
+
+   ```dotenv
+   # Official 3.0.0 image location and exact matching tag
+   ATLAS_IMAGE_REGISTRY=ghcr.io/timo348
+   ATLAS_VERSION=3.0.0
+
+   # Optional: a separate random bearer value of at least 32 characters.
+   # Leave empty to keep /api/metrics disabled.
+   PROMETHEUS_METRICS_TOKEN=
+   ```
+
+   `ATLAS_UPLOAD_MAX_MB` remains unchanged from 2.1.0. Operators using an
+   internal registry may retain it, but it must provide all three matching
+   3.0.0 images.
+4. Validate, pull, and start the complete matching service set:
+
+   ```bash
+   docker compose config --quiet
+   docker compose pull
+   docker compose up -d --no-build
+   docker compose ps -a
+   docker compose logs --no-color migrate
+   ```
+
+The migration service adds file-format and user-preference data, then
+normalizes older PDF metadata for the current file workflow. Database rollback
+requires the pre-upgrade backup; selecting an older image tag alone does not
+reverse these schema or data changes.
+
+Matching Linux/amd64 images are published in GHCR as `3.0.0`, `3.0`, `3`, and
+`latest` for `atlas-docs-web`, `atlas-docs-collab`, and `atlas-docs-migrate`.
+Keep all three services on the same tag.
+
 ## 2.1.0 – Folder sharing, PDFs, imports, and export
 
 Released on August 19, 2026.

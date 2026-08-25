@@ -7,10 +7,11 @@
 ![Apache-2.0 license](https://img.shields.io/badge/license-Apache--2.0-4f46e5.svg)
 ![Self-hosted](https://img.shields.io/badge/deployment-self--hosted-22c55e.svg)
 ![Docker Compose](https://img.shields.io/badge/runtime-Docker%20Compose-2496ed.svg?logo=docker&logoColor=white)
-![Markdown, LaTeX, Canvas, and PDF](https://img.shields.io/badge/files-Markdown%20%7C%20LaTeX%20%7C%20Canvas%20%7C%20PDF-f59e0b.svg)
+![Documents, diagrams, planning, and files](https://img.shields.io/badge/files-documents%20%7C%20diagrams%20%7C%20planning%20%7C%20files-f59e0b.svg)
 
-Write in Markdown and LaTeX, sketch in standalone Excalidraw canvases, view PDFs, organize
-everything in permission-aware spaces, and keep your content portable.
+Write in Markdown and LaTeX, plan visually with Mermaid and Gantt files, sketch in
+standalone Excalidraw canvases, view PDFs and other uploaded files, organize everything in
+permission-aware spaces, and keep your content portable.
 
 [Product tour](#product-tour) &middot; [Why Atlas Docs](#why-atlas-docs) &middot;
 [Features](#features) &middot;
@@ -60,7 +61,7 @@ everything in permission-aware spaces, and keep your content portable.
   <img src="docs/assets/atlas-docs-profile-settings.png" width="700" alt="Profile and appearance settings in Atlas Docs">
 </p>
 
-<p align="center"><sub>Language, theme, typography, text size, navigation density, profile image, default document view, and portable emergency exports follow each account.</sub></p>
+<p align="center"><sub>The central Settings page keeps account, design, workspace, per-file opening views, Gantt appearance, and portable exports together.</sub></p>
 
 ## Why Atlas Docs
 
@@ -81,8 +82,16 @@ or a straightforward Docker-based operating model.
 ### Documents and visual files
 
 - Real-time Markdown and LaTeX editing with previews and source-file downloads.
-- Import Markdown, LaTeX, Excalidraw, and PDF files; view or download PDF pages,
-  attach PDFs to Markdown, and export Markdown/LaTeX through the browser's PDF print flow.
+- Mermaid diagram files with a source-and-diagram or diagram-only view, plus a visual Gantt
+  planner with drag/drop dates, direct editing, Mermaid import, custom status meanings, and
+  optional dimming of dates in the past.
+- Standalone text and Todo-board files, plus native browser previews for PDFs, images, audio,
+  and video uploads. Other uploaded files remain intact and downloadable.
+- Import files through one dialog; Markdown, LaTeX, Excalidraw, PDF, Mermaid, Gantt, and plain
+  text receive a matching Atlas editor or preview.
+- A full-screen file view removes workspace navigation while keeping the same in-place exit control.
+- View or download PDF pages, attach PDFs to Markdown, and export Markdown/LaTeX through the
+  browser's PDF print flow.
 - Syntax-highlighted Markdown code blocks for Java, Python, C, C#, C++, and
   Bash, plus clearly marked preview links and a wider responsive reading area.
 - Standalone, collaboratively edited Excalidraw canvas files.
@@ -113,9 +122,9 @@ or a straightforward Docker-based operating model.
 - Administrator interfaces for users and teams.
 - Administrator instance dashboard plus a bearer-protected Prometheus endpoint for Grafana dashboards.
 - English and German interfaces.
-- Per-user theme, interface and editor fonts, text size, compact navigation, and
-  profile image preferences, plus configurable default document and start-space
-  views.
+- Central account, design, and preference settings: profile image, local-password changes,
+  theme, interface/editor fonts, text size, compact navigation, start space, and per-file
+  opening defaults.
 
 ### Portability and operations
 
@@ -126,8 +135,7 @@ or a straightforward Docker-based operating model.
 - PostgreSQL backup tooling with validation, checksums, optional `age`
   encryption, retention, and a dedicated upgrade tier that retains page-version
   history.
-- Docker Hub, GHCR, internal registry, and physically disconnected deployment
-  paths.
+- Official GHCR images, optional internal mirrors, and physically disconnected deployment paths.
 - Additive migration from legacy embedded canvases to standalone canvas files.
 
 ## Security and privacy
@@ -212,7 +220,7 @@ Compose plugin. Read the [complete setup guide](SETUP.md) before starting; it
 lists the required secrets, network settings, and production checks.
 
 ```bash
-ATLAS_RELEASE=v2.1.0 # Replace with the published tag you intend to deploy.
+ATLAS_RELEASE=v3.0.0 # Replace with the published tag you intend to deploy.
 git clone --branch "$ATLAS_RELEASE" --depth 1 https://github.com/Timo348/Atlas-Docs.git
 cd Atlas-Docs
 cp .env.example .env
@@ -261,12 +269,9 @@ operational procedures.
 - [Environment variable template](.env.example)
 - [Version tags](https://github.com/Timo348/Atlas-Docs/tags)
 - [Issue tracker](https://github.com/Timo348/Atlas-Docs/issues)
-- [Docker Hub: web](https://hub.docker.com/r/timo348/atlas-docs-web)
-- [Docker Hub: collaboration](https://hub.docker.com/r/timo348/atlas-docs-collab)
-- [Docker Hub: migrations](https://hub.docker.com/r/timo348/atlas-docs-migrate)
-- GHCR images: `ghcr.io/timo348/atlas-docs-web`,
-  `ghcr.io/timo348/atlas-docs-collab`, and
-  `ghcr.io/timo348/atlas-docs-migrate`
+- [GHCR: web](https://github.com/users/Timo348/packages/container/package/atlas-docs-web)
+- [GHCR: collaboration](https://github.com/users/Timo348/packages/container/package/atlas-docs-collab)
+- [GHCR: migrations](https://github.com/users/Timo348/packages/container/package/atlas-docs-migrate)
 
 ## License
 
