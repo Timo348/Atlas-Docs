@@ -156,6 +156,15 @@ export function todoDeadlineState(task: TodoTask, now = new Date()) {
   return "upcoming" as const;
 }
 
+export function setTodoChecklistItemChecked(markdown: string, checklistItemIndex: number, checked: boolean) {
+  if (!Number.isInteger(checklistItemIndex) || checklistItemIndex < 0) return markdown;
+  let currentIndex = -1;
+  return markdown.replace(/^(\s*(?:[-+*]|\d+[.)])\s+\[)([ xX])(\])/gm, (match, prefix: string, _current: string, suffix: string) => {
+    currentIndex += 1;
+    return currentIndex === checklistItemIndex ? `${prefix}${checked ? "x" : " "}${suffix}` : match;
+  });
+}
+
 export function serializeTodoBoard(document: Y.Doc) {
   return `${JSON.stringify({
     format: "atlas-todos",

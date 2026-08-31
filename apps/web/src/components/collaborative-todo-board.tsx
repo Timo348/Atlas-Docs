@@ -11,6 +11,7 @@ import {
   canCompleteTodoTask,
   deleteTodoTask,
   readTodoTasks,
+  setTodoChecklistItemChecked,
   TODO_COLUMNS,
   TODO_PRIORITIES,
   todoDeadlineState,
@@ -165,7 +166,7 @@ function TodoCard({
         {!readOnly && <div className="todo-card-actions"><button className="todo-edit-button" type="button" onClick={() => onEdit(task)} title={text("Edit task", "Aufgabe bearbeiten")} aria-label={text("Edit task", "Aufgabe bearbeiten")}><Pencil size={14} /></button><button className="todo-delete-button" type="button" onClick={() => onDelete(task.id)} title={text("Delete task", "Aufgabe löschen")} aria-label={text("Delete task", "Aufgabe löschen")}><Trash2 size={14} /></button></div>}
       </header>
       <strong className="todo-task-title">{task.title}</strong>
-      {task.description && <div className="todo-card-description"><ReactMarkdown remarkPlugins={[remarkGfm]}>{task.description}</ReactMarkdown></div>}
+      {task.description && <div className="todo-card-description"><TodoMarkdown description={task.description} readOnly={readOnly} text={text} onChecklistChange={(index, checked) => onUpdate(task.id, { description: setTodoChecklistItemChecked(task.description, index, checked) })} /></div>}
       {blockers.length > 0 && <p className="todo-task-blocked"><CircleAlert size={14} />{completionBlocked ? text("Complete these tasks first:", "Erledige zuerst diese Aufgaben:") : text("Waiting for:", "Wartet auf:")} {blockers.map((blocker) => blocker.title).join(", ")}</p>}
       <div className="todo-card-fields">
         <label><span>{text("Priority", "Priorität")}</span><select value={task.priority} disabled={readOnly} onChange={(event) => onUpdate(task.id, { priority: event.target.value as TodoPriority })}>{TODO_PRIORITIES.map((item) => <option key={item} value={item}>{priorityLabel(item, text)}</option>)}</select></label>
@@ -220,7 +221,7 @@ function TodoTaskDialog({
       <div className="todo-task-dialog-body">
         <label className="todo-dialog-title"><span>{text("Task title", "Aufgabentitel")}</span><input autoFocus value={title} maxLength={240} onChange={(event) => setTitle(event.target.value)} /></label>
         <label className="todo-dialog-description"><span>{text("Description (Markdown)", "Beschreibung (Markdown)")}</span><textarea value={description} maxLength={12000} onChange={(event) => setDescription(event.target.value)} placeholder={text("Use Markdown, for example **important** or a checklist.", "Nutze Markdown, zum Beispiel **wichtig** oder eine Checkliste.")} /></label>
-        {description.trim() && <section className="todo-description-preview" aria-label={text("Description preview", "Beschreibungsvorschau")}><span>{text("Preview", "Vorschau")}</span><ReactMarkdown remarkPlugins={[remarkGfm]}>{description}</ReactMarkdown></section>}
+        {description.trim() && <section className="todo-description-preview" aria-label={text("Description preview", "Beschreibungsvorschau")}><span>{text("Preview", "Vorschau")}</span><TodoMarkdown description={description} readOnly={false} text={text} onChecklistChange={(index, checked) => setDescription(setTodoChecklistItemChecked(description, index, checked))} /></section>}
         <div className="todo-dialog-grid">
           <label><span>{text("Status", "Status")}</span><select value={column} onChange={(event) => setColumn(event.target.value as TodoColumn)}>{TODO_COLUMNS.map((item) => <option key={item} value={item}>{columnLabel(item, text)}</option>)}</select></label>
           <label><span>{text("Priority", "Priorität")}</span><select value={priority} onChange={(event) => setPriority(event.target.value as TodoPriority)}>{TODO_PRIORITIES.map((item) => <option key={item} value={item}>{priorityLabel(item, text)}</option>)}</select></label>
@@ -239,6 +240,45 @@ function TodoTaskDialog({
       <footer><button type="button" className="button" onClick={onClose}>{text("Cancel", "Abbrechen")}</button><button className="button primary-button" disabled={!title.trim()}>{editMode ? text("Save changes", "Änderungen speichern") : text("Create task", "Aufgabe erstellen")}</button></footer>
     </form>
   </div>;
+}
+
+function TodoMarkdown({
+  description,
+  readOnly,
+  text,
+  onChecklistChange,
+}: {
+  description: string;
+  readOnly: boolean;
+  text: (english: string, german: string) => string;
+  onChecklistChange?: (checklistItemIndex: number, checked: boolean) => void;
+}) {
+  let nextChecklistItemIndex = 0;
+  return <ReactMarkdown
+    remarkPlugins={[remarkGfm]}
+    components={{
+      input: ({ type, checked, ...props }) => {
+        if (type !== "checkbox") return <input {...props} type={type} checked={checked} />;
+        const checklistItemIndex = nextChecklistItemIndex;
+        nextChecklistItemIndex += 1;
+        const canToggle = !readOnly && Boolean(onChecklistChange);
+        return <input
+          {...props}
+          aria-label={text("Toggle checklist item", "Checklistenpunkt umschalten")}
+          checked={checked === true}
+          className="todo-checklist-input"
+          disabled={!canToggle}
+          onClick={(event) => event.stopPropagation()}
+          onChange={(event) => {
+            event.stopPropagation();
+            onChecklistChange?.(checklistItemIndex, event.currentTarget.checked);
+          }}
+          onPointerDown={(event) => event.stopPropagation()}
+          type="checkbox"
+        />;
+      },
+    }}
+  >{description}</ReactMarkdown>;
 }
 
 function columnLabel(column: TodoColumn, text: (english: string, german: string) => string) {

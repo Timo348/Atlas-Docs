@@ -2,7 +2,7 @@
 
 import { HocuspocusProvider } from "@hocuspocus/provider";
 import {
-  Bold, Code2, Download, Eye, FileText, History, ImagePlus, Italic, Link2, LoaderCircle, Maximize2, Minimize2, Minus,
+  Bold, Code2, Download, Eye, FileText, History, ImagePlus, Italic, Link2, LoaderCircle, Maximize2, Minimize2, Minus, Palette,
   Paperclip, Pencil, Plus, Printer, RotateCcw, Save as SaveIcon, Share2, Strikethrough, Table2, Users, X,
 } from "lucide-react";
 import {
@@ -34,6 +34,7 @@ import {
   type TableAction, type TextEdit,
 } from "@/lib/markdown-editor";
 import { highlightMarkdownCode } from "@/lib/markdown-highlight";
+import { MARKDOWN_TEXT_COLORS, remarkAtlasTextColor, type MarkdownTextColor } from "@/lib/markdown-color";
 import { apiErrorMessage } from "@/lib/api-errors";
 import {
   applyCollaborationPermission,
@@ -187,6 +188,7 @@ function CollaborativeDocumentEditor({
   const [editorNotice, setEditorNotice] = useState("");
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [tableSourceMode, setTableSourceMode] = useState(false);
+  const [colorPaletteOpen, setColorPaletteOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const editorStageRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -197,7 +199,10 @@ function CollaborativeDocumentEditor({
   const restoreEditorFocusRef = useRef(false);
   const savedTitleRef = useRef(page.title);
 
-  useEffect(() => setTableSourceMode(false), [page.id]);
+  useEffect(() => {
+    setTableSourceMode(false);
+    setColorPaletteOpen(false);
+  }, [page.id]);
 
   useEffect(() => {
     let active = true;
@@ -561,6 +566,11 @@ function CollaborativeDocumentEditor({
     const start = selectionStart ?? resolved?.anchor ?? cursorIndex;
     const end = selectionEnd ?? resolved?.head ?? cursorIndex;
     applyEdit(formatMarkdownInline(markdown, start, end, style, preferences.language));
+  }
+
+  function applyTextColor(color: MarkdownTextColor) {
+    applyInlineFormatting(`color:${color}`);
+    setColorPaletteOpen(false);
   }
 
   function focusMarkdownCursor(nextCursor: number) {
@@ -1168,6 +1178,14 @@ function CollaborativeDocumentEditor({
                   <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => applyInlineFormatting("italic")} title={text("Italic (Ctrl+I)", "Kursiv (Strg+I)")} aria-label={text("Italic", "Kursiv")}><Italic size={14} /></button>
                   <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => applyInlineFormatting("strikethrough")} title={text("Strikethrough", "Durchgestrichen")} aria-label={text("Strikethrough", "Durchgestrichen")}><Strikethrough size={14} /></button>
                   <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => applyInlineFormatting("code")} title={text("Inline code", "Inline-Code")} aria-label={text("Inline code", "Inline-Code")}><Code2 size={14} /></button>
+                  <div className="markdown-color-picker">
+                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => setColorPaletteOpen((open) => !open)} title={text("Text color", "Textfarbe")} aria-label={text("Text color", "Textfarbe")} aria-expanded={colorPaletteOpen} aria-controls="markdown-color-palette"><Palette size={14} /></button>
+                    {colorPaletteOpen && <div className="markdown-color-palette" id="markdown-color-palette" role="menu" aria-label={text("Text colors", "Textfarben")}>
+                      {MARKDOWN_TEXT_COLORS.map((color) => (
+                        <button key={color.id} type="button" role="menuitem" className={`markdown-color-swatch markdown-color-swatch-${color.id}`} onMouseDown={(event) => event.preventDefault()} onClick={() => applyTextColor(color.id)} title={text(`Set text color to ${color.label[0]}`, `Textfarbe auf ${color.label[1]} setzen`)} aria-label={text(`Set text color to ${color.label[0]}`, `Textfarbe auf ${color.label[1]} setzen`)} />
+                      ))}
+                    </div>}
+                  </div>
                   <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => applyInlineFormatting("link")} title={text("Insert link (Ctrl+K)", "Link einfügen (Strg+K)")} aria-label={text("Insert link", "Link einfügen")}><Link2 size={14} /></button>
                   <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => attachmentInputRef.current?.click()} title={text("Attach PDF", "PDF anhängen")} aria-label={text("Attach PDF", "PDF anhängen")}><Paperclip size={14} /></button>
                 </div>
@@ -1321,7 +1339,7 @@ function CollaborativeDocumentEditor({
         )}
         {page.format !== "CANVAS" && page.format !== "MERMAID" && page.format !== "GANTT" && page.format !== "TODO" && page.format !== "TEXT" && tab === "preview" && (page.format === "LATEX"
           ? <LatexPreview source={markdown} />
-          : <article className="markdown-preview"><ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{markdown}</ReactMarkdown></article>)}
+          : <article className="markdown-preview"><ReactMarkdown remarkPlugins={[remarkGfm, remarkAtlasTextColor]} components={markdownComponents}>{markdown}</ReactMarkdown></article>)}
         {page.format === "CANVAS" && (
           <div className="canvas-visible">
             <CollaborativeCanvas ydoc={ydoc} readOnly={readOnly} />
@@ -1351,7 +1369,7 @@ function CollaborativeDocumentEditor({
           <h1 className="pdf-print-title">{title}</h1>
           {page.format === "LATEX"
             ? <LatexPreview source={markdown} />
-            : <article className="markdown-preview"><ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{markdown}</ReactMarkdown></article>}
+            : <article className="markdown-preview"><ReactMarkdown remarkPlugins={[remarkGfm, remarkAtlasTextColor]} components={markdownComponents}>{markdown}</ReactMarkdown></article>}
         </section>
       )}
       {historyOpen && (

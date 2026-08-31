@@ -61,7 +61,11 @@ Atlas Docs kennt folgende Dateitypen:
 
 In **Schreiben** bearbeitest du den Inhalt, unter **Vorschau** siehst du das
 gerenderte Ergebnis. Die Formatierungsleiste bietet Fett, Kursiv,
-Durchgestrichen, Inline-Code und Links.
+Durchgestrichen, Inline-Code, Links und eine kontraststarke Textfarbpalette.
+Markiere den gewünschten Text, öffne das Farbpaletten-Symbol und wähle eine
+Farbe. Atlas speichert dies im Markdown als zum Beispiel
+`[[color:blue|Dieser Text ist blau]]`; die Farbe erscheint in Vorschau und
+PDF-Export sowohl im hellen als auch im dunklen Farbschema.
 
 Links werden in der Vorschau farbig und unterstrichen dargestellt. Codeblöcke
 mit den Sprachangaben `java`, `python`, `c`, `c#`, `c++` oder `bash` erhalten
@@ -74,6 +78,10 @@ Beschreibung, Status, Priorität, Frist und die Aufgaben, die vorher erledigt
 sein müssen. Die Beschreibung wird als Markdown eingegeben und direkt als
 Vorschau angezeigt; über das Stift-Symbol einer Karte kannst du alle Werte
 später wieder ändern.
+
+GFM-Checklisten in der Beschreibung, zum Beispiel `- [ ] Rückmeldung senden`,
+kannst du direkt auf der Karte oder in der Vorschau anklicken. Atlas schreibt
+den Status wieder in die Markdown-Beschreibung zurück.
 
 Eine Aufgabe mit offenen Voraussetzungen zeigt die blockierenden Titel direkt
 auf der Karte. Solange diese Aufgaben nicht erledigt sind, lässt sich die Karte

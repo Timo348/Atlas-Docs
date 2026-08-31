@@ -66,7 +66,7 @@ release archive, then enter its root. The value below is the currently published
 tag; replace it when deploying a newer release:
 
 ```bash
-ATLAS_RELEASE=v3.1.1
+ATLAS_RELEASE=v3.1.2
 git clone --branch "$ATLAS_RELEASE" --depth 1 https://github.com/Timo348/Atlas-Docs.git
 cd Atlas-Docs
 cp .env.example .env
@@ -457,18 +457,20 @@ Compose overlays with the installed copies. Preserve `.env` separately, merge
 new variables deliberately, and keep a record of the currently deployed
 `ATLAS_VERSION`.
 
-### Upgrade to 3.1.1
+### Upgrade to 3.1.2
 
-Create the normal `upgrade` backup and use the files from tag `v3.1.1`; retain
+Create the normal `upgrade` backup and use the files from tag `v3.1.2`; retain
 the existing secret `.env`. Set the target service version before starting:
 
 ```dotenv
-ATLAS_VERSION=3.1.1
+ATLAS_VERSION=3.1.2
 ```
 
 No new environment variable, Compose service, or Prisma migration is required.
-Todo task prerequisites are stored inside the existing collaborative document;
-existing tasks continue to work without prerequisites. Matching Linux/amd64
+Todo task prerequisites and Markdown descriptions, including their clickable
+checklists, remain stored inside the existing collaborative document. Markdown
+text colours use the fixed built-in palette and therefore do not require a new
+setting. Matching Linux/amd64
 images are published in GHCR and Docker Hub. The Compose default remains GHCR;
 to pull the Docker Hub copies, set `ATLAS_IMAGE_REGISTRY=docker.io/timo348`.
 

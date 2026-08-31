@@ -31,6 +31,9 @@ test("formats selected Markdown inline without changing surrounding text", () =>
 
   const link = formatMarkdownInline("Atlas", 0, 5, "link", "en");
   assert.equal(link.text, "[Atlas](https://example.com)");
+
+  const color = formatMarkdownInline("before selected after", 7, 15, "color:blue", "en");
+  assert.equal(color.text, "before [[color:blue|selected]] after");
 });
 
 test("inline formatting inserts useful placeholders at a collapsed caret", () => {

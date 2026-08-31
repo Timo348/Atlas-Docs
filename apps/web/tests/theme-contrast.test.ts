@@ -42,6 +42,21 @@ test("system dark palette stays aligned with the explicit dark theme", () => {
   );
 });
 
+test("Markdown text colors stay readable in light and dark themes", () => {
+  const light = variablesFor(":root");
+  const dark = variablesFor("html[data-theme=\"dark\"]");
+  for (const color of ["red", "orange", "yellow", "green", "blue", "purple"]) {
+    assert.ok(
+      contrast(light[`markdown-color-${color}`], light.paper) >= 4.5,
+      `${color} Markdown text must reach 4.5:1 on the light paper`,
+    );
+    assert.ok(
+      contrast(dark[`markdown-color-${color}`], dark.paper) >= 4.5,
+      `${color} Markdown text must reach 4.5:1 on the dark paper`,
+    );
+  }
+});
+
 test("dark controls and focus indicators meet non-text contrast targets", () => {
   const variables = variablesFor("html[data-theme=\"dark\"]");
   assert.ok(

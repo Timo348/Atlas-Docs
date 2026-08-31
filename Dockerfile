@@ -73,6 +73,7 @@ COPY --from=build-web /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=build-web /app/apps/web/public ./apps/web/public
 USER node
 EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD node -e "fetch('http://127.0.0.1:3000/api/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
 CMD ["node", "apps/web/server.js"]
 
 FROM ${NODE_IMAGE} AS collab
@@ -94,4 +95,5 @@ COPY --from=collab-runtime-dependencies /app/node_modules ./node_modules
 COPY --from=build-collab /app/apps/collab/dist ./dist
 USER node
 EXPOSE 1234
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 CMD node -e "fetch('http://127.0.0.1:1234/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
 CMD ["node", "dist/index.js"]

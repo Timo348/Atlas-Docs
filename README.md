@@ -81,7 +81,7 @@ or a straightforward Docker-based operating model.
 
 ### Documents and visual files
 
-- Real-time Markdown and LaTeX editing with previews and source-file downloads.
+- Real-time Markdown and LaTeX editing with previews and source-file downloads. Markdown offers a formatting toolbar with a contrast-safe text-colour palette.
 - Mermaid diagram files with a source-and-diagram or diagram-only view, plus a visual Gantt
   planner with drag/drop dates, direct editing, Mermaid import, custom status meanings, and
   optional dimming of dates in the past.
@@ -222,7 +222,7 @@ Compose plugin. Read the [complete setup guide](SETUP.md) before starting; it
 lists the required secrets, network settings, and production checks.
 
 ```bash
-ATLAS_RELEASE=v3.1.1 # Replace with the published tag you intend to deploy.
+ATLAS_RELEASE=v3.1.2 # Replace with the published tag you intend to deploy.
 git clone --branch "$ATLAS_RELEASE" --depth 1 https://github.com/Timo348/Atlas-Docs.git
 cd Atlas-Docs
 cp .env.example .env

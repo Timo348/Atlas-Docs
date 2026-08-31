@@ -1,3 +1,5 @@
+import { colorMarkdownText, isMarkdownTextColor, type MarkdownTextColor } from "@/lib/markdown-color";
+
 export type SlashCommandId =
   | "table"
   | "codeblock"
@@ -24,7 +26,7 @@ export type TextEdit = {
   changes?: TextChange[];
 };
 
-export type MarkdownInlineStyle = "bold" | "italic" | "strikethrough" | "code" | "link";
+export type MarkdownInlineStyle = "bold" | "italic" | "strikethrough" | "code" | "link" | `color:${MarkdownTextColor}`;
 
 export type TextChange = {
   start: number;
@@ -176,7 +178,10 @@ export function formatMarkdownInline(
   const selected = text.slice(start, end);
   const fallback = language === "de" ? "Text" : "Text";
   const label = selected || (style === "link" ? (language === "de" ? "Linktext" : "Link text") : fallback);
-  const value = style === "bold"
+  const color = style.startsWith("color:") ? style.slice("color:".length) : null;
+  const value = color && isMarkdownTextColor(color)
+    ? colorMarkdownText(color, label)
+    : style === "bold"
     ? `**${label}**`
     : style === "italic"
       ? `*${label}*`

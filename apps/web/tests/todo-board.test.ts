@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import * as Y from "yjs";
 import {
   addTodoTask,
@@ -9,6 +13,7 @@ import {
   initializeTodoBoard,
   readTodoTasks,
   serializeTodoBoard,
+  setTodoChecklistItemChecked,
   todoTaskBlockers,
   todoDeadlineState,
   updateTodoTask,
@@ -54,6 +59,32 @@ test("Todo board snapshots copy tasks independently", () => {
   assert.deepEqual(readTodoTasks(target).map((task) => ({ title: task.title, description: task.description })), [{ title: "Plan", description: "Draft the **project plan**." }]);
   source.destroy();
   target.destroy();
+});
+
+test("Todo checklist items toggle their matching Markdown entry", () => {
+  const description = "- [ ] First step\n  - [x] Nested step\n1. [ ] Final step\n";
+
+  assert.equal(setTodoChecklistItemChecked(description, 1, false), "- [ ] First step\n  - [ ] Nested step\n1. [ ] Final step\n");
+  assert.equal(setTodoChecklistItemChecked(description, 2, true), "- [ ] First step\n  - [x] Nested step\n1. [x] Final step\n");
+  assert.equal(setTodoChecklistItemChecked(description, -1, true), description);
+});
+
+test("GFM checklist inputs render in the same order as their Markdown entries", () => {
+  const description = "- [ ] First step\n  - [x] Nested step\n";
+  let nextChecklistItemIndex = 0;
+  const indexes: number[] = [];
+
+  renderToStaticMarkup(createElement(ReactMarkdown, {
+    remarkPlugins: [remarkGfm],
+    components: {
+      input: ({ type, ...props }) => {
+        if (type === "checkbox") indexes.push(nextChecklistItemIndex++);
+        return createElement("input", props);
+      },
+    },
+  }, description));
+
+  assert.deepEqual(indexes, [0, 1]);
 });
 
 test("Todo tasks cannot be completed before their prerequisites", () => {
