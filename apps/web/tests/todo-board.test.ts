@@ -3,12 +3,16 @@ import test from "node:test";
 import * as Y from "yjs";
 import {
   addTodoTask,
+  canCompleteTodoTask,
   copyTodoBoard,
+  deleteTodoTask,
   initializeTodoBoard,
   readTodoTasks,
   serializeTodoBoard,
+  todoTaskBlockers,
   todoDeadlineState,
   updateTodoTask,
+  wouldCreateTodoDependency,
 } from "../src/lib/todo-board";
 
 test("Todo tasks sort every column by descending priority, then nearest deadline", () => {
@@ -52,6 +56,38 @@ test("Todo board snapshots copy tasks independently", () => {
   target.destroy();
 });
 
+test("Todo tasks cannot be completed before their prerequisites", () => {
+  const document = new Y.Doc();
+  initializeTodoBoard(document);
+  const specificationId = addTodoTask(document, { title: "Specification" });
+  assert.ok(specificationId);
+  const releaseId = addTodoTask(document, { title: "Release", blockedBy: [specificationId] });
+  assert.ok(releaseId);
+
+  assert.deepEqual(todoTaskBlockers(document, releaseId), [readTodoTasks(document).find((task) => task.id === specificationId)]);
+  assert.equal(canCompleteTodoTask(document, releaseId), false);
+  assert.equal(updateTodoTask(document, releaseId, { column: "COMPLETED" }), false);
+  assert.equal(updateTodoTask(document, specificationId, { column: "COMPLETED" }), true);
+  assert.equal(canCompleteTodoTask(document, releaseId), true);
+  assert.equal(updateTodoTask(document, releaseId, { column: "COMPLETED" }), true);
+  document.destroy();
+});
+
+test("Todo dependencies reject cycles and are cleaned up when a task is deleted", () => {
+  const document = new Y.Doc();
+  initializeTodoBoard(document);
+  const planId = addTodoTask(document, { title: "Plan" });
+  const reviewId = addTodoTask(document, { title: "Review" });
+  assert.ok(planId && reviewId);
+
+  assert.equal(updateTodoTask(document, planId, { blockedBy: [reviewId] }), true);
+  assert.equal(wouldCreateTodoDependency(document, reviewId, planId), true);
+  assert.equal(updateTodoTask(document, reviewId, { blockedBy: [planId] }), false);
+  assert.equal(deleteTodoTask(document, reviewId), true);
+  assert.deepEqual(readTodoTasks(document).find((task) => task.id === planId)?.blockedBy, []);
+  document.destroy();
+});
+
 test("Todo tasks created before descriptions default to an empty Markdown value", () => {
   const document = new Y.Doc();
   const board = document.getMap<unknown>("todo-board");
@@ -68,5 +104,6 @@ test("Todo tasks created before descriptions default to an empty Markdown value"
   board.set("tasks", tasks);
 
   assert.equal(readTodoTasks(document)[0]?.description, "");
+  assert.deepEqual(readTodoTasks(document)[0]?.blockedBy, []);
   document.destroy();
 });

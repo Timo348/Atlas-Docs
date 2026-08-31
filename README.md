@@ -86,8 +86,8 @@ or a straightforward Docker-based operating model.
   planner with drag/drop dates, direct editing, Mermaid import, custom status meanings, and
   optional dimming of dates in the past.
 - Standalone text and Todo-board files. Todo tasks are created in one focused dialog with
-  Markdown descriptions, status, priority, and deadline; PDFs, images, audio, and video use
-  native browser previews. Other uploaded files remain intact and downloadable.
+  Markdown descriptions, status, priority, deadline, and blocking prerequisites; PDFs, images,
+  audio, and video use native browser previews. Other uploaded files remain intact and downloadable.
 - Import files through one dialog; Markdown, LaTeX, Excalidraw, PDF, Mermaid, Gantt, and plain
   text receive a matching Atlas editor or preview.
 - A full-screen file view removes workspace navigation while keeping the same in-place exit control.
@@ -222,7 +222,7 @@ Compose plugin. Read the [complete setup guide](SETUP.md) before starting; it
 lists the required secrets, network settings, and production checks.
 
 ```bash
-ATLAS_RELEASE=v3.1.0 # Replace with the published tag you intend to deploy.
+ATLAS_RELEASE=v3.1.1 # Replace with the published tag you intend to deploy.
 git clone --branch "$ATLAS_RELEASE" --depth 1 https://github.com/Timo348/Atlas-Docs.git
 cd Atlas-Docs
 cp .env.example .env

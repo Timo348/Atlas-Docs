@@ -613,6 +613,8 @@ a { color: inherit; text-decoration: none; }
 .todo-card-description :is(h1, h2, h3) { color: var(--ink); font-size: 12px; margin: 0 0 7px; }
 .todo-card-description :is(ul, ol) { margin: 0 0 7px; padding-left: 19px; }
 .todo-card-description code { background: var(--code-inline); border-radius: 3px; color: var(--ink); padding: 1px 3px; }
+.todo-task-blocked { align-items: flex-start; background: color-mix(in srgb, #d98a23 14%, var(--surface)); border: 1px solid color-mix(in srgb, #d98a23 36%, var(--line)); border-radius: 6px; color: var(--ink); display: flex; font-size: 10px; gap: 5px; line-height: 1.35; margin: 0; padding: 7px; }
+.todo-task-blocked svg { color: #a66300; flex: 0 0 auto; margin-top: 1px; }
 .todo-card-fields { display: grid; gap: 7px; grid-template-columns: 1fr 1fr; }
 .todo-card label { display: grid; gap: 3px; min-width: 0; }
 .todo-card label > span { color: var(--muted); font-size: 9px; font-weight: 750; letter-spacing: .5px; text-transform: uppercase; }
@@ -639,6 +641,15 @@ a { color: inherit; text-decoration: none; }
 .todo-description-preview code { background: var(--code-inline); border-radius: 3px; color: var(--ink); padding: 1px 4px; }
 .todo-description-preview pre { background: var(--code-block); border-radius: 5px; color: var(--code-text); overflow: auto; padding: 9px; }
 .todo-dialog-grid { display: grid; gap: 15px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.todo-dialog-dependencies { border: 1px solid var(--line); border-radius: 8px; margin: 0; min-width: 0; padding: 12px; }
+.todo-dialog-dependencies legend { color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: 1.1px; padding: 0 4px; text-transform: uppercase; }
+.todo-dialog-dependencies > p { color: var(--muted); font-size: 11px; line-height: 1.45; margin: 0 0 10px; text-transform: none; }
+.todo-dependency-options { display: grid; gap: 6px; max-height: 142px; overflow: auto; }
+.todo-dependency-options label { align-items: center; background: var(--paper-2); border: 1px solid var(--line); border-radius: 6px; color: var(--ink); cursor: pointer; display: flex; font-size: 11px; font-weight: 600; gap: 8px; letter-spacing: 0; padding: 7px 8px; text-transform: none; }
+.todo-dependency-options input { height: 15px; margin: 0; width: 15px; }
+.todo-dependency-options label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.todo-dependency-empty { color: var(--muted); font-size: 11px; padding: 4px 0; }
+.todo-dialog-error { color: var(--danger-text); font-size: 11px; font-weight: 650; line-height: 1.4; margin: -5px 0 0; }
 .todo-task-dialog > footer { align-items: center; border-top: 1px solid var(--line); display: flex; gap: 9px; justify-content: flex-end; padding: 14px 22px; }
 
 /* Visual Gantt planner */

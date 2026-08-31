@@ -70,9 +70,16 @@ Syntaxfarben; die Kurzformen `py`, `cs` und `sh` werden ebenfalls erkannt.
 ### Todo-Boards
 
 Klicke in einem Todo-Board auf **Aufgabe hinzufügen**. Der Dialog bündelt Titel,
-Beschreibung, Status, Priorität und Frist. Die Beschreibung wird als Markdown
-eingegeben und direkt als Vorschau angezeigt; über das Stift-Symbol einer Karte
-kannst du alle Werte später wieder ändern.
+Beschreibung, Status, Priorität, Frist und die Aufgaben, die vorher erledigt
+sein müssen. Die Beschreibung wird als Markdown eingegeben und direkt als
+Vorschau angezeigt; über das Stift-Symbol einer Karte kannst du alle Werte
+später wieder ändern.
+
+Eine Aufgabe mit offenen Voraussetzungen zeigt die blockierenden Titel direkt
+auf der Karte. Solange diese Aufgaben nicht erledigt sind, lässt sich die Karte
+weder per Statuswahl noch per Drag-and-drop nach **Erledigt** verschieben.
+Kreisabhängigkeiten werden nicht zugelassen; beim Löschen einer Voraussetzung
+wird ihre Verknüpfung automatisch entfernt.
 
 ### Slash-Befehle
 
