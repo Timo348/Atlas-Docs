@@ -85,8 +85,9 @@ or a straightforward Docker-based operating model.
 - Mermaid diagram files with a source-and-diagram or diagram-only view, plus a visual Gantt
   planner with drag/drop dates, direct editing, Mermaid import, custom status meanings, and
   optional dimming of dates in the past.
-- Standalone text and Todo-board files, plus native browser previews for PDFs, images, audio,
-  and video uploads. Other uploaded files remain intact and downloadable.
+- Standalone text and Todo-board files. Todo tasks are created in one focused dialog with
+  Markdown descriptions, status, priority, and deadline; PDFs, images, audio, and video use
+  native browser previews. Other uploaded files remain intact and downloadable.
 - Import files through one dialog; Markdown, LaTeX, Excalidraw, PDF, Mermaid, Gantt, and plain
   text receive a matching Atlas editor or preview.
 - A full-screen file view removes workspace navigation while keeping the same in-place exit control.
@@ -135,7 +136,8 @@ or a straightforward Docker-based operating model.
 - PostgreSQL backup tooling with validation, checksums, optional `age`
   encryption, retention, and a dedicated upgrade tier that retains page-version
   history.
-- Official GHCR images, optional internal mirrors, and physically disconnected deployment paths.
+- Official GHCR and Docker Hub images, optional internal mirrors, and physically disconnected
+  deployment paths.
 - Additive migration from legacy embedded canvases to standalone canvas files.
 
 ## Security and privacy
@@ -220,7 +222,7 @@ Compose plugin. Read the [complete setup guide](SETUP.md) before starting; it
 lists the required secrets, network settings, and production checks.
 
 ```bash
-ATLAS_RELEASE=v3.0.0 # Replace with the published tag you intend to deploy.
+ATLAS_RELEASE=v3.1.0 # Replace with the published tag you intend to deploy.
 git clone --branch "$ATLAS_RELEASE" --depth 1 https://github.com/Timo348/Atlas-Docs.git
 cd Atlas-Docs
 cp .env.example .env
@@ -272,6 +274,9 @@ operational procedures.
 - [GHCR: web](https://github.com/users/Timo348/packages/container/package/atlas-docs-web)
 - [GHCR: collaboration](https://github.com/users/Timo348/packages/container/package/atlas-docs-collab)
 - [GHCR: migrations](https://github.com/users/Timo348/packages/container/package/atlas-docs-migrate)
+- [Docker Hub: web](https://hub.docker.com/r/timo348/atlas-docs-web)
+- [Docker Hub: collaboration](https://hub.docker.com/r/timo348/atlas-docs-collab)
+- [Docker Hub: migrations](https://hub.docker.com/r/timo348/atlas-docs-migrate)
 
 ## License
 

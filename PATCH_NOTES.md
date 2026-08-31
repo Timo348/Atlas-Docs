@@ -1,5 +1,52 @@
 # Atlas Docs Patch Notes
 
+## 3.1.0 – Focused Todo creation and Markdown descriptions
+
+Released on August 31, 2026.
+
+[GitHub release](https://github.com/Timo348/Atlas-Docs/releases/tag/v3.1.0) ·
+[Setup and upgrade guide](SETUP.md#upgrade-to-310) · [End-user guide](UsageGuide.md)
+
+- **Focused task creation:** **Add task** now opens one dialog for the title,
+  Markdown description, status, priority, and deadline instead of requiring a
+  title before the remaining fields are available.
+- **Markdown task descriptions:** Every Todo task can store a 12,000-character
+  Markdown description. The dialog renders a live GFM preview and each card
+  shows the rendered description; the edit control reopens the same dialog.
+
+### Upgrade notes from 3.0.0
+
+1. Create the usual `upgrade` backup, then use the release files from tag
+   `v3.1.0`. Preserve the existing secret `.env`; never overwrite it with
+   `.env.example`.
+2. Set the exact matching service version:
+
+   ```dotenv
+   ATLAS_VERSION=3.1.0
+   ```
+
+3. No new environment variable, Compose service, or database migration is
+   required. Existing Todo tasks remain valid and simply have an empty
+   description until edited.
+4. Validate and start the complete matching service set:
+
+   ```bash
+   docker compose config --quiet
+   docker compose pull
+   docker compose up -d --no-build
+   docker compose ps -a
+   docker compose logs --no-color migrate
+   ```
+
+Matching Linux/amd64 `web`, `collab`, and `migrate` images are published in
+GHCR and Docker Hub as `3.1.0`, `3.1`, `3`, and `latest`. Keep all three
+services on the same tag.
+
+Completed issues:
+
+- [#35 – PopUp für Task Erstellung](https://github.com/Timo348/Atlas-Docs/issues/35)
+- [#36 – Beschreibung ToDos](https://github.com/Timo348/Atlas-Docs/issues/36)
+
 ## 3.0.0 – Central settings, visual planning, and observability
 
 Released on August 25, 2026.

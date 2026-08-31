@@ -12,6 +12,7 @@ export type TodoPriority = typeof TODO_PRIORITIES[number];
 export type TodoTask = {
   id: string;
   title: string;
+  description: string;
   column: TodoColumn;
   priority: TodoPriority;
   deadline: string | null;
@@ -19,7 +20,7 @@ export type TodoTask = {
   updatedAt: number;
 };
 
-export type TodoTaskUpdate = Partial<Pick<TodoTask, "title" | "column" | "priority" | "deadline">>;
+export type TodoTaskUpdate = Partial<Pick<TodoTask, "title" | "description" | "column" | "priority" | "deadline">>;
 
 export function initializeTodoBoard(document: Y.Doc) {
   const board = document.getMap<unknown>(TODO_BOARD_MAP);
@@ -44,7 +45,7 @@ export function readTodoTasks(document: Y.Doc) {
 
 export function addTodoTask(
   document: Y.Doc,
-  input: { title: string; column?: TodoColumn; priority?: TodoPriority; deadline?: string | null },
+  input: { title: string; description?: string; column?: TodoColumn; priority?: TodoPriority; deadline?: string | null },
 ) {
   const title = normalizeTitle(input.title);
   if (!title) return null;
@@ -55,6 +56,7 @@ export function addTodoTask(
   const now = Date.now();
   const task = new Y.Map<unknown>();
   task.set("title", title);
+  task.set("description", normalizeDescription(input.description));
   task.set("column", isTodoColumn(input.column) ? input.column : "NEW");
   task.set("priority", isTodoPriority(input.priority) ? input.priority : "MEDIUM");
   task.set("deadline", normalizeDeadline(input.deadline));
@@ -71,6 +73,7 @@ export function updateTodoTask(document: Y.Doc, id: string, update: TodoTaskUpda
   if (update.title !== undefined && !nextTitle) return false;
   document.transact(() => {
     if (nextTitle !== undefined) task.set("title", nextTitle);
+    if (update.description !== undefined) task.set("description", normalizeDescription(update.description));
     if (update.column !== undefined && isTodoColumn(update.column)) task.set("column", update.column);
     if (update.priority !== undefined && isTodoPriority(update.priority)) task.set("priority", update.priority);
     if (update.deadline !== undefined) task.set("deadline", normalizeDeadline(update.deadline));
@@ -132,6 +135,7 @@ export function copyTodoBoard(source: Y.Doc, target: Y.Doc) {
     for (const item of tasks) {
       const task = new Y.Map<unknown>();
       task.set("title", item.title);
+      task.set("description", item.description);
       task.set("column", item.column);
       task.set("priority", item.priority);
       task.set("deadline", item.deadline);
@@ -169,6 +173,7 @@ function toTodoTask(id: string, value: unknown): TodoTask | null {
   return {
     id,
     title,
+    description: normalizeDescription(value.get("description")),
     column: isTodoColumn(column) ? column : "NEW",
     priority: isTodoPriority(priority) ? priority : "MEDIUM",
     deadline,
@@ -179,6 +184,10 @@ function toTodoTask(id: string, value: unknown): TodoTask | null {
 
 function normalizeTitle(value: unknown) {
   return typeof value === "string" ? value.trim().slice(0, 240) : "";
+}
+
+function normalizeDescription(value: unknown) {
+  return typeof value === "string" ? value.trim().slice(0, 12000) : "";
 }
 
 function normalizeDeadline(value: unknown) {

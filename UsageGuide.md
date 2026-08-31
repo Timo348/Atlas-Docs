@@ -51,7 +51,7 @@ Atlas Docs kennt folgende Dateitypen:
 | LaTeX | Wissenschaftliche oder technisch gesetzte Dokumente | `.tex` |
 | Mermaid | Diagramm-Quelltext mit Diagrammvorschau | `.mmd` oder `.mermaid` |
 | Gantt | Visuelle Projektplanung und Mermaid-Gantt-Importe | `.gantt` |
-| Todo | Priorisierte Aufgaben mit Status und Frist | `.todos.json` |
+| Todo | Priorisierte Aufgaben mit Markdown-Beschreibung, Status und Frist | `.todos.json` |
 | Text | Unformatierter, gemeinsam bearbeitbarer Text | `.txt` oder Originalname |
 | Canvas | Diagramme, Skizzen und visuelle Planung mit Excalidraw | `.excalidraw` |
 | PDF | Unveränderbare Dokumente, Angebote und Anhänge | Original-PDF |
@@ -66,6 +66,13 @@ Durchgestrichen, Inline-Code und Links.
 Links werden in der Vorschau farbig und unterstrichen dargestellt. Codeblöcke
 mit den Sprachangaben `java`, `python`, `c`, `c#`, `c++` oder `bash` erhalten
 Syntaxfarben; die Kurzformen `py`, `cs` und `sh` werden ebenfalls erkannt.
+
+### Todo-Boards
+
+Klicke in einem Todo-Board auf **Aufgabe hinzufügen**. Der Dialog bündelt Titel,
+Beschreibung, Status, Priorität und Frist. Die Beschreibung wird als Markdown
+eingegeben und direkt als Vorschau angezeigt; über das Stift-Symbol einer Karte
+kannst du alle Werte später wieder ändern.
 
 ### Slash-Befehle
 

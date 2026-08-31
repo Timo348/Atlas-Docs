@@ -1,7 +1,9 @@
 "use client";
 
-import { CalendarDays, CirclePlus, Flag, GripVertical, Trash2 } from "lucide-react";
+import { CalendarDays, CirclePlus, Flag, GripVertical, Pencil, Trash2, X } from "lucide-react";
 import { type DragEvent, type FormEvent, useEffect, useMemo, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import * as Y from "yjs";
 import { usePreferences } from "@/components/preferences-provider";
 import {
@@ -14,6 +16,7 @@ import {
   type TodoColumn,
   type TodoPriority,
   type TodoTask,
+  type TodoTaskUpdate,
   updateTodoTask,
 } from "@/lib/todo-board";
 
@@ -21,9 +24,7 @@ export function CollaborativeTodoBoard({ document, readOnly }: { document: Y.Doc
   const { preferences, text } = usePreferences();
   const [revision, setRevision] = useState(0);
   const [draggedTask, setDraggedTask] = useState<string | null>(null);
-  const [title, setTitle] = useState("");
-  const [priority, setPriority] = useState<TodoPriority>("MEDIUM");
-  const [deadline, setDeadline] = useState("");
+  const [dialogTask, setDialogTask] = useState<TodoTask | "create" | null>(null);
   const tasks = useMemo(() => readTodoTasks(document), [document, revision]);
 
   useEffect(() => {
@@ -33,17 +34,15 @@ export function CollaborativeTodoBoard({ document, readOnly }: { document: Y.Doc
     return () => board.unobserveDeep(rerender);
   }, [document]);
 
-  function createTask(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (readOnly || !title.trim()) return;
-    addTodoTask(document, { title, priority, deadline: deadline || null });
-    setTitle("");
-    setPriority("MEDIUM");
-    setDeadline("");
-  }
-
   function moveTask(id: string, column: TodoColumn) {
     if (!readOnly) updateTodoTask(document, id, { column });
+  }
+
+  function saveTask(input: { title: string; description: string; column: TodoColumn; priority: TodoPriority; deadline: string | null }) {
+    if (readOnly) return;
+    if (dialogTask === "create") addTodoTask(document, input);
+    else if (dialogTask) updateTodoTask(document, dialogTask.id, input);
+    setDialogTask(null);
   }
 
   return (
@@ -54,21 +53,7 @@ export function CollaborativeTodoBoard({ document, readOnly }: { document: Y.Doc
           <h2>{text("Project tasks", "Projektaufgaben")}</h2>
           <p>{text("Priority sorts every column. Drag cards or select a status.", "Priorität sortiert jede Spalte. Ziehe Karten oder wähle einen Status.")}</p>
         </div>
-        <form className="todo-create-form" onSubmit={createTask}>
-          <input
-            value={title}
-            disabled={readOnly}
-            maxLength={240}
-            onChange={(event) => setTitle(event.target.value)}
-            placeholder={text("New task", "Neue Aufgabe")}
-            aria-label={text("New task title", "Titel neuer Aufgabe")}
-          />
-          <select value={priority} disabled={readOnly} onChange={(event) => setPriority(event.target.value as TodoPriority)} aria-label={text("Task priority", "Aufgabenpriorität")}>
-            {TODO_PRIORITIES.map((item) => <option key={item} value={item}>{priorityLabel(item, text)}</option>)}
-          </select>
-          <input type="date" value={deadline} disabled={readOnly} onChange={(event) => setDeadline(event.target.value)} aria-label={text("Task deadline", "Aufgabenfrist")} />
-          <button className="button primary-button" disabled={readOnly || !title.trim()}><CirclePlus size={16} />{text("Add task", "Aufgabe hinzufügen")}</button>
-        </form>
+        {!readOnly && <button className="button primary-button todo-create-button" type="button" onClick={() => setDialogTask("create")}><CirclePlus size={16} />{text("Add task", "Aufgabe hinzufügen")}</button>}
       </header>
       <div className="todo-columns">
         {TODO_COLUMNS.map((column) => {
@@ -96,6 +81,7 @@ export function CollaborativeTodoBoard({ document, readOnly }: { document: Y.Doc
                     text={text}
                     onMove={moveTask}
                     onDelete={(id) => !readOnly && deleteTodoTask(document, id)}
+                    onEdit={(item) => !readOnly && setDialogTask(item)}
                     onUpdate={(id, update) => !readOnly && updateTodoTask(document, id, update)}
                     onDragStart={(event, id) => {
                       if (readOnly) return;
@@ -112,6 +98,7 @@ export function CollaborativeTodoBoard({ document, readOnly }: { document: Y.Doc
           );
         })}
       </div>
+      {dialogTask && <TodoTaskDialog existing={dialogTask === "create" ? null : dialogTask} text={text} onClose={() => setDialogTask(null)} onSave={saveTask} />}
     </section>
   );
 }
@@ -123,6 +110,7 @@ function TodoCard({
   text,
   onMove,
   onDelete,
+  onEdit,
   onUpdate,
   onDragStart,
   onDragEnd,
@@ -133,7 +121,8 @@ function TodoCard({
   text: (english: string, german: string) => string;
   onMove: (id: string, column: TodoColumn) => void;
   onDelete: (id: string) => void;
-  onUpdate: (id: string, update: { title?: string; priority?: TodoPriority; deadline?: string | null }) => void;
+  onEdit: (task: TodoTask) => void;
+  onUpdate: (id: string, update: TodoTaskUpdate) => void;
   onDragStart: (event: DragEvent<HTMLElement>, id: string) => void;
   onDragEnd: () => void;
 }) {
@@ -143,18 +132,10 @@ function TodoCard({
       <header>
         <span className="todo-drag-handle" aria-hidden="true"><GripVertical size={15} /></span>
         <span className="todo-priority-badge"><Flag size={12} />{priorityLabel(task.priority, text)}</span>
-        {!readOnly && <button className="todo-delete-button" type="button" onClick={() => onDelete(task.id)} title={text("Delete task", "Aufgabe löschen")} aria-label={text("Delete task", "Aufgabe löschen")}><Trash2 size={14} /></button>}
+        {!readOnly && <div className="todo-card-actions"><button className="todo-edit-button" type="button" onClick={() => onEdit(task)} title={text("Edit task", "Aufgabe bearbeiten")} aria-label={text("Edit task", "Aufgabe bearbeiten")}><Pencil size={14} /></button><button className="todo-delete-button" type="button" onClick={() => onDelete(task.id)} title={text("Delete task", "Aufgabe löschen")} aria-label={text("Delete task", "Aufgabe löschen")}><Trash2 size={14} /></button></div>}
       </header>
-      <input
-        className="todo-task-title"
-        defaultValue={task.title}
-        key={`${task.id}:${task.title}`}
-        readOnly={readOnly}
-        maxLength={240}
-        onBlur={(event) => onUpdate(task.id, { title: event.currentTarget.value })}
-        onKeyDown={(event) => event.key === "Enter" && event.currentTarget.blur()}
-        aria-label={text("Task title", "Aufgabentitel")}
-      />
+      <strong className="todo-task-title">{task.title}</strong>
+      {task.description && <div className="todo-card-description"><ReactMarkdown remarkPlugins={[remarkGfm]}>{task.description}</ReactMarkdown></div>}
       <div className="todo-card-fields">
         <label><span>{text("Priority", "Priorität")}</span><select value={task.priority} disabled={readOnly} onChange={(event) => onUpdate(task.id, { priority: event.target.value as TodoPriority })}>{TODO_PRIORITIES.map((item) => <option key={item} value={item}>{priorityLabel(item, text)}</option>)}</select></label>
         <label><span>{text("Deadline", "Frist")}</span><input type="date" value={task.deadline || ""} disabled={readOnly} onChange={(event) => onUpdate(task.id, { deadline: event.target.value || null })} /></label>
@@ -165,6 +146,51 @@ function TodoCard({
       </footer>
     </article>
   );
+}
+
+function TodoTaskDialog({
+  existing,
+  text,
+  onClose,
+  onSave,
+}: {
+  existing: TodoTask | null;
+  text: (english: string, german: string) => string;
+  onClose: () => void;
+  onSave: (input: { title: string; description: string; column: TodoColumn; priority: TodoPriority; deadline: string | null }) => void;
+}) {
+  const [title, setTitle] = useState(existing?.title || "");
+  const [description, setDescription] = useState(existing?.description || "");
+  const [column, setColumn] = useState<TodoColumn>(existing?.column || "NEW");
+  const [priority, setPriority] = useState<TodoPriority>(existing?.priority || "MEDIUM");
+  const [deadline, setDeadline] = useState(existing?.deadline || "");
+  const editMode = Boolean(existing);
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!title.trim()) return;
+    onSave({ title, description, column, priority, deadline: deadline || null });
+  }
+
+  return <div className="modal-backdrop todo-task-dialog-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+    <form className="todo-task-dialog" onSubmit={submit} role="dialog" aria-modal="true" aria-label={editMode ? text("Edit task", "Aufgabe bearbeiten") : text("New task", "Neue Aufgabe")}>
+      <header>
+        <div><span>Atlas</span><h2>{editMode ? text("Edit task", "Aufgabe bearbeiten") : text("New task", "Neue Aufgabe")}</h2></div>
+        <button type="button" className="icon-button" onClick={onClose} aria-label={text("Close", "Schließen")}><X size={18} /></button>
+      </header>
+      <div className="todo-task-dialog-body">
+        <label className="todo-dialog-title"><span>{text("Task title", "Aufgabentitel")}</span><input autoFocus value={title} maxLength={240} onChange={(event) => setTitle(event.target.value)} /></label>
+        <label className="todo-dialog-description"><span>{text("Description (Markdown)", "Beschreibung (Markdown)")}</span><textarea value={description} maxLength={12000} onChange={(event) => setDescription(event.target.value)} placeholder={text("Use Markdown, for example **important** or a checklist.", "Nutze Markdown, zum Beispiel **wichtig** oder eine Checkliste.")} /></label>
+        {description.trim() && <section className="todo-description-preview" aria-label={text("Description preview", "Beschreibungsvorschau")}><span>{text("Preview", "Vorschau")}</span><ReactMarkdown remarkPlugins={[remarkGfm]}>{description}</ReactMarkdown></section>}
+        <div className="todo-dialog-grid">
+          <label><span>{text("Status", "Status")}</span><select value={column} onChange={(event) => setColumn(event.target.value as TodoColumn)}>{TODO_COLUMNS.map((item) => <option key={item} value={item}>{columnLabel(item, text)}</option>)}</select></label>
+          <label><span>{text("Priority", "Priorität")}</span><select value={priority} onChange={(event) => setPriority(event.target.value as TodoPriority)}>{TODO_PRIORITIES.map((item) => <option key={item} value={item}>{priorityLabel(item, text)}</option>)}</select></label>
+          <label><span>{text("Deadline", "Frist")}</span><input type="date" value={deadline} onChange={(event) => setDeadline(event.target.value)} /></label>
+        </div>
+      </div>
+      <footer><button type="button" className="button" onClick={onClose}>{text("Cancel", "Abbrechen")}</button><button className="button primary-button" disabled={!title.trim()}>{editMode ? text("Save changes", "Änderungen speichern") : text("Create task", "Aufgabe erstellen")}</button></footer>
+    </form>
+  </div>;
 }
 
 function columnLabel(column: TodoColumn, text: (english: string, german: string) => string) {

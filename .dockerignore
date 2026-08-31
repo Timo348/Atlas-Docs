@@ -3,7 +3,7 @@ node_modules
 **/.next
 **/dist
 .git
-.env
+.env*
 coverage
 apps/web/public/excalidraw-assets
 

@@ -572,11 +572,9 @@ a { color: inherit; text-decoration: none; }
 .todo-board-kicker { color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; }
 .todo-board h2 { font-family: var(--font-serif), serif; font-size: 25px; font-weight: 580; line-height: 1.1; margin: 4px 0 5px; }
 .todo-board-header p { color: var(--muted); font-size: 12px; margin: 0; }
-.todo-create-form { align-items: center; display: grid; gap: 7px; grid-template-columns: minmax(170px, 1fr) 106px 142px auto; max-width: 710px; width: 58%; }
-.todo-create-form input, .todo-create-form select, .todo-card input, .todo-card select { background: var(--control-bg); border: 1px solid var(--control-border); border-radius: 7px; color: var(--ink); font: inherit; outline: 0; }
-.todo-create-form input, .todo-create-form select { font-size: 12px; height: 36px; min-width: 0; padding: 0 9px; }
-.todo-create-form input:focus, .todo-create-form select:focus, .todo-card input:focus, .todo-card select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus-ring); }
-.todo-create-form .button { height: 36px; justify-content: center; padding: 0 11px; white-space: nowrap; }
+.todo-create-button { white-space: nowrap; }
+.todo-card input, .todo-card select, .todo-task-dialog input, .todo-task-dialog select, .todo-task-dialog textarea { background: var(--control-bg); border: 1px solid var(--control-border); border-radius: 7px; color: var(--ink); font: inherit; outline: 0; }
+.todo-card input:focus, .todo-card select:focus, .todo-task-dialog input:focus, .todo-task-dialog select:focus, .todo-task-dialog textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus-ring); }
 .todo-columns { display: grid; gap: 13px; grid-template-columns: repeat(4, minmax(240px, 1fr)); min-height: 0; overflow: auto; padding: 16px clamp(16px, 3vw, 42px) 30px; }
 .todo-column { background: color-mix(in srgb, var(--surface) 87%, var(--bg)); border: 1px solid var(--line); border-radius: 11px; display: grid; grid-template-rows: 41px minmax(0, 1fr); min-height: 230px; min-width: 0; overflow: hidden; }
 .todo-column-header { align-items: center; border-bottom: 1px solid var(--line); display: flex; font-size: 12px; justify-content: space-between; padding: 0 12px; }
@@ -603,9 +601,18 @@ a { color: inherit; text-decoration: none; }
 .todo-priority-medium .todo-priority-badge { background: #e3f0fd; color: #175b9f; }
 .todo-priority-low { border-left-color: #758295; }
 .todo-priority-low .todo-priority-badge { background: #edf0f4; color: #506070; }
-.todo-delete-button { background: transparent; border: 0; color: var(--muted); cursor: pointer; display: inline-flex; margin-left: auto; padding: 2px; }
+.todo-card-actions { display: inline-flex; gap: 3px; margin-left: auto; }
+.todo-edit-button, .todo-delete-button { background: transparent; border: 0; color: var(--muted); cursor: pointer; display: inline-flex; padding: 2px; }
+.todo-edit-button:hover { color: var(--accent); }
 .todo-delete-button:hover { color: var(--danger-text); }
 .todo-task-title { font-size: 13px; font-weight: 680; min-width: 0; padding: 5px 6px; width: 100%; }
+.todo-card-description { border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; line-height: 1.45; max-height: 106px; overflow: auto; padding: 7px 6px 0; }
+.todo-card-description > :first-child { margin-top: 0; }
+.todo-card-description > :last-child { margin-bottom: 0; }
+.todo-card-description p { margin: 0 0 7px; }
+.todo-card-description :is(h1, h2, h3) { color: var(--ink); font-size: 12px; margin: 0 0 7px; }
+.todo-card-description :is(ul, ol) { margin: 0 0 7px; padding-left: 19px; }
+.todo-card-description code { background: var(--code-inline); border-radius: 3px; color: var(--ink); padding: 1px 3px; }
 .todo-card-fields { display: grid; gap: 7px; grid-template-columns: 1fr 1fr; }
 .todo-card label { display: grid; gap: 3px; min-width: 0; }
 .todo-card label > span { color: var(--muted); font-size: 9px; font-weight: 750; letter-spacing: .5px; text-transform: uppercase; }
@@ -615,6 +622,24 @@ a { color: inherit; text-decoration: none; }
 .todo-deadline { align-items: center; color: var(--muted); display: inline-flex; font-size: 10px; gap: 4px; line-height: 1.2; padding-bottom: 7px; text-align: right; }
 .todo-deadline-overdue { color: var(--danger-text); font-weight: 750; }
 .todo-deadline-today { color: #a66300; font-weight: 750; }
+.todo-task-dialog { background: var(--paper); border: 1px solid var(--line); border-radius: 13px; box-shadow: 0 28px 80px var(--shadow); max-height: calc(100vh - 40px); overflow: auto; width: min(660px, 100%); }
+.todo-task-dialog > header { align-items: flex-start; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; padding: 19px 22px; }
+.todo-task-dialog > header > div { display: grid; gap: 3px; }
+.todo-task-dialog > header span, .todo-task-dialog label > span, .todo-description-preview > span { color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: 1.1px; text-transform: uppercase; }
+.todo-task-dialog h2 { font-family: var(--font-serif), serif; font-size: 25px; font-weight: 550; line-height: 1.1; margin: 0; }
+.todo-task-dialog-body { display: grid; gap: 20px; padding: 22px; }
+.todo-task-dialog label { color: var(--muted); display: grid; font-size: 10px; font-weight: 800; gap: 6px; letter-spacing: .45px; min-width: 0; text-transform: uppercase; }
+.todo-task-dialog input, .todo-task-dialog select { font-size: 12px; height: 38px; min-width: 0; padding: 0 10px; text-transform: none; width: 100%; }
+.todo-dialog-title input { font-size: 15px; font-weight: 700; }
+.todo-dialog-description textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.5; min-height: 126px; padding: 10px; resize: vertical; text-transform: none; width: 100%; }
+.todo-description-preview { background: var(--paper-2); border: 1px solid var(--line); border-radius: 8px; color: var(--muted); font-size: 12px; line-height: 1.55; padding: 11px 12px; }
+.todo-description-preview > span { display: block; margin-bottom: 7px; }
+.todo-description-preview > :last-child { margin-bottom: 0; }
+.todo-description-preview :is(h1, h2, h3) { color: var(--ink); font-family: var(--font-serif), serif; line-height: 1.25; }
+.todo-description-preview code { background: var(--code-inline); border-radius: 3px; color: var(--ink); padding: 1px 4px; }
+.todo-description-preview pre { background: var(--code-block); border-radius: 5px; color: var(--code-text); overflow: auto; padding: 9px; }
+.todo-dialog-grid { display: grid; gap: 15px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.todo-task-dialog > footer { align-items: center; border-top: 1px solid var(--line); display: flex; gap: 9px; justify-content: flex-end; padding: 14px 22px; }
 
 /* Visual Gantt planner */
 .gantt-planner { background: var(--bg); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: 100%; min-height: 0; overflow: hidden; }
@@ -999,7 +1024,8 @@ html[data-compact="true"] .sidebar-footer { padding-bottom: 8px; padding-top: 8p
   .gantt-calendar-actions { justify-content: flex-start; }
   .gantt-task-dialog { max-height: calc(100vh - 20px); }
   .todo-board-header { align-items: stretch; flex-direction: column; }
-  .todo-create-form { grid-template-columns: minmax(150px, 1fr) 100px 132px auto; max-width: none; width: 100%; }
+  .todo-task-dialog { max-height: calc(100vh - 20px); }
+  .todo-dialog-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .todo-columns { grid-template-columns: repeat(4, minmax(225px, 1fr)); }
   .markdown-preview { padding: 30px 22px 80px; }
   .latex-preview-shell { padding: 20px 10px 60px; }
@@ -1092,9 +1118,10 @@ html[data-compact="true"] .sidebar-footer { padding-bottom: 8px; padding-top: 8p
   .gantt-dialog-dependency, .gantt-dialog-progress { grid-column: auto; }
   .gantt-import-recovery { padding: 25px 18px; }
   .todo-board-header { padding: 17px 14px 14px; }
-  .todo-create-form { grid-template-columns: 1fr 1fr; }
-  .todo-create-form > input { grid-column: 1 / -1; }
-  .todo-create-form .button { grid-column: 1 / -1; }
+  .todo-task-dialog > header, .todo-task-dialog-body, .todo-task-dialog > footer { padding-left: 16px; padding-right: 16px; }
+  .todo-task-dialog > footer { align-items: stretch; flex-direction: column-reverse; }
+  .todo-task-dialog > footer .button { width: 100%; }
+  .todo-dialog-grid { grid-template-columns: 1fr; }
   .todo-columns { padding-left: 12px; padding-right: 12px; }
 }
 
