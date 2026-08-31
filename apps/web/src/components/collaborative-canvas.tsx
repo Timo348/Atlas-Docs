@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type * as Y from "yjs";
 import { usePreferences } from "@/components/preferences-provider";
+import { getCanvasInitialAppState } from "@/lib/canvas-defaults";
 import { configureExcalidrawAssets } from "@/lib/excalidraw-assets";
 
 const Excalidraw = dynamic(
@@ -75,9 +76,7 @@ export function CollaborativeCanvas({ ydoc, readOnly }: { ydoc: Y.Doc; readOnly:
         initialData={{
           elements: Array.from(elementsMap.values()) as never[],
           files: Object.fromEntries(Array.from(filesMap.entries())) as never,
-          appState: {
-            viewBackgroundColor: (settingsMap.get("viewBackgroundColor") as string) || "#fbfaf7",
-          },
+          appState: getCanvasInitialAppState(settingsMap.get("viewBackgroundColor") as string | undefined),
         }}
         viewModeEnabled={readOnly}
         onChange={(elements, appState, files) => {
