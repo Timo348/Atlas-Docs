@@ -1,8 +1,9 @@
 import * as Y from "yjs";
+import { copyAtlasDoc } from "@/lib/atlasdoc";
 import { copyTodoBoard } from "@/lib/todo-board";
 
 const MAP_NAMES = ["canvas-elements", "canvas-files", "canvas-settings"] as const;
-export type SnapshotFormat = "MARKDOWN" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TODO" | "TEXT" | "FILE";
+export type SnapshotFormat = "MARKDOWN" | "ATLASDOC" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TODO" | "TEXT" | "FILE";
 
 export function createVisibleSnapshot(source: Y.Doc, format: SnapshotFormat) {
   const snapshot = new Y.Doc();
@@ -12,6 +13,8 @@ export function createVisibleSnapshot(source: Y.Doc, format: SnapshotFormat) {
       const targetMap = snapshot.getMap<unknown>(name);
       for (const [key, value] of sourceMap.entries()) targetMap.set(key, clone(value));
     }
+  } else if (format === "ATLASDOC") {
+    copyAtlasDoc(source, snapshot);
   } else if (format === "TODO") {
     copyTodoBoard(source, snapshot);
   } else {
@@ -35,6 +38,8 @@ export function restoreVisibleSnapshot(target: Y.Doc, update: Uint8Array, format
           targetMap.set(key, clone(value));
         }
       }
+    } else if (format === "ATLASDOC") {
+      copyAtlasDoc(snapshot, target);
     } else if (format === "TODO") {
       copyTodoBoard(snapshot, target);
     } else {

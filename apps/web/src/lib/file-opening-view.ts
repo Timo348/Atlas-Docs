@@ -1,8 +1,8 @@
 import type { MermaidView } from "@/lib/mermaid-view";
 import type { Preferences } from "@/lib/preferences";
 
-export type AtlasPageFormat = "MARKDOWN" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TODO" | "TEXT" | "FILE";
-export type InitialEditorTab = "write" | "preview" | "canvas" | "todo" | MermaidView;
+export type AtlasPageFormat = "MARKDOWN" | "ATLASDOC" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TODO" | "TEXT" | "FILE";
+export type InitialEditorTab = "write" | "preview" | "canvas" | "todo" | "atlasdoc" | MermaidView;
 
 export function initialEditorTab(
   format: AtlasPageFormat,
@@ -11,6 +11,7 @@ export function initialEditorTab(
 ): InitialEditorTab {
   if (format === "CANVAS") return "canvas";
   if (format === "TODO") return "todo";
+  if (format === "ATLASDOC") return "atlasdoc";
   if (format === "TEXT") return "write";
   if (format === "FILE") return "write";
   if (format === "MERMAID") return preferences.fileViewDefaults.mermaid;

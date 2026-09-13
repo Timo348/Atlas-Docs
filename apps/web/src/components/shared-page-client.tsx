@@ -17,7 +17,7 @@ export function SharedPageClient({
     title: string;
     slug: string;
     parentId: null;
-    format: "MARKDOWN" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TODO" | "TEXT" | "FILE" | "PDF";
+    format: "MARKDOWN" | "ATLASDOC" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TODO" | "TEXT" | "FILE" | "PDF";
     fileMime?: string | null;
     fileSize?: number | null;
   };
@@ -65,7 +65,7 @@ export function SharedPageClient({
 }
 
 function isCollaborativePage(
-  page: { format: "MARKDOWN" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TODO" | "TEXT" | "FILE" | "PDF" },
-): page is typeof page & { format: "MARKDOWN" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TODO" | "TEXT" | "FILE" } {
+  page: { format: "MARKDOWN" | "ATLASDOC" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TODO" | "TEXT" | "FILE" | "PDF" },
+): page is typeof page & { format: "MARKDOWN" | "ATLASDOC" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TODO" | "TEXT" | "FILE" } {
   return page.format !== "PDF";
 }

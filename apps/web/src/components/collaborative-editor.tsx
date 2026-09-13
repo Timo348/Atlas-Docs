@@ -13,6 +13,7 @@ import ReactMarkdown, { type Components as MarkdownComponents } from "react-mark
 import remarkGfm from "remark-gfm";
 import * as Y from "yjs";
 import { CollaborativeCanvas } from "@/components/collaborative-canvas";
+import { CollaborativeAtlasDoc } from "@/components/collaborative-atlasdoc";
 import { CollaborativeGantt } from "@/components/collaborative-gantt";
 import { CollaborativeMermaid } from "@/components/collaborative-mermaid";
 import { CollaborativeTodoBoard } from "@/components/collaborative-todo-board";
@@ -66,7 +67,7 @@ type PageItem = {
   title: string;
   slug: string;
   parentId: string | null;
-  format: "MARKDOWN" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TODO" | "TEXT" | "FILE";
+  format: "MARKDOWN" | "ATLASDOC" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TODO" | "TEXT" | "FILE";
   fileMime?: string | null;
   fileSize?: number | null;
 };
@@ -138,6 +139,16 @@ export function CollaborativeEditor(props: EditorProps) {
       page={props.page}
       headerCenter={props.headerCenter}
       publicShare={props.publicShare}
+      fullscreen={props.fullscreen}
+      onFullscreenChange={props.onFullscreenChange}
+    />;
+  }
+  if (props.page.format === "ATLASDOC") {
+    return <CollaborativeAtlasDoc
+      page={props.page}
+      headerCenter={props.headerCenter}
+      publicShare={props.publicShare}
+      canManageShares={props.canManageShares}
       fullscreen={props.fullscreen}
       onFullscreenChange={props.onFullscreenChange}
     />;

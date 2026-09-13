@@ -66,7 +66,7 @@ release archive, then enter its root. The value below is the currently published
 tag; replace it when deploying a newer release:
 
 ```bash
-ATLAS_RELEASE=v3.1.2
+ATLAS_RELEASE=v3.1.3
 git clone --branch "$ATLAS_RELEASE" --depth 1 https://github.com/Timo348/Atlas-Docs.git
 cd Atlas-Docs
 cp .env.example .env
@@ -456,6 +456,31 @@ Read the target release notes and compare its `.env.example`, `compose.yml`, and
 Compose overlays with the installed copies. Preserve `.env` separately, merge
 new variables deliberately, and keep a record of the currently deployed
 `ATLAS_VERSION`.
+
+### Upgrade to 3.1.3
+
+Create the normal `upgrade` backup and use the files from tag `v3.1.3`; retain
+the existing secret `.env`. Set the target service version before starting:
+
+```dotenv
+ATLAS_VERSION=3.1.3
+```
+
+This release adds the native `.atlasdoc` page format and includes the matching
+Prisma migration. The Todo dependency search and completed-task filter require
+no additional environment variables. Matching Linux/amd64 images are
+published in GHCR and Docker Hub. The Compose default remains GHCR; to pull
+the Docker Hub copies, set `ATLAS_IMAGE_REGISTRY=docker.io/timo348`.
+
+Validate and start the matching services:
+
+```bash
+docker compose config --quiet
+docker compose pull
+docker compose up -d --no-build
+docker compose ps -a
+docker compose logs --no-color migrate
+```
 
 ### Upgrade to 3.1.2
 

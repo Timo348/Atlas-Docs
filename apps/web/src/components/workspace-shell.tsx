@@ -23,7 +23,7 @@ import { spaceRoleLabel } from "@/lib/space-role";
 import { workspaceShortcut } from "@/lib/workspace-shortcuts";
 import { filePreviewKind } from "@/lib/file-preview";
 
-type PageFormat = "MARKDOWN" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TODO" | "TEXT" | "FILE" | "PDF";
+type PageFormat = "MARKDOWN" | "ATLASDOC" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TODO" | "TEXT" | "FILE" | "PDF";
 type PageItem = {
   id: string;
   title: string;
@@ -812,7 +812,7 @@ function RootPages({
             </span>
           )}
           <Link className="page-link" href={`/?space=${page.spaceId}&page=${page.id}`}>
-            {page.format === "CANVAS" ? <Network size={14} /> : page.format === "MERMAID" ? <Workflow size={14} /> : page.format === "GANTT" ? <ChartGantt size={14} /> : page.format === "TODO" ? <ListTodo size={14} /> : page.format === "LATEX" ? <FileCode2 size={14} /> : <FileText size={14} />}<span>{page.title}</span>
+            {page.format === "CANVAS" ? <Network size={14} /> : page.format === "ATLASDOC" ? <BookOpen size={14} /> : page.format === "MERMAID" ? <Workflow size={14} /> : page.format === "GANTT" ? <ChartGantt size={14} /> : page.format === "TODO" ? <ListTodo size={14} /> : page.format === "LATEX" ? <FileCode2 size={14} /> : <FileText size={14} />}<span>{page.title}</span>
             {page.format === "FILE" && !filePreviewKind(page.fileMime) && <span className="file-unsupported-marker" title={text("Unsupported file type — download only", "Nicht unterstützter Dateityp — nur Download")} aria-label={text("Unsupported file type", "Nicht unterstützter Dateityp")}><AlertTriangle size={12} /></span>}
             {page.format === "PDF" && <small className="page-format-tag">{text("PDF", "PDF")}</small>}
           </Link>
@@ -907,6 +907,7 @@ function ActionDialog({
           {dialog.kind === "page" && (
             pageMode === "create" ? <div className="format-picker">
               <button className={format === "MARKDOWN" ? "active" : ""} onClick={() => setFormat("MARKDOWN")}><FileText size={20} /><span><strong>Markdown</strong><small>{text("Flexible documentation with preview", "Flexible Dokumentation mit Vorschau")}</small></span></button>
+              <button className={format === "ATLASDOC" ? "active" : ""} onClick={() => setFormat("ATLASDOC")}><BookOpen size={20} /><span><strong>{text("AtlasDoc", "AtlasDoc")}</strong><small>{text("WYSIWYG A4 document with movable elements", "WYSIWYG-A4-Dokument mit verschiebbaren Elementen")}</small></span></button>
               <button className={format === "TEXT" ? "active" : ""} onClick={() => setFormat("TEXT")}><FileText size={20} /><span><strong>{text("Plain text", "Klartext")}</strong><small>{text("Simple editable text without formatting", "Einfacher editierbarer Text ohne Formatierung")}</small></span></button>
               <button className={format === "LATEX" ? "active" : ""} onClick={() => setFormat("LATEX")}><FileCode2 size={20} /><span><strong>LaTeX</strong><small>{text("Scientific documents and formulas", "Wissenschaftliche Dokumente und Formeln")}</small></span></button>
               <button className={format === "MERMAID" ? "active" : ""} onClick={() => setFormat("MERMAID")}><Workflow size={20} /><span><strong>{text("Mermaid", "Mermaid")}</strong><small>{text("Diagram source with a local preview", "Diagramm-Quelltext mit lokaler Vorschau")}</small></span></button>

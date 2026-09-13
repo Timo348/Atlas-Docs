@@ -140,6 +140,21 @@ export function wouldCreateTodoDependency(document: Y.Doc, id: string, dependenc
   return todoTaskDependsOn(tasks, dependencyId, id, new Set());
 }
 
+export function filterTodoDependencyCandidates(
+  tasks: readonly TodoTask[],
+  query = "",
+  hideCompleted = false,
+  selectedIds: readonly string[] = [],
+) {
+  const needle = query.trim().toLocaleLowerCase();
+  const selected = new Set(selectedIds);
+  return tasks.filter((task) => {
+    const matchesQuery = !needle || task.title.toLocaleLowerCase().includes(needle);
+    const visibleStatus = !hideCompleted || task.column !== "COMPLETED" || selected.has(task.id);
+    return matchesQuery && visibleStatus;
+  });
+}
+
 export function compareTodoTasks(left: TodoTask, right: TodoTask) {
   const priorityDifference = priorityRank(right.priority) - priorityRank(left.priority);
   if (priorityDifference) return priorityDifference;

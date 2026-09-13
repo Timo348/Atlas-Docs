@@ -48,6 +48,25 @@ test("imports standard Excalidraw elements, files, and background", async () => 
   }
 });
 
+test("imports native AtlasDoc JSON into its structured collaboration map", async () => {
+  const imported = await readImportedFile(new File([JSON.stringify({
+    format: "atlasdoc",
+    version: 1,
+    settings: { gridVisible: true },
+    elements: [{ id: "heading-1", type: "heading", text: "Imported document" }],
+  })], "proposal.atlasdoc"));
+  assert.equal(imported.format, "ATLASDOC");
+  if (imported.format !== "ATLASDOC") assert.fail("unexpected import format");
+  const document = decodeDocument(imported.collaborationState);
+  try {
+    assert.equal(document.getMap("atlasdoc").get("version"), 1);
+    assert.equal(document.getMap("atlasdoc").get("settings") && typeof document.getMap("atlasdoc").get("settings"), "object");
+    assert.equal((document.getMap("atlasdoc").get("elements") as Y.Map<unknown>).get("heading-1") !== undefined, true);
+  } finally {
+    document.destroy();
+  }
+});
+
 test("accepts structurally recognizable PDFs and rejects fake content", async () => {
   const valid = new File(["%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF\n"], "specification.pdf", { type: "text/plain" });
   const imported = await readImportedFile(valid);

@@ -8,6 +8,7 @@ export const MIN_PROMETHEUS_METRICS_TOKEN_LENGTH = 32;
 
 export const PAGE_FORMATS = [
   "MARKDOWN",
+  "ATLASDOC",
   "LATEX",
   "CANVAS",
   "MERMAID",

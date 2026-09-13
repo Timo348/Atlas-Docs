@@ -10,7 +10,7 @@ import { slugify } from "@/lib/slug";
 export const runtime = "nodejs";
 
 type ImportedPage =
-  | { format: "MARKDOWN" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TEXT"; name: string; collaborationState: Uint8Array }
+  | { format: "MARKDOWN" | "ATLASDOC" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TEXT"; name: string; collaborationState: Uint8Array }
   | { format: "PDF"; name: string; bytes: Uint8Array }
   | { format: "FILE"; name: string; bytes: Uint8Array; mime: string };
 

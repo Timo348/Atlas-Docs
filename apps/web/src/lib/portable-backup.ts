@@ -10,7 +10,7 @@ export type PortablePage = {
   slug: string;
   folderId: string | null;
   parentId: string | null;
-  format: "MARKDOWN" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TODO" | "TEXT" | "FILE" | "PDF";
+  format: "MARKDOWN" | "ATLASDOC" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TODO" | "TEXT" | "FILE" | "PDF";
   fileData?: Uint8Array | null;
   fileMime?: string | null;
   sortOrder: number;

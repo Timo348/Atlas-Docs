@@ -1,7 +1,8 @@
 import * as Y from "yjs";
+import { initializeAtlasDoc } from "@/lib/atlasdoc";
 import { initializeTodoBoard } from "@/lib/todo-board";
 
-export type CollaborationPageFormat = "MARKDOWN" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TODO" | "TEXT" | "FILE";
+export type CollaborationPageFormat = "MARKDOWN" | "ATLASDOC" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TODO" | "TEXT" | "FILE";
 export type CollaborationLanguage = "en" | "de";
 
 const TEXT_NAME = "markdown";
@@ -24,6 +25,7 @@ export function initialCollaborationContent(
   language: CollaborationLanguage,
 ) {
   if (format === "CANVAS") return "";
+  if (format === "ATLASDOC") return "";
   if (format === "TEXT" || format === "FILE" || format === "TODO") return "";
   if (format === "MERMAID") return "flowchart LR\n  Start --> Ende\n";
   if (format === "GANTT") return language === "de"
@@ -56,6 +58,7 @@ export function initializeCollaborationDocument(
     settings.set("viewBackgroundColor", "#fbfaf7");
     return true;
   }
+  if (format === "ATLASDOC") return initializeAtlasDoc(document, language);
   if (format === "TODO") return initializeTodoBoard(document);
   const text = document.getText(TEXT_NAME);
   if (text.length > 0) return false;

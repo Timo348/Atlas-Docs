@@ -12,7 +12,7 @@ type SharedPage = {
   title: string;
   slug: string;
   folderId: string | null;
-  format: "MARKDOWN" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TODO" | "TEXT" | "FILE" | "PDF";
+  format: "MARKDOWN" | "ATLASDOC" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TODO" | "TEXT" | "FILE" | "PDF";
   fileMime?: string | null;
   fileSize?: number | null;
   sortOrder: number;
@@ -102,7 +102,7 @@ function SharedFolderTree({ rootId, token, folders, pages, selectedPageId, text 
       <div className={folder.parentId === null ? "" : "shared-folder-tree-children"}>
         {directPages.map((page) => (
           <Link key={page.id} className={`shared-folder-page ${selectedPageId === page.id ? "active" : ""}`} href={`/share/folder/${encodeURIComponent(token)}?page=${encodeURIComponent(page.id)}`}>
-            {page.format === "CANVAS" ? <Network size={14} /> : page.format === "MERMAID" ? <Workflow size={14} /> : page.format === "GANTT" ? <ChartGantt size={14} /> : page.format === "TODO" ? <ListTodo size={14} /> : page.format === "LATEX" ? <FileCode2 size={14} /> : <FileText size={14} />}
+            {page.format === "CANVAS" ? <Network size={14} /> : page.format === "ATLASDOC" ? <BookOpen size={14} /> : page.format === "MERMAID" ? <Workflow size={14} /> : page.format === "GANTT" ? <ChartGantt size={14} /> : page.format === "TODO" ? <ListTodo size={14} /> : page.format === "LATEX" ? <FileCode2 size={14} /> : <FileText size={14} />}
             <span>{page.title}</span>
             {page.format === "PDF" && <small className="page-format-tag">{text("PDF", "PDF")}</small>}
             {page.format === "FILE" && <AlertTriangle size={12} aria-label={text("Unsupported file", "Nicht unterstützte Datei")} />}

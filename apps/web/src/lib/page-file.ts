@@ -1,6 +1,6 @@
 export const MAX_IMPORTED_FILE_BYTES = 25 * 1024 * 1024;
 
-export type AtlasPageFormat = "MARKDOWN" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TODO" | "TEXT" | "FILE" | "PDF";
+export type AtlasPageFormat = "MARKDOWN" | "ATLASDOC" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TODO" | "TEXT" | "FILE" | "PDF";
 
 export function isPlainTextImportName(name: string) {
   const extension = fileExtension(name);
@@ -25,10 +25,11 @@ export function fileExtension(name: string) {
 export function downloadableFileName(title: string, format: AtlasPageFormat) {
   if (format === "TEXT" || format === "FILE") return title;
   if (format === "PDF") return title.toLowerCase().endsWith(".pdf") ? title : `${title}.pdf`;
-  const extension = format === "LATEX" ? ".tex" : format === "CANVAS" ? ".excalidraw" : format === "MERMAID" ? ".mmd" : format === "GANTT" ? ".gantt" : format === "TODO" ? ".todos.json" : ".md";
+  const extension = format === "ATLASDOC" ? ".atlasdoc" : format === "LATEX" ? ".tex" : format === "CANVAS" ? ".excalidraw" : format === "MERMAID" ? ".mmd" : format === "GANTT" ? ".gantt" : format === "TODO" ? ".todos.json" : ".md";
   if (format === "MERMAID" && (title.toLowerCase().endsWith(".mmd") || title.toLowerCase().endsWith(".mermaid"))) return title;
   if (format === "GANTT" && title.toLowerCase().endsWith(".gantt")) return title;
   if (format === "TODO" && title.toLowerCase().endsWith(".todos.json")) return title;
+  if (format === "ATLASDOC" && title.toLowerCase().endsWith(".atlasdoc")) return title;
   return title.toLowerCase().endsWith(extension) ? title : `${title}${extension}`;
 }
 
@@ -36,6 +37,7 @@ export function portableExtension(title: string, format: AtlasPageFormat) {
   if (format === "TEXT") return fileExtension(title) === ".txt" ? ".txt" : "";
   if (format === "FILE") return fileExtension(title);
   if (format === "PDF") return ".pdf";
+  if (format === "ATLASDOC") return ".atlasdoc";
   if (format === "LATEX") return ".tex";
   if (format === "CANVAS") return ".excalidraw";
   if (format === "MERMAID") {

@@ -26,6 +26,8 @@ test("keeps text and unsupported-file names suitable for download and export", (
   assert.equal(downloadableFileName("notes.txt", "TEXT"), "notes.txt");
   assert.equal(downloadableFileName("README", "TEXT"), "README");
   assert.equal(downloadableFileName("overview", "MARKDOWN"), "overview.md");
+  assert.equal(downloadableFileName("proposal", "ATLASDOC"), "proposal.atlasdoc");
+  assert.equal(portableExtension("proposal", "ATLASDOC"), ".atlasdoc");
   assert.equal(portableExtension("notes.txt", "TEXT"), ".txt");
   assert.equal(portableExtension("README", "TEXT"), "");
   assert.equal(portableExtension("archive.tar.gz", "FILE"), ".gz");

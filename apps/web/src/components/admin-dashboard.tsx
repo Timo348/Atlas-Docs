@@ -206,6 +206,7 @@ function formatBytes(value: bigint, language: Language) {
 function formatLabel(format: AtlasPageFormat, text: (english: string, german: string) => string) {
   const labels: Record<AtlasPageFormat, string> = {
     MARKDOWN: "Markdown",
+    ATLASDOC: ".atlasdoc",
     LATEX: "LaTeX",
     CANVAS: "Canvas",
     MERMAID: "Mermaid",

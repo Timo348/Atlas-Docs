@@ -10,6 +10,7 @@ import {
   canCompleteTodoTask,
   copyTodoBoard,
   deleteTodoTask,
+  filterTodoDependencyCandidates,
   initializeTodoBoard,
   readTodoTasks,
   serializeTodoBoard,
@@ -117,6 +118,17 @@ test("Todo dependencies reject cycles and are cleaned up when a task is deleted"
   assert.equal(deleteTodoTask(document, reviewId), true);
   assert.deepEqual(readTodoTasks(document).find((task) => task.id === planId)?.blockedBy, []);
   document.destroy();
+});
+
+test("Todo dependency candidates support title search and hiding completed tasks", () => {
+  const tasks = [
+    { id: "one", title: "Prepare specification", column: "NEW", priority: "MEDIUM", deadline: null, blockedBy: [], description: "", createdAt: 1, updatedAt: 1 },
+    { id: "two", title: "Review specification", column: "COMPLETED", priority: "LOW", deadline: null, blockedBy: [], description: "", createdAt: 2, updatedAt: 2 },
+  ] as const;
+
+  assert.deepEqual(filterTodoDependencyCandidates(tasks, "spec", true).map((task) => task.id), ["one"]);
+  assert.deepEqual(filterTodoDependencyCandidates(tasks, "review", true, ["two"]).map((task) => task.id), ["two"]);
+  assert.deepEqual(filterTodoDependencyCandidates(tasks, "prepare").map((task) => task.id), ["one"]);
 });
 
 test("Todo tasks created before descriptions default to an empty Markdown value", () => {

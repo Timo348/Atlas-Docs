@@ -1,8 +1,9 @@
 import * as Y from "yjs";
 import { CodedApiError } from "@/lib/api-errors";
+import { createAtlasDocCollaborationStateFromJson } from "@/lib/atlasdoc";
 import { uploadLimitBytes } from "@/lib/upload-limit";
 
-export type ImportPageFormat = "MARKDOWN" | "LATEX" | "CANVAS" | "PDF";
+export type ImportPageFormat = "MARKDOWN" | "ATLASDOC" | "LATEX" | "CANVAS" | "PDF";
 
 type ImportedTextFile = {
   format: "MARKDOWN" | "LATEX";
@@ -14,12 +15,17 @@ type ImportedCanvasFile = {
   name: string;
   collaborationState: Uint8Array;
 };
+type ImportedAtlasDocFile = {
+  format: "ATLASDOC";
+  name: string;
+  collaborationState: Uint8Array;
+};
 type ImportedPdfFile = {
   format: "PDF";
   name: string;
   bytes: Uint8Array;
 };
-export type ImportedFile = ImportedTextFile | ImportedCanvasFile | ImportedPdfFile;
+export type ImportedFile = ImportedTextFile | ImportedCanvasFile | ImportedAtlasDocFile | ImportedPdfFile;
 
 export async function readImportedFile(file: File): Promise<ImportedFile> {
   const bytes = await readUpload(file);
@@ -29,6 +35,14 @@ export async function readImportedFile(file: File): Promise<ImportedFile> {
   if (extension === "pdf") {
     validatePdfBytes(bytes);
     return { format: "PDF", name, bytes };
+  }
+
+  if (extension === "atlasdoc") {
+    try {
+      return { format: "ATLASDOC", name, collaborationState: createAtlasDocCollaborationStateFromJson(decodeUtf8(bytes)) };
+    } catch {
+      throw new CodedApiError("FILE_INVALID_CONTENT");
+    }
   }
 
   if (extension === "md" || extension === "markdown" || extension === "tex" || extension === "latex") {

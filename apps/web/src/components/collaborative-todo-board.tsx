@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, CircleAlert, CirclePlus, Flag, GripVertical, Pencil, Trash2, X } from "lucide-react";
+import { CalendarDays, CircleAlert, CirclePlus, Flag, GripVertical, Pencil, Search, Trash2, X } from "lucide-react";
 import { type DragEvent, type FormEvent, useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -10,6 +10,7 @@ import {
   addTodoTask,
   canCompleteTodoTask,
   deleteTodoTask,
+  filterTodoDependencyCandidates,
   readTodoTasks,
   setTodoChecklistItemChecked,
   TODO_COLUMNS,
@@ -203,8 +204,16 @@ function TodoTaskDialog({
   const [priority, setPriority] = useState<TodoPriority>(existing?.priority || "MEDIUM");
   const [deadline, setDeadline] = useState(existing?.deadline || "");
   const [blockedBy, setBlockedBy] = useState<string[]>(existing?.blockedBy || []);
+  const [dependencyQuery, setDependencyQuery] = useState("");
+  const [hideCompletedDependencies, setHideCompletedDependencies] = useState(false);
   const editMode = Boolean(existing);
   const dependencyCandidates = tasks.filter((task) => !existing || (task.id !== existing.id && !wouldCreateTodoDependency(document, existing.id, task.id)));
+  const visibleDependencyCandidates = filterTodoDependencyCandidates(
+    dependencyCandidates,
+    dependencyQuery,
+    hideCompletedDependencies,
+    blockedBy,
+  );
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -230,9 +239,13 @@ function TodoTaskDialog({
         <fieldset className="todo-dialog-dependencies">
           <legend>{text("Must be completed first", "Muss zuerst erledigt werden")}</legend>
           <p>{text("The task cannot be completed until every selected task is completed.", "Diese Aufgabe kann erst erledigt werden, wenn alle ausgewählten Aufgaben erledigt sind.")}</p>
+          <div className="todo-dependency-filters">
+            <label className="todo-dependency-search"><Search size={14} aria-hidden="true" /><input value={dependencyQuery} onChange={(event) => setDependencyQuery(event.target.value)} placeholder={text("Search tasks", "Aufgaben suchen")} aria-label={text("Search dependency tasks", "Abhängigkeiten suchen")} /></label>
+            <label className="todo-dependency-toggle"><input type="checkbox" checked={hideCompletedDependencies} onChange={(event) => setHideCompletedDependencies(event.target.checked)} /><span>{text("Hide completed", "Erledigte ausblenden")}</span></label>
+          </div>
           <div className="todo-dependency-options">
-            {dependencyCandidates.map((task) => <label key={task.id}><input type="checkbox" checked={blockedBy.includes(task.id)} onChange={(event) => setBlockedBy((current) => event.target.checked ? [...current, task.id] : current.filter((id) => id !== task.id))} /><span>{task.title}</span></label>)}
-            {!dependencyCandidates.length && <span className="todo-dependency-empty">{text("No eligible tasks", "Keine passenden Aufgaben")}</span>}
+            {visibleDependencyCandidates.map((task) => <label key={task.id}><input type="checkbox" checked={blockedBy.includes(task.id)} onChange={(event) => setBlockedBy((current) => event.target.checked ? [...current, task.id] : current.filter((id) => id !== task.id))} /><span>{task.title}</span><small>{task.column === "COMPLETED" ? text("Completed", "Erledigt") : columnLabel(task.column, text)}</small></label>)}
+            {!visibleDependencyCandidates.length && <span className="todo-dependency-empty">{dependencyCandidates.length ? text("No tasks match this filter", "Keine Aufgabe passt zu diesem Filter") : text("No eligible tasks", "Keine passenden Aufgaben")}</span>}
           </div>
         </fieldset>
         {error && <p className="todo-dialog-error" role="alert">{error}</p>}

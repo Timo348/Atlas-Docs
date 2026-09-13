@@ -16,6 +16,7 @@ import {
 } from "@/lib/portable-backup";
 import { createZipStream, type ZipEntry } from "@/lib/zip-stream";
 import { serializeTodoBoardState } from "@/lib/todo-board";
+import { serializeAtlasDocState } from "@/lib/atlasdoc";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -175,6 +176,10 @@ async function* createExportEntries(
         ]);
         if (page.format === "TODO") {
           if (pageLayout.sourcePath) yield { name: pageLayout.sourcePath, data: serializeTodoBoardState(storedDocument?.data) };
+          continue;
+        }
+        if (page.format === "ATLASDOC") {
+          if (pageLayout.sourcePath) yield { name: pageLayout.sourcePath, data: serializeAtlasDocState(storedDocument?.data) };
           continue;
         }
         if (page.format === "PDF") {
