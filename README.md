@@ -9,7 +9,7 @@
 ![Docker Compose](https://img.shields.io/badge/runtime-Docker%20Compose-2496ed.svg?logo=docker&logoColor=white)
 ![Documents, diagrams, planning, and files](https://img.shields.io/badge/files-documents%20%7C%20diagrams%20%7C%20planning%20%7C%20files-f59e0b.svg)
 
-Write in Markdown and LaTeX, plan visually with Mermaid and Gantt files, sketch in
+Write in Markdown and LaTeX, plan with a private calendar and shared Todo boards, sketch in
 standalone Excalidraw canvases, view PDFs and other uploaded files, organize everything in
 permission-aware spaces, and keep your content portable.
 
@@ -61,7 +61,7 @@ permission-aware spaces, and keep your content portable.
   <img src="docs/assets/atlas-docs-profile-settings.png" width="700" alt="Profile and appearance settings in Atlas Docs">
 </p>
 
-<p align="center"><sub>The central Settings page keeps account, design, workspace, per-file opening views, Gantt appearance, and portable exports together.</sub></p>
+<p align="center"><sub>The central Settings page keeps account, design, workspace, per-file opening views, and portable exports together.</sub></p>
 
 ## Why Atlas Docs
 
@@ -82,11 +82,13 @@ or a straightforward Docker-based operating model.
 ### Documents and visual files
 
 - Real-time Markdown and LaTeX editing with previews and source-file downloads. Markdown offers a formatting toolbar with a contrast-safe text-colour palette.
-- Mermaid diagram files with a source-and-diagram or diagram-only view, plus a visual Gantt
-  planner with drag/drop dates, direct editing, Mermaid import, custom status meanings, and
-  optional dimming of dates in the past.
+- Mermaid diagram files with a source-and-diagram or diagram-only view. Existing Gantt
+  files are archived with source downloads and version history; their stored data is preserved.
+- A private calendar at `/calendar` with month, week, day and agenda views, appointments,
+  recurring personal Todos, and Space task deadlines. Filter sources or switch between all
+  Space tasks and your assignments. Date-only deadlines stay independent of time zones.
 - Standalone text and Todo-board files. Todo tasks are created in one focused dialog with
-  Markdown descriptions, status, priority, deadline, and blocking prerequisites; PDFs, images,
+  Markdown descriptions, status, priority, deadline, multiple assignees, and blocking prerequisites; PDFs, images,
   audio, and video use native browser previews. Other uploaded files remain intact and downloadable.
 - Import files through one dialog; Markdown, LaTeX, Excalidraw, PDF, Mermaid, Gantt, and plain
   text receive a matching Atlas editor or preview.
@@ -224,7 +226,7 @@ Compose plugin. Read the [complete setup guide](SETUP.md) before starting; it
 lists the required secrets, network settings, and production checks.
 
 ```bash
-ATLAS_RELEASE=v3.2.0 # Replace with the published tag you intend to deploy.
+ATLAS_RELEASE=v3.3.0 # Replace with the published tag you intend to deploy.
 git clone --branch "$ATLAS_RELEASE" --depth 1 https://github.com/Timo348/Atlas-Docs.git
 cd Atlas-Docs
 cp .env.example .env

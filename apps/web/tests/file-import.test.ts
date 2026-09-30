@@ -6,6 +6,7 @@ import { readImportedFile, readValidatedPdf } from "../src/lib/file-import";
 import { fileContentDisposition } from "../src/lib/file-response";
 import { sharedPageAttachmentUrl } from "../src/lib/shared-page-attachments";
 import { uploadLimitBytes, uploadLimitMb } from "../src/lib/upload-limit";
+import { decodeTodoTasks } from "@atlas/todo";
 
 test("upload limits use configured whole megabytes and fall back safely", () => {
   assert.equal(uploadLimitMb(undefined), 25);
@@ -25,6 +26,15 @@ test("imports UTF-8 Markdown and LaTeX into editable Yjs text", async () => {
   if (markdown.format === "PDF" || latex.format === "PDF") assert.fail("unexpected PDF import");
   assert.equal(decodeText(markdown.collaborationState), "# Über Atlas\n");
   assert.equal(decodeText(latex.collaborationState), "\\section{Atlas}\n");
+});
+test("portable Todo imports retain task identities, dates and assignments", async () => {
+  const tasks = [{ id: "task-1", title: "Imported task", description: "Details", column: "NEW", priority: "HIGH", deadline: "2026-09-30", blockedBy: [], assigneeIds: ["alice"], createdAt: 10, updatedAt: 20 }];
+  const imported = await readImportedFile(new File([JSON.stringify({ format: "atlas-todos", version: 1, tasks })], "board.todos.json"));
+  assert.equal(imported.format, "TODO");
+  if (imported.format !== "TODO") assert.fail("unexpected Todo import format");
+  assert.deepEqual(decodeTodoTasks(imported.collaborationState), tasks);
+  await assert.rejects(() => readImportedFile(new File([JSON.stringify({ format: "atlas-todos", version: 1, tasks: [{ ...tasks[0], blockedBy: ["missing"] }] })], "bad.todos.json")),
+    (error: unknown) => error instanceof CodedApiError && error.code === "FILE_INVALID_CONTENT");
 });
 
 test("imports standard Excalidraw elements, files, and background", async () => {

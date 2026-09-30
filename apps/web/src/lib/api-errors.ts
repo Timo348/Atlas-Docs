@@ -1,4 +1,16 @@
 export const API_ERROR_MESSAGES = {
+  TODO_IMPORT_ASSIGNEES_INVALID: {
+    en: "This Todo import contains assignees without current access to the destination Space. Correct the assignees in the file and try again.",
+    de: "Dieser Todo-Import enthält Zuständige ohne aktuellen Zugriff auf den Ziel-Space. Korrigiere die Zuweisungen in der Datei und versuche es erneut.",
+  },
+  CALENDAR_CONFLICT: {
+    en: "This calendar entry changed. Reload it before saving your draft.",
+    de: "Dieser Kalendereintrag wurde geändert. Lade ihn neu, bevor du deinen Entwurf speicherst.",
+  },
+  CALENDAR_RANGE_LIMIT: {
+    en: "This calendar range contains too many entries. Choose a smaller range.",
+    de: "Dieser Kalenderzeitraum enthält zu viele Einträge. Wähle einen kleineren Zeitraum.",
+  },
   AUTH_REQUIRED: {
     en: "You must be signed in.",
     de: "Du musst angemeldet sein.",

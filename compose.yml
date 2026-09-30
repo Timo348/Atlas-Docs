@@ -2,7 +2,7 @@ name: atlas-docs
 
 services:
   web:
-    image: ${ATLAS_IMAGE_REGISTRY:-ghcr.io/timo348}/atlas-docs-web:${ATLAS_VERSION:-3.2.0}
+    image: ${ATLAS_IMAGE_REGISTRY:-ghcr.io/timo348}/atlas-docs-web:${ATLAS_VERSION:-3.3.0}
     pull_policy: missing
     init: true
     restart: unless-stopped
@@ -47,7 +47,7 @@ services:
         condition: service_healthy
 
   collab:
-    image: ${ATLAS_IMAGE_REGISTRY:-ghcr.io/timo348}/atlas-docs-collab:${ATLAS_VERSION:-3.2.0}
+    image: ${ATLAS_IMAGE_REGISTRY:-ghcr.io/timo348}/atlas-docs-collab:${ATLAS_VERSION:-3.3.0}
     pull_policy: missing
     init: true
     restart: unless-stopped
@@ -82,7 +82,7 @@ services:
         condition: service_healthy
 
   migrate:
-    image: ${ATLAS_IMAGE_REGISTRY:-ghcr.io/timo348}/atlas-docs-migrate:${ATLAS_VERSION:-3.2.0}
+    image: ${ATLAS_IMAGE_REGISTRY:-ghcr.io/timo348}/atlas-docs-migrate:${ATLAS_VERSION:-3.3.0}
     pull_policy: missing
     init: true
     restart: "no"
@@ -97,7 +97,7 @@ services:
       [
         "sh",
         "-c",
-        "./node_modules/.bin/prisma migrate deploy && ./node_modules/.bin/tsx prisma/migrate-legacy-canvases.ts && ./node_modules/.bin/tsx prisma/seed.ts",
+        "./node_modules/.bin/prisma migrate deploy && ./node_modules/.bin/tsx prisma/migrate-legacy-canvases.ts && ./node_modules/.bin/tsx prisma/backfill-todo-index.ts && ./node_modules/.bin/tsx prisma/seed.ts",
       ]
     cap_drop:
       - ALL

@@ -17,6 +17,7 @@ import {
 import { createZipStream, type ZipEntry } from "@/lib/zip-stream";
 import { serializeTodoBoardState } from "@/lib/todo-board";
 import { serializeAtlasDocState } from "@/lib/atlasdoc";
+import { personalCalendarExport } from "@/lib/calendar-server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -41,8 +42,9 @@ export async function GET(request: NextRequest) {
 
   const now = new Date();
   const spaces = await loadSpaces(user.id, scope, now);
+  const personalCalendar = await personalCalendarExport(user.id);
   const layout = buildPortableLayout(spaces);
-  const stream = createZipStream(createExportEntries(spaces, layout, scope, now, warnings), now);
+  const stream = createZipStream(createExportEntries(spaces, layout, scope, now, warnings, personalCalendar), now);
   const timestamp = now.toISOString().replace(/[:.]/g, "-");
 
   return new Response(stream, {
@@ -111,15 +113,17 @@ async function* createExportEntries(
   scope: ExportScope,
   createdAt: Date,
   warnings: string[],
+  personalCalendar: Awaited<ReturnType<typeof personalCalendarExport>>,
 ): AsyncGenerator<ZipEntry> {
   const pageCount = spaces.reduce((count, space) => count + space.pages.length, 0);
   const manifest = {
     format: "atlas-docs-portable-export",
-    formatVersion: 3,
+    formatVersion: 4,
     createdAt: createdAt.toISOString(),
     scope,
     excludes: ["document version history", "accounts", "permissions", "sessions", "profile and space images"],
     warnings,
+    personalCalendarPath: "calendar/personal.json",
     spaces: spaces.map((space) => ({
       id: space.id,
       name: space.name,
@@ -142,6 +146,7 @@ async function* createExportEntries(
     data: portableReadme(createdAt, scope, spaces.length, pageCount, warnings),
   };
   yield { name: "manifest.json", data: `${JSON.stringify(manifest, null, 2)}\n` };
+  yield { name: "calendar/personal.json", data: `${JSON.stringify(personalCalendar, null, 2)}\n` };
 
   for (const space of spaces) {
     for (const page of space.pages) {
@@ -287,6 +292,8 @@ Pages: ${pageCount}
 Open the \`spaces\` directory as an Obsidian vault or as a normal folder in VS Code. Markdown, LaTeX, Mermaid, Gantt, and plain-text files contain their current text. Todo boards are exported as \`.todos.json\` files. Referenced page images and PDF attachments use relative paths. Canvas files are stored as standard \`.excalidraw\` JSON, PDF pages remain standard \`.pdf\` files, and unsupported uploaded files are included unchanged.
 
 This portable emergency export intentionally excludes Atlas accounts, permissions, sessions, profile images, space cover images, and document version history. Use the PostgreSQL server backup for a complete operational restore.
+
+The owner's private calendar entries, recurrence rules, exceptions and preferences are included in \`calendar/personal.json\`. Even an instance export contains only the requesting user's personal calendar. Full PostgreSQL backups preserve every user's private calendar for an operational restore.
 ${warningSection}
 ## Deutscher Hinweis
 

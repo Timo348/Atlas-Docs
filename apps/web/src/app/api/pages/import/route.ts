@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
+import { decodeTodoTasks } from "@atlas/todo";
+import { replaceTodoIndex } from "@atlas/todo/persistence";
 import { canEdit, requireApiUser, spaceAccess } from "@/lib/access";
 import { apiErrorResponse, isCodedApiError } from "@/lib/api-errors";
 import { collaborationDocumentName, createTextCollaborationState } from "@/lib/collaboration-document";
 import { db } from "@/lib/db";
+import { loadAssignableSpaceMembers } from "@/lib/calendar-server";
 import { readImportedFile } from "@/lib/file-import";
 import { isGanttImportName, isMermaidImportName, isPlainTextImportName } from "@/lib/page-file";
 import { slugify } from "@/lib/slug";
@@ -10,7 +13,7 @@ import { slugify } from "@/lib/slug";
 export const runtime = "nodejs";
 
 type ImportedPage =
-  | { format: "MARKDOWN" | "ATLASDOC" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TEXT"; name: string; collaborationState: Uint8Array }
+  | { format: "MARKDOWN" | "ATLASDOC" | "LATEX" | "CANVAS" | "MERMAID" | "GANTT" | "TEXT" | "TODO"; name: string; collaborationState: Uint8Array }
   | { format: "PDF"; name: string; bytes: Uint8Array }
   | { format: "FILE"; name: string; bytes: Uint8Array; mime: string };
 
@@ -36,6 +39,12 @@ export async function POST(request: Request) {
     }
 
     const imported = await readImportedPage(file);
+    if (imported.format === "TODO") {
+      const eligible = new Set((await loadAssignableSpaceMembers(spaceId)).map((member) => member.id));
+      if (decodeTodoTasks(imported.collaborationState).some((task) => task.assigneeIds.some((id) => !eligible.has(id)))) {
+        return apiErrorResponse("TODO_IMPORT_ASSIGNEES_INVALID", 400);
+      }
+    }
     const baseSlug = slugify(title);
     const exists = await db.page.findUnique({
       where: { spaceId_slug: { spaceId, slug: baseSlug } },
@@ -81,6 +90,7 @@ export async function POST(request: Request) {
             data: Buffer.from(imported.collaborationState),
           },
         });
+        if (imported.format === "TODO") await replaceTodoIndex(transaction, created, imported.collaborationState);
       }
       return created;
     });

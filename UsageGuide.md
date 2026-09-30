@@ -9,7 +9,7 @@ Installation, Konfiguration und Datensicherung stehen in der
 1. Melde dich mit deinem lokalen Konto oder dem eingerichteten
    Single-Sign-on-Anbieter an.
 2. Wähle in der Navigation den gewünschten **Bereich (Space)** aus.
-3. Erstelle links über **Datei** ein Dokument, Diagramm, Gantt-Plan, Todo-Board,
+3. Erstelle links über **Datei** ein Dokument, Diagramm, Todo-Board,
    Textdatei oder Canvas. Über den Reiter **Importieren** kannst du vorhandene
    Dateien übernehmen; Atlas öffnet unterstützte Formate im passenden Editor
    oder in einer browsernativen Vorschau. Mit **Ordner** kannst du Inhalte
@@ -50,7 +50,7 @@ Atlas Docs kennt folgende Dateitypen:
 | Markdown | Notizen, Dokumentation, Checklisten und Tabellen | `.md` |
 | LaTeX | Wissenschaftliche oder technisch gesetzte Dokumente | `.tex` |
 | Mermaid | Diagramm-Quelltext mit Diagrammvorschau | `.mmd` oder `.mermaid` |
-| Gantt | Visuelle Projektplanung und Mermaid-Gantt-Importe | `.gantt` |
+| Gantt (Archiv) | Vorhandene Pläne mit Download und Versionshistorie | `.gantt` |
 | Todo | Priorisierte Aufgaben mit Markdown-Beschreibung, Status und Frist | `.todos.json` |
 | Text | Unformatierter, gemeinsam bearbeitbarer Text | `.txt` oder Originalname |
 | Canvas | Diagramme, Skizzen und visuelle Planung mit Excalidraw | `.excalidraw` |
@@ -86,10 +86,52 @@ Syntaxfarben; die Kurzformen `py`, `cs` und `sh` werden ebenfalls erkannt.
 ### Todo-Boards
 
 Klicke in einem Todo-Board auf **Aufgabe hinzufügen**. Der Dialog bündelt Titel,
-Beschreibung, Status, Priorität, Frist und die Aufgaben, die vorher erledigt
+Beschreibung, Status, Priorität, Frist, zuständige Personen und die Aufgaben, die vorher erledigt
 sein müssen. Die Beschreibung wird als Markdown eingegeben und direkt als
 Vorschau angezeigt; über das Stift-Symbol einer Karte kannst du alle Werte
 später wieder ändern.
+
+Neue Aufgaben werden zunächst dir zugewiesen. Unter **Zuständig** kannst du
+mehrere aktive Personen mit Space-Zugriff auswählen oder alle abwählen.
+Vorhandene Aufgaben bleiben unzugeordnet, bis jemand ihre Zuweisung ändert.
+
+### Persönlicher Kalender
+
+Öffne **Kalender** in der Navigation. Du kannst ihn auch ohne Mitgliedschaft
+in einem Space verwenden. Auf dem Desktop startet ein neuer Kalender mit
+**Monat**, auf dem Smartphone mit **Agenda**. Über **Woche**, **Tag**, **Heute**
+und die Pfeile wechselst du den Ausschnitt. Atlas speichert deine Ansicht und
+Quellenauswahl in deinem Konto.
+
+- Schalte Spaces einzeln oder über **Alle auswählen/abwählen** um. Neue Spaces
+  sind zunächst sichtbar. **Alle/Meine** betrifft Space-Aufgaben; **Meine**
+  zeigt Aufgaben, denen du zugewiesen bist. Private Einträge bleiben unabhängig davon.
+- Aufgaben mit Frist erscheinen ganztägig am Fälligkeitstag. **Ohne Termin**
+  enthält undatierte Todos, **Überfällig** offene Aufgaben mit vergangener Frist.
+  Erledigte Aufgaben sind zunächst ausgeblendet.
+- **Neu** erstellt einen privaten **Termin** oder ein persönliches **Todo**.
+  Termine bieten Beschreibung, Ort, Anfang, Ende, Ganztagsoption und Zeitzone.
+  Todos bieten eine optionale Fälligkeit, Priorität und einen Erledigt-Status.
+  Diese Einträge werden anderen Benutzern auch durch eine Adminrolle nicht zugänglich.
+- Wiederholungen sind täglich, wöchentlich, monatlich oder jährlich möglich,
+  jeweils mit Intervall und optionaler Anzahl oder Enddatum. Beim Bearbeiten
+  oder Löschen einer Serie wählst du **Dieses Vorkommen** oder **Dieses und
+  alle folgenden**. Frühere Vorkommen bleiben erhalten; wiederkehrende Todos
+  werden einzeln erledigt. Lokale Terminzeiten bleiben bei Zeitumstellungen erhalten.
+- Ein Klick öffnet die Details. Bei einer Space-Aufgabe führt **Im Board öffnen**
+  direkt zur Aufgabe. Eine neue Fälligkeit im Kalender ändert die Board-Frist;
+  auch Verschieben im Kalender speichert sie im ursprünglichen Board.
+  Abhängigkeiten und deine aktuellen Schreibrechte gelten weiterhin.
+- Nach Änderungen an Space-Aufgaben wartet Atlas auf die Bestätigung aus der
+  Datenbank. Bei Konflikten oder einer fehlenden Bestätigung nach 30 Sekunden
+  bleibt dein Entwurf im Dialog. Prüfe dann den aktuellen Board-Zustand.
+- **Persönlicher Export** lädt Einträge, Serien, Ausnahmen und Kalenderpräferenzen
+  als JSON herunter. Der portable ZIP-Export enthält ebenfalls deinen eigenen Kalender.
+
+Der Kalender aktualisiert sich alle fünf Sekunden sowie beim Fensterfokus.
+Vorhandene Gantt-Dateien öffnen sich als Archiv: Quelltext, Download und
+Versionshistorie bleiben erhalten. Neue Gantt-Dateien und Gantt-Einstellungen
+sind ausgeblendet.
 
 GFM-Checklisten in der Beschreibung, zum Beispiel `- [ ] Rückmeldung senden`,
 kannst du direkt auf der Karte oder in der Vorschau anklicken. Atlas schreibt
@@ -154,22 +196,13 @@ Mermaid-Dateien können entweder als **Diagramm** oder als **Text + Diagramm**
 angezeigt werden. Über **Einstellungen → Präferenzen → Dateien öffnen** legst
 du fest, welche Ansicht beim nächsten Öffnen standardmäßig verwendet wird.
 
-## 6. Gantt-Planner verwenden
+## 6. Gantt-Archive verwenden
 
-Ein Gantt-Plan öffnet direkt im visuellen Planner. Erstelle eine Aufgabe über
-**Neue Aufgabe**, gib Start- und Enddatum an und ziehe die Leiste später auf
-einen anderen Zeitraum oder an ihrem Rand länger beziehungsweise kürzer.
-
-- **Doppelklick auf eine Aufgabe:** Titel, Termine, Abschnitt, Fortschritt und
-  Status bearbeiten.
-- **Heute:** Springt zum heutigen Datum und schaltet bei Bedarf die Ausgrauung
-  vergangener Zeiträume um.
-- **Importieren:** Übernimmt einen Mermaid-Gantt-Text in den Planner.
-- **Farben und Status:** Unter **Einstellungen → Präferenzen → Gantt-Ansicht**
-  lassen sich Bedeutung und Farbe der Status festlegen.
-
-Atlas speichert den Plan weiterhin als Mermaid-Gantt-Text. Damit bleibt er auch
-außerhalb von Atlas Docs lesbar und exportierbar.
+Vorhandene Gantt-Dateien zeigen ihren gespeicherten Plan als schreibgeschütztes Archiv.
+Über **Gantt-Datei herunterladen** erhältst du den ursprünglichen Mermaid-Gantt-Text;
+die **Versionshistorie** bleibt erreichbar. Neue Gantt-Dateien, der visuelle
+Planner und die Gantt-Einstellungen sind ausgeblendet. Die Daten bleiben
+für Exporte und eine spätere Überarbeitung erhalten.
 
 ## 7. PDF-Dateien und weitere Uploads verwenden
 
@@ -257,10 +290,9 @@ verwalten. Instanzadministratoren verwalten zusätzlich Benutzer und Teams.
 - Sprache Deutsch oder Englisch
 - helles, dunkles oder systemabhängiges Farbschema
 - Schriftarten und Textgröße
-- Standardansichten für Markdown, LaTeX, Mermaid und Gantt
+- Standardansichten für Markdown, LaTeX und Mermaid
 - Startbereich beim Öffnen von Atlas ohne direkten Seiten- oder Bereichslink
 - kompakte Navigation
-- Bedeutung, Farbe und Vergangenheitsausgrauung im Gantt-Planner
 
 Die Einstellungen werden mit deinem Konto gespeichert und gelten auch auf
 anderen Geräten. Unter **Daten & Export** kannst du außerdem alle für dich

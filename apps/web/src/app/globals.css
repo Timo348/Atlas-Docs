@@ -52,6 +52,12 @@
   color-scheme: light;
 }
 
+.gantt-archive-notice { padding: 15px 20px; border-bottom: 1px solid var(--line); background: var(--paper-2); color: var(--muted); display: flex; gap: 10px; align-items: center; font-size: 13px; }
+.todo-assignee-list { display: flex; flex-wrap: wrap; gap: 8px 14px; padding-top: 5px; }
+.todo-assignee-list label { display: flex; align-items: center; gap: 7px; font-size: 13px; }
+.todo-task-assignees { display: flex; align-items: center; gap: 5px; margin: 4px 0 8px; color: var(--muted); font-size: 11px; line-height: 1.4; }
+.todo-card[data-focused="true"] { outline: 2px solid var(--accent); outline-offset: 3px; }
+
 html[data-theme="dark"] {
   --ink: #f2f4f8;
   --muted: #b6bdca;

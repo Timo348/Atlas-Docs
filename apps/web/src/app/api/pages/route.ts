@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { replaceTodoIndex } from "@atlas/todo/persistence";
 import { canEdit, requireApiUser, spaceAccess } from "@/lib/access";
 import { apiErrorResponse, readJsonBody } from "@/lib/api-errors";
 import { collaborationDocumentName, createInitialCollaborationState, resolveCollaborationLanguage } from "@/lib/collaboration-document";
@@ -11,7 +12,7 @@ const schema = z.object({
   spaceId: z.string().min(1),
   parentId: z.string().min(1).nullable().optional(),
   folderId: z.string().min(1).nullable().optional(),
-  format: z.enum(["MARKDOWN", "ATLASDOC", "LATEX", "CANVAS", "MERMAID", "GANTT", "TODO", "TEXT"]).default("MARKDOWN"),
+  format: z.enum(["MARKDOWN", "ATLASDOC", "LATEX", "CANVAS", "MERMAID", "TODO", "TEXT"]).default("MARKDOWN"),
 });
 
 export async function POST(request: Request) {
@@ -64,12 +65,17 @@ export async function POST(request: Request) {
         createdById: user.id,
       },
     });
+    const initialState = createInitialCollaborationState(parsed.data.format, language);
     await transaction.collabDocument.create({
       data: {
         name: collaborationDocumentName(createdPage.id),
-        data: Buffer.from(createInitialCollaborationState(parsed.data.format, language)),
+        data: Buffer.from(initialState),
       },
     });
+    if (parsed.data.format === "TODO") {
+      // Newly inserted rows are already held by this transaction.
+      await replaceTodoIndex(transaction, createdPage, initialState);
+    }
     return createdPage;
   });
   return NextResponse.json(page, { status: 201 });

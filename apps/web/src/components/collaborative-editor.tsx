@@ -65,6 +65,7 @@ import type { PublicShareAccess } from "@/lib/public-share";
 
 type PageItem = {
   id: string;
+  spaceId?: string;
   title: string;
   slug: string;
   parentId: string | null;
@@ -184,7 +185,7 @@ function CollaborativeDocumentEditor({
   const [collaborationAccess, setCollaborationAccess] = useState(
     () => createCollaborationAccessState(page.id),
   );
-  const readOnly = collaborationIsReadOnly(collaborationAccess, page.id);
+  const readOnly = page.format === "GANTT" || collaborationIsReadOnly(collaborationAccess, page.id);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [versions, setVersions] = useState<PageVersion[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -1200,7 +1201,7 @@ function CollaborativeDocumentEditor({
             </div>
             <small>{activePeople}</small>
           </div>
-          {!publicShare && <button
+          {!publicShare && page.format !== "GANTT" && <button
             className="button compact version-save-button"
             disabled={readOnly || status !== "connected" || versionBusy}
             onClick={() => void saveVersion()}
@@ -1482,13 +1483,9 @@ function CollaborativeDocumentEditor({
           />
         )}
         {page.format === "GANTT" && (
-          <CollaborativeGantt
-            source={markdown}
-            readOnly={readOnly}
-            onChange={(value, cursor, anchor) => changeMarkdown(value, cursor, anchor, { kind: "text" })}
-          />
+          <><div className="gantt-archive-notice"><History size={17} />{text("Gantt archive. Existing data, downloads and version history are preserved.", "Gantt-Archiv. Bestehende Daten, Downloads und Versionshistorie bleiben erhalten.")}</div><CollaborativeGantt source={markdown} readOnly onChange={() => undefined} /></>
         )}
-        {page.format === "TODO" && <CollaborativeTodoBoard document={ydoc} readOnly={readOnly} />}
+        {page.format === "TODO" && <CollaborativeTodoBoard document={ydoc} readOnly={readOnly} spaceId={publicShare ? undefined : page.spaceId} currentUserId={user.id} />}
       </section>
       {page.format !== "CANVAS" && (
         <section className={`pdf-print-document ${page.format === "LATEX" ? "latex-print-document" : "markdown-print-document"}`} aria-hidden="true">

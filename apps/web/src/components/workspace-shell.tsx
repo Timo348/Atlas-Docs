@@ -7,7 +7,7 @@ import { type DragEvent, useEffect, useRef, useState } from "react";
 import {
   AlertTriangle, BookOpen, ChevronDown, ChevronRight, FileCode2, FilePlus2, FileText, Folder,
   FolderPlus, GripVertical, LogOut, MoreHorizontal, PanelLeftClose, PanelLeftOpen,
-  ChartGantt, ChartNoAxesCombined, ListTodo, Network, Pencil, Plus, Search, Settings2, Share2, ShieldCheck, Trash2, Upload, Users, Workflow, X,
+  CalendarDays, ChartGantt, ChartNoAxesCombined, ListTodo, Network, Pencil, Plus, Search, Settings2, Share2, ShieldCheck, Trash2, Upload, Users, Workflow, X,
 } from "lucide-react";
 import { CollaborativeEditor } from "@/components/collaborative-editor";
 import { FolderShareDialog } from "@/components/page-share-dialog";
@@ -514,6 +514,7 @@ export function WorkspaceShell({
         )}
 
         <div className="sidebar-footer">
+          <Link className="footer-link" href="/calendar"><CalendarDays size={17} /> {text("Calendar", "Kalender")}</Link>
           {(user.role === "ADMIN" || user.metricsAccess) && <Link className="footer-link" href="/admin/dashboard"><ChartNoAxesCombined size={17} /> {text("Instance dashboard", "Instanz-Dashboard")}</Link>}
           {user.role === "ADMIN" && <Link className="footer-link" href="/admin/users"><ShieldCheck size={17} /> {text("User management", "Benutzerverwaltung")}</Link>}
           {user.role === "ADMIN" && <Link className="footer-link" href="/admin/teams"><Users size={17} /> {text("Team management", "Teamverwaltung")}</Link>}
@@ -908,7 +909,6 @@ function ActionDialog({
               <button className={format === "TEXT" ? "active" : ""} onClick={() => setFormat("TEXT")}><FileText size={20} /><span><strong>{text("Plain text", "Klartext")}</strong><small>{text("Simple editable text without formatting", "Einfacher editierbarer Text ohne Formatierung")}</small></span></button>
               <button className={format === "LATEX" ? "active" : ""} onClick={() => setFormat("LATEX")}><FileCode2 size={20} /><span><strong>LaTeX</strong><small>{text("Scientific documents and formulas", "Wissenschaftliche Dokumente und Formeln")}</small></span></button>
               <button className={format === "MERMAID" ? "active" : ""} onClick={() => setFormat("MERMAID")}><Workflow size={20} /><span><strong>{text("Mermaid", "Mermaid")}</strong><small>{text("Diagram source with a local preview", "Diagramm-Quelltext mit lokaler Vorschau")}</small></span></button>
-              <button className={format === "GANTT" ? "active" : ""} onClick={() => setFormat("GANTT")}><ChartGantt size={20} /><span><strong>{text("Gantt timeline", "Gantt-Zeitstrahl")}</strong><small>{text("Project planning with a local timeline", "Projektplanung mit lokalem Zeitstrahl")}</small></span></button>
               <button className={format === "TODO" ? "active" : ""} onClick={() => setFormat("TODO")}><ListTodo size={20} /><span><strong>{text("Todo board", "Todo-Board")}</strong><small>{text("Prioritized project tasks with deadlines", "Priorisierte Projektaufgaben mit Fristen")}</small></span></button>
               <button className={format === "CANVAS" ? "active" : ""} onClick={() => setFormat("CANVAS")}><Network size={20} /><span><strong>Canvas</strong><small>{text("Visual workspace with Excalidraw", "Visueller Arbeitsbereich mit Excalidraw")}</small></span></button>
             </div> : <div className="file-import-picker">

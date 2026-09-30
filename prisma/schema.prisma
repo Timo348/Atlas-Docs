@@ -41,41 +41,50 @@ enum PageSharePermission {
   EDIT
 }
 
+enum TodoIndexState {
+  PENDING
+  INDEXED
+  ERROR
+}
+
 model User {
-  id                String        @id @default(cuid())
-  name              String?
-  email             String        @unique
-  emailVerified     DateTime?
-  image             String?
-  passwordHash      String?
-  avatarData        Bytes?
-  avatarMime        String?
-  language          String        @default("en")
-  colorTheme        String        @default("system")
-  uiFont            String        @default("inter")
-  editorFont        String        @default("mono")
-  fontSize          String        @default("medium")
-  defaultEditorView String        @default("write")
-  fileViewDefaults  Json          @default("{\"markdown\":\"write\",\"latex\":\"write\",\"mermaid\":\"source-and-diagram\",\"gantt\":\"source-and-diagram\"}") @db.JsonB
-  ganttAppearance   Json          @default("{\"dimPastDates\":true,\"statuses\":{\"none\":{\"label\":\"\",\"color\":\"#3480c8\"},\"active\":{\"label\":\"\",\"color\":\"#9b6cc4\"},\"done\":{\"label\":\"\",\"color\":\"#2f955f\"},\"crit\":{\"label\":\"\",\"color\":\"#cf5b4e\"}}}") @db.JsonB
-  defaultSpaceId    String?
-  compactMode       Boolean       @default(false)
-  role              UserRole      @default(MEMBER)
-  active            Boolean       @default(true)
-  metricsAccess     Boolean       @default(false)
-  accounts          Account[]
-  sessions          Session[]
-  memberships       Membership[]
-  teamMemberships   TeamMember[]
-  pagesCreated      Page[]        @relation("PageCreator")
-  pageVersions      PageVersion[]
-  pageImages        PageImage[]
-  pageAssets        PageAsset[]
-  pageShares        PageShare[]   @relation("PageShareCreator")
-  folderShares      FolderShare[] @relation("FolderShareCreator")
-  defaultSpace      Space?        @relation("DefaultSpace", fields: [defaultSpaceId], references: [id], onDelete: SetNull)
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  id                 String              @id @default(cuid())
+  name               String?
+  email              String              @unique
+  emailVerified      DateTime?
+  image              String?
+  passwordHash       String?
+  avatarData         Bytes?
+  avatarMime         String?
+  language           String              @default("en")
+  colorTheme         String              @default("system")
+  uiFont             String              @default("inter")
+  editorFont         String              @default("mono")
+  fontSize           String              @default("medium")
+  defaultEditorView  String              @default("write")
+  fileViewDefaults   Json                @default("{\"markdown\":\"write\",\"latex\":\"write\",\"mermaid\":\"source-and-diagram\",\"gantt\":\"source-and-diagram\"}") @db.JsonB
+  ganttAppearance    Json                @default("{\"dimPastDates\":true,\"statuses\":{\"none\":{\"label\":\"\",\"color\":\"#3480c8\"},\"active\":{\"label\":\"\",\"color\":\"#9b6cc4\"},\"done\":{\"label\":\"\",\"color\":\"#2f955f\"},\"crit\":{\"label\":\"\",\"color\":\"#cf5b4e\"}}}") @db.JsonB
+  defaultSpaceId     String?
+  compactMode        Boolean             @default(false)
+  role               UserRole            @default(MEMBER)
+  active             Boolean             @default(true)
+  metricsAccess      Boolean             @default(false)
+  accounts           Account[]
+  sessions           Session[]
+  memberships        Membership[]
+  teamMemberships    TeamMember[]
+  pagesCreated       Page[]              @relation("PageCreator")
+  pageVersions       PageVersion[]
+  pageImages         PageImage[]
+  pageAssets         PageAsset[]
+  pageShares         PageShare[]         @relation("PageShareCreator")
+  folderShares       FolderShare[]       @relation("FolderShareCreator")
+  calendarEntries    CalendarEntry[]
+  calendarExceptions CalendarException[]
+  calendarPreference CalendarPreference?
+  defaultSpace       Space?              @relation("DefaultSpace", fields: [defaultSpaceId], references: [id], onDelete: SetNull)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
 
   @@index([defaultSpaceId])
 }
@@ -125,6 +134,7 @@ model Space {
   teamAccess      SpaceTeamAccess[]
   folders         Folder[]
   pages           Page[]
+  todoTasks       TodoTaskIndex[]
   defaultForUsers User[]            @relation("DefaultSpace")
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
@@ -171,37 +181,43 @@ model Membership {
 }
 
 model Page {
-  id                           String        @id @default(cuid())
+  id                           String          @id @default(cuid())
   title                        String
   slug                         String
   spaceId                      String
   parentId                     String?
   folderId                     String?
-  format                       PageFormat    @default(MARKDOWN)
+  format                       PageFormat      @default(MARKDOWN)
   fileData                     Bytes?
   fileMime                     String?
   fileSize                     Int?
-  sortOrder                    Int           @default(0)
-  versionCounter               Int           @default(0)
-  legacyCanvasMigrationVersion Int           @default(1)
-  legacyCanvasTargetId         String?       @unique
+  sortOrder                    Int             @default(0)
+  versionCounter               Int             @default(0)
+  legacyCanvasMigrationVersion Int             @default(1)
+  legacyCanvasTargetId         String?         @unique
+  todoIndexState               TodoIndexState  @default(PENDING)
+  todoIndexedAt                DateTime?
+  todoIndexError               String?         @db.Text
   createdById                  String
-  space                        Space         @relation(fields: [spaceId], references: [id], onDelete: Cascade)
-  parent                       Page?         @relation("PageTree", fields: [parentId], references: [id], onDelete: SetNull)
-  children                     Page[]        @relation("PageTree")
-  folder                       Folder?       @relation(fields: [folderId], references: [id], onDelete: SetNull)
-  createdBy                    User          @relation("PageCreator", fields: [createdById], references: [id])
+  space                        Space           @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  parent                       Page?           @relation("PageTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children                     Page[]          @relation("PageTree")
+  folder                       Folder?         @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  createdBy                    User            @relation("PageCreator", fields: [createdById], references: [id])
   versions                     PageVersion[]
   images                       PageImage[]
   assets                       PageAsset[]
   shares                       PageShare[]
-  createdAt                    DateTime      @default(now())
-  updatedAt                    DateTime      @updatedAt
+  todoTasks                    TodoTaskIndex[]
+  createdAt                    DateTime        @default(now())
+  updatedAt                    DateTime        @updatedAt
 
   @@unique([spaceId, slug])
+  @@unique([id, spaceId])
   @@index([spaceId, parentId])
   @@index([spaceId, folderId])
   @@index([legacyCanvasMigrationVersion])
+  @@index([format, todoIndexState])
 }
 
 model PageShare {
@@ -254,18 +270,18 @@ model PageAsset {
 }
 
 model Folder {
-  id        String   @id @default(cuid())
+  id        String        @id @default(cuid())
   name      String
   spaceId   String
   parentId  String?
-  sortOrder Int      @default(0)
-  space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
-  parent    Folder?  @relation("FolderTree", fields: [parentId], references: [id], onDelete: Cascade)
-  children  Folder[] @relation("FolderTree")
+  sortOrder Int           @default(0)
+  space     Space         @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  parent    Folder?       @relation("FolderTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children  Folder[]      @relation("FolderTree")
   pages     Page[]
   shares    FolderShare[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
 
   @@unique([spaceId, parentId, name])
   @@index([spaceId, parentId])
@@ -310,4 +326,83 @@ model CollabDocument {
   name      String   @id
   data      Bytes
   updatedAt DateTime @updatedAt
+}
+
+// A disposable projection. The authoritative task data remains in the Yjs board.
+model TodoTaskIndex {
+  pageId      String
+  taskId      String
+  spaceId     String
+  title       String
+  description String   @db.Text
+  column      String
+  priority    String
+  deadline    String?
+  assigneeIds String[] @default([])
+  blockedBy   String[] @default([])
+  createdAt   BigInt
+  updatedAt   BigInt
+  stateHash   String
+  indexedAt   DateTime @default(now())
+  page        Page     @relation(fields: [pageId, spaceId], references: [id, spaceId], onDelete: Cascade)
+  space       Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@id([pageId, taskId])
+  @@index([spaceId, deadline, column])
+  @@index([deadline, column])
+  @@index([assigneeIds], type: Gin)
+}
+
+model CalendarEntry {
+  id              String              @id @default(cuid())
+  userId          String
+  kind            String
+  title           String
+  description     String              @default("") @db.Text
+  location        String?
+  allDay          Boolean             @default(false)
+  start           String?
+  end             String?
+  dueDate         String?
+  timeZone        String              @default("Europe/Berlin")
+  completed       Boolean             @default(false)
+  priority        String              @default("MEDIUM")
+  recurrence      Json?               @db.JsonB
+  recurrenceUntil String?
+  revision        Int                 @default(1)
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exceptions      CalendarException[]
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([userId, kind, start])
+  @@index([userId, dueDate])
+}
+
+model CalendarException {
+  id            String        @id @default(cuid())
+  entryId       String
+  userId        String
+  occurrenceKey String
+  cancelled     Boolean       @default(false)
+  patch         Json          @default("{}") @db.JsonB
+  entry         CalendarEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@unique([entryId, occurrenceKey])
+  @@index([userId])
+}
+
+model CalendarPreference {
+  userId           String   @id
+  view             String   @default("dayGridMonth")
+  selectedSpaceIds String[] @default([])
+  knownSpaceIds    String[] @default([])
+  taskScope        String   @default("all")
+  showCompleted    Boolean  @default(false)
+  timeZone         String   @default("Europe/Berlin")
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  updatedAt        DateTime @updatedAt
 }

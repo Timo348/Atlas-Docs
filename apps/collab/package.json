@@ -1,6 +1,6 @@
 {
   "name": "@atlas/collab",
-  "version": "3.2.0",
+  "version": "3.3.0",
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
@@ -11,11 +11,13 @@
     "test": "node --test dist/*.test.js"
   },
   "dependencies": {
+    "@atlas/todo": "*",
     "@hocuspocus/extension-database": "4.3.0",
     "@hocuspocus/extension-redis": "4.3.0",
     "@hocuspocus/server": "4.3.0",
     "@prisma/client": "6.19.3",
-    "jose": "6.1.2"
+    "jose": "6.1.2",
+    "yjs": "13.6.31"
   },
   "devDependencies": {
     "@types/node": "22.19.1",

@@ -66,7 +66,7 @@ release archive, then enter its root. The value below is the currently published
 tag; replace it when deploying a newer release:
 
 ```bash
-ATLAS_RELEASE=v3.2.0
+ATLAS_RELEASE=v3.3.0
 git clone --branch "$ATLAS_RELEASE" --depth 1 https://github.com/Timo348/Atlas-Docs.git
 cd Atlas-Docs
 cp .env.example .env
@@ -460,6 +460,39 @@ Read the target release notes and compare its `.env.example`, `compose.yml`, and
 Compose overlays with the installed copies. Preserve `.env` separately, merge
 new variables deliberately, and keep a record of the currently deployed
 `ATLAS_VERSION`.
+
+### Upgrade to 3.3.0
+
+Create the usual `upgrade` backup before stopping application writes. Use the
+deployment files from `v3.3.0`, preserve your secret `.env`, and set
+`ATLAS_VERSION=3.3.0` for web, collab and migrate. No new service or environment
+variable is required. All three services must use the same release because
+collaboration now projects Todo boards into a SQL calendar index.
+
+The additive migration creates personal calendar entries, series exceptions,
+per-user preferences and a disposable `TodoTaskIndex`. Existing Yjs boards
+remain authoritative. The migration service indexes old boards under row locks;
+rerunning it is safe. Empty indexed boards and boards awaiting indexing have
+different states. A damaged board retains its original bytes and receives an
+`ERROR` diagnostic that appears in the calendar. Review migration logs for
+`needs recovery` messages and retain the pre-upgrade backup for recovery.
+
+Stop the running web/collab services before migration, then start the matching
+service set. Follow the general upgrade sequence below and confirm migration
+exit `0`, healthy containers, `/api/health` and collaboration `/health`.
+Check existing Todo deadlines, an empty board, private entry creation and an
+existing Gantt archive after upgrading.
+
+Server PostgreSQL backups include the new calendar tables automatically.
+Portable ZIP exports include only the requesting user's personal calendar,
+including for an administrator's instance export. The personal JSON export is
+available at `/api/calendar/export`. The Todo index can be rebuilt from Yjs;
+personal calendars require a database backup. Stored Gantt source and history
+are preserved even though creation and planner settings are hidden.
+
+Rollback requires stopping all newer services and restoring the pre-upgrade
+database together with the matching older images. Older collaboration services
+do not maintain the SQL Todo index, so never mix service versions.
 
 ### Upgrade to 3.2.0
 

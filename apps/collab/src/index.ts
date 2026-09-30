@@ -5,6 +5,11 @@ import { Server } from "@hocuspocus/server";
 import { verifyCollaborationToken } from "./auth.js";
 import { pageIdFromDocumentName } from "./document-name.js";
 import { flushCollaborationDocuments, isAuthorizedFlush } from "./flush.js";
+import { replaceTodoIndex } from "@atlas/todo/persistence";
+import { currentPageRole, writableRole } from "./access.js";
+import { previewTodoSync } from "./todo-sync.js";
+import { mergeTodoBoardStates } from "@atlas/todo";
+import * as Y from "yjs";
 
 const databaseUrl = process.env.DATABASE_URL;
 const secret = process.env.COLLAB_SECRET;
@@ -24,6 +29,7 @@ type PublicShareContext = {
 type CollaborationContext = {
   user?: { id: string; name: string };
   publicShare?: PublicShareContext;
+  tokenReadOnly?: boolean;
 };
 
 const PAGE_SHARE_REVALIDATE_MS = 60_000;
@@ -52,15 +58,23 @@ const server = new Server<CollaborationContext>({
         const pageId = pageIdFromDocumentName(documentName);
         if (!pageId) return;
         await prisma.$transaction(async (transaction) => {
-          const pages = await transaction.$queryRaw<{ id: string }[]>`
-            SELECT "id" FROM "Page" WHERE "id" = ${pageId} FOR KEY SHARE
+          const pages = await transaction.$queryRaw<{ id: string; spaceId: string; format: string }[]>`
+            SELECT "id", "spaceId", "format" FROM "Page" WHERE "id" = ${pageId} FOR UPDATE
           `;
           if (pages.length === 0) return;
+          let durableState: Uint8Array = state;
+          if (pages[0].format === "TODO") {
+            const current = await transaction.$queryRaw<{ data: Uint8Array }[]>`
+              SELECT "data" FROM "CollabDocument" WHERE "name" = ${documentName} FOR UPDATE
+            `;
+            durableState = mergeTodoBoardStates(current[0]?.data, state);
+          }
           await transaction.collabDocument.upsert({
             where: { name: documentName },
-            update: { data: Buffer.from(state) },
-            create: { name: documentName, data: Buffer.from(state) },
+            update: { data: Buffer.from(durableState) },
+            create: { name: documentName, data: Buffer.from(durableState) },
           });
+          if (pages[0].format === "TODO") await replaceTodoIndex(transaction, pages[0], durableState);
         });
       },
     }),
@@ -78,11 +92,57 @@ const server = new Server<CollaborationContext>({
       return {
         user: { id: claims.sub, name: claims.name },
         publicShare: { kind, id, pageId: claims.pageId, permission },
+        tokenReadOnly: claims.readOnly,
       };
     } else {
-      connectionConfig.readOnly = claims.readOnly;
+      const role = await currentPageRole(prisma, claims.sub, claims.pageId);
+      if (!role) throw new Error("Page access is no longer active.");
+      connectionConfig.readOnly = claims.readOnly || !writableRole(role);
     }
-    return { user: { id: claims.sub, name: claims.name } };
+    return { user: { id: claims.sub, name: claims.name }, tokenReadOnly: claims.readOnly };
+  },
+  async beforeSync({ context, documentName, connection, type, document, payload }) {
+    const pageId = pageIdFromDocumentName(documentName);
+    if (!pageId) throw new Error("Invalid page document.");
+    if (context.publicShare) {
+      const share = context.publicShare;
+      const permission = share.kind === "folder"
+        ? await activeFolderSharePermission(share.id, pageId)
+        : await activePageSharePermission(share.id, pageId);
+      if (!permission) throw new Error("Public share is no longer active.");
+      connection.readOnly = context.tokenReadOnly === true || permission !== "EDIT";
+    } else {
+      if (!context.user) throw new Error("User is not authenticated.");
+      const role = await currentPageRole(prisma, context.user.id, pageId);
+      if (!role) throw new Error("Page access is no longer active.");
+      connection.readOnly = context.tokenReadOnly === true || !writableRole(role);
+    }
+    // Sync step 0 only requests state. Hocuspocus rejects updates when readOnly.
+    if ((type !== 1 && type !== 2) || connection.readOnly) return;
+    const page = await prisma.page.findUnique({ where: { id: pageId }, select: { format: true, spaceId: true } });
+    if (page?.format !== "TODO") return;
+    const { newlyAssigned } = previewTodoSync(document, payload);
+    if (newlyAssigned.length) {
+      const active = await prisma.user.findMany({
+        where: {
+          id: { in: newlyAssigned }, active: true,
+          OR: [
+            { memberships: { some: { spaceId: page.spaceId } } },
+            { teamMemberships: { some: {
+              OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+              team: { spaces: { some: { spaceId: page.spaceId } } },
+            } } },
+          ],
+        },
+        select: { id: true },
+      });
+      if (active.length !== newlyAssigned.length) throw new Error("A task assignee no longer has active Space access.");
+    }
+    // Another connection may have changed dependencies while the database query
+    // awaited. Validate and apply synchronously; Hocuspocus' subsequent apply is
+    // idempotent and uses this same origin for broadcasting and persistence.
+    previewTodoSync(document, payload);
+    Y.applyUpdate(document, payload, { source: "connection", connection });
   },
   async connected({ context, connection }) {
     const publicShare = context.publicShare;

@@ -7,6 +7,8 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY package.json ./
 COPY apps/web/package.json apps/web/package.json
 COPY apps/collab/package.json apps/collab/package.json
+COPY apps/migrate/package.json apps/migrate/package.json
+COPY packages/todo/package.json packages/todo/package.json
 COPY package-lock.json ./
 # Package lifecycle scripts are not needed in the dependency layer. Prisma is
 # generated explicitly in the next step, so this install remains deterministic.
@@ -17,24 +19,34 @@ RUN ./node_modules/.bin/prisma generate
 FROM dependencies AS build-web
 COPY tsconfig.base.json ./
 COPY apps ./apps
+COPY packages ./packages
 COPY scripts ./scripts
+RUN npm run build --workspace=@atlas/todo
 RUN npm run build --workspace=@atlas/web
 
 FROM dependencies AS build-collab
 COPY tsconfig.base.json ./
 COPY apps ./apps
+COPY packages ./packages
+RUN npm run build --workspace=@atlas/todo
 RUN npm run build --workspace=@atlas/collab
 
 FROM ${NODE_IMAGE} AS collab-runtime-dependencies
 WORKDIR /app
-COPY apps/collab/package.json apps/collab/package-lock.json ./
-RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev --ignore-scripts
+COPY package.json package-lock.json ./
+COPY apps/collab/package.json apps/collab/package.json
+COPY packages/todo/package.json packages/todo/package.json
+RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev --ignore-scripts --workspace=@atlas/collab --include-workspace-root=false
 COPY --from=dependencies /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=build-collab /app/packages/todo/dist ./packages/todo/dist
 
 FROM ${NODE_IMAGE} AS migrate-runtime-dependencies
 WORKDIR /app
-COPY apps/migrate/package.json apps/migrate/package-lock.json ./
-RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev
+COPY package.json package-lock.json ./
+COPY apps/migrate/package.json apps/migrate/package.json
+COPY packages/todo/package.json packages/todo/package.json
+RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev --ignore-scripts --workspace=@atlas/migrate --include-workspace-root=false
+COPY --from=build-collab /app/packages/todo/dist ./packages/todo/dist
 COPY prisma ./prisma
 RUN ./node_modules/.bin/prisma generate --schema prisma/schema.prisma
 
@@ -92,6 +104,7 @@ LABEL org.opencontainers.image.title="Atlas Docs Collaboration" \
       org.opencontainers.image.created="${ATLAS_BUILD_DATE}" \
       org.opencontainers.image.licenses="Apache-2.0"
 COPY --from=collab-runtime-dependencies /app/node_modules ./node_modules
+COPY --from=collab-runtime-dependencies /app/packages ./packages
 COPY --from=build-collab /app/apps/collab/dist ./dist
 USER node
 EXPOSE 1234

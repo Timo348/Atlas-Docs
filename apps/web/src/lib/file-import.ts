@@ -2,8 +2,9 @@ import * as Y from "yjs";
 import { CodedApiError } from "@/lib/api-errors";
 import { createAtlasDocCollaborationStateFromJson } from "@/lib/atlasdoc";
 import { uploadLimitBytes } from "@/lib/upload-limit";
+import { createTodoBoardStateFromJson } from "@atlas/todo";
 
-export type ImportPageFormat = "MARKDOWN" | "ATLASDOC" | "LATEX" | "CANVAS" | "PDF";
+export type ImportPageFormat = "MARKDOWN" | "ATLASDOC" | "LATEX" | "CANVAS" | "PDF" | "TODO";
 
 type ImportedTextFile = {
   format: "MARKDOWN" | "LATEX";
@@ -25,12 +26,16 @@ type ImportedPdfFile = {
   name: string;
   bytes: Uint8Array;
 };
-export type ImportedFile = ImportedTextFile | ImportedCanvasFile | ImportedAtlasDocFile | ImportedPdfFile;
+export type ImportedFile = ImportedTextFile | ImportedCanvasFile | ImportedAtlasDocFile | ImportedPdfFile | { format: "TODO"; name: string; collaborationState: Uint8Array };
 
 export async function readImportedFile(file: File): Promise<ImportedFile> {
   const bytes = await readUpload(file);
   const extension = fileExtension(file.name);
   const name = cleanFileName(file.name);
+  if (/\.todos\.json$/i.test(file.name)) {
+    try { return { format: "TODO", name, collaborationState: createTodoBoardStateFromJson(decodeUtf8(bytes)) }; }
+    catch { throw new CodedApiError("FILE_INVALID_CONTENT"); }
+  }
 
   if (extension === "pdf") {
     validatePdfBytes(bytes);

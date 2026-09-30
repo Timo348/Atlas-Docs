@@ -1,5 +1,48 @@
 # Atlas Docs Patch Notes
 
+## 3.3.0 – Personal calendar and shared task deadlines
+
+Released on September 30, 2026.
+
+Every active account has a private calendar at `/calendar`, including accounts
+without a Space. Month, week, day and agenda views combine private appointments,
+personal Todos and selected Space task deadlines. Source selection, All/Mine,
+completed-task visibility and the preferred view are saved per user.
+
+Appointments and personal Todos support daily, weekly, monthly and yearly
+recurrence, individual exceptions and changes from a chosen occurrence onward.
+Local appointment times follow the stored time zone through clock changes;
+earlier occurrences and separate Todo completions are preserved.
+
+Space tasks now support multiple assignees. New tasks default to their creator;
+existing tasks remain unassigned. Calendar edits synchronize through the original
+board and are confirmed only after durable indexing. Current rights, dependencies
+and concurrent changes are checked, with unsuccessful drafts retained.
+
+Gantt creation and planner settings are hidden. Existing files remain accessible
+as read-only archives with downloads and version history. Personal JSON and
+portable ZIP exports include the requesting user's calendar; server PostgreSQL
+backups include all calendar tables.
+
+Completed issue: [#41](https://github.com/Timo348/Atlas-Docs/issues/41).
+
+### Upgrade notes
+
+- Upgrade web, collab and migrate together to `3.3.0`. Matching Linux/amd64
+  images are published on Docker Hub and GHCR as `3.3.0`, `3.3`, `3` and `latest`.
+- The additive migration creates calendar tables and the derived Todo index.
+  The migration service indexes legacy boards under locks and reports damaged
+  boards without changing their source data. Review its logs after upgrading.
+- No new environment variable or Compose service is required. Preserve `.env`
+  and back up the database before stopping writers and applying the migration.
+- Rollback requires stopping the newer services and restoring the pre-upgrade
+  database with matching older images. Older applications do not maintain the
+  new Todo index; never mix service versions.
+
+See [the setup guide](https://github.com/Timo348/Atlas-Docs/blob/v3.3.0/SETUP.md#upgrade-to-330)
+and [the calendar review](https://github.com/Timo348/Atlas-Docs/blob/v3.3.0/docs/CALENDAR_REVIEW.md)
+for validation and query limits.
+
 ## 3.2.0 – Reliable editing and metrics grants
 
 Released on September 30, 2026.

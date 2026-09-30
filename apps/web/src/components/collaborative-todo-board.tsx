@@ -1,7 +1,8 @@
 "use client";
 
-import { CalendarDays, CircleAlert, CirclePlus, Flag, GripVertical, Pencil, Search, Trash2, X } from "lucide-react";
-import { type DragEvent, type FormEvent, useEffect, useMemo, useState } from "react";
+import { CalendarDays, CircleAlert, CirclePlus, Flag, GripVertical, Pencil, Search, Trash2, Users, X } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { type DragEvent, type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import * as Y from "yjs";
@@ -24,8 +25,13 @@ import {
   wouldCreateTodoDependency,
 } from "@/lib/todo-board";
 
-export function CollaborativeTodoBoard({ document, readOnly }: { document: Y.Doc; readOnly: boolean }) {
+type Assignee = { id: string; name: string; email: string };
+export function CollaborativeTodoBoard({ document, readOnly, spaceId, currentUserId }: { document: Y.Doc; readOnly: boolean; spaceId?: string; currentUserId?: string }) {
   const { preferences, text } = usePreferences();
+  const searchParams = useSearchParams();
+  const focusedTaskId = searchParams.get("task");
+  const lastFocusedTask = useRef<string | null>(null);
+  const [members, setMembers] = useState<Assignee[]>([]);
   const [revision, setRevision] = useState(0);
   const [draggedTask, setDraggedTask] = useState<string | null>(null);
   const [dialogTask, setDialogTask] = useState<TodoTask | "create" | null>(null);
@@ -33,6 +39,25 @@ export function CollaborativeTodoBoard({ document, readOnly }: { document: Y.Doc
   const [dialogError, setDialogError] = useState<string | null>(null);
   const tasks = useMemo(() => readTodoTasks(document), [document, revision]);
   const taskById = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
+
+  useEffect(() => {
+    if (!spaceId) return;
+    let active = true;
+    fetch(`/api/calendar/spaces/${encodeURIComponent(spaceId)}/members`).then(async (assignmentResponse) => {
+      if (!assignmentResponse.ok) return;
+      const result = await assignmentResponse.json() as { members: Assignee[] };
+      if (active) setMembers(result.members);
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, [spaceId]);
+  useEffect(() => {
+    if (!focusedTaskId || !taskById.has(focusedTaskId) || lastFocusedTask.current === focusedTaskId) return;
+    const card = window.document.getElementById(`todo-task-${focusedTaskId}`);
+    if (!card) return;
+    lastFocusedTask.current = focusedTaskId;
+    card?.scrollIntoView({ block: "center" });
+    card?.focus({ preventScroll: true });
+  }, [focusedTaskId, taskById]);
 
   useEffect(() => {
     const board = document.getMap("todo-board");
@@ -51,7 +76,7 @@ export function CollaborativeTodoBoard({ document, readOnly }: { document: Y.Doc
     updateTodoTask(document, id, { column });
   }
 
-  function saveTask(input: { title: string; description: string; column: TodoColumn; priority: TodoPriority; deadline: string | null; blockedBy: string[] }) {
+  function saveTask(input: { title: string; description: string; column: TodoColumn; priority: TodoPriority; deadline: string | null; blockedBy: string[]; assigneeIds: string[] }) {
     if (readOnly) return;
     const saved = dialogTask === "create"
       ? Boolean(addTodoTask(document, input))
@@ -95,6 +120,8 @@ export function CollaborativeTodoBoard({ document, readOnly }: { document: Y.Doc
                   <TodoCard
                     key={task.id}
                     task={task}
+                    focused={task.id === focusedTaskId}
+                    members={members}
                     readOnly={readOnly}
                     language={preferences.language}
                     text={text}
@@ -126,13 +153,15 @@ export function CollaborativeTodoBoard({ document, readOnly }: { document: Y.Doc
           );
         })}
       </div>
-      {dialogTask && <TodoTaskDialog existing={dialogTask === "create" ? null : dialogTask} tasks={tasks} document={document} error={dialogError} text={text} onClose={() => setDialogTask(null)} onSave={saveTask} />}
+      {dialogTask && <TodoTaskDialog existing={dialogTask === "create" ? null : dialogTask} tasks={tasks} document={document} members={members} currentUserId={currentUserId} error={dialogError} text={text} onClose={() => setDialogTask(null)} onSave={saveTask} />}
     </section>
   );
 }
 
 function TodoCard({
   task,
+  focused,
+  members,
   readOnly,
   language,
   text,
@@ -146,6 +175,8 @@ function TodoCard({
   onDragEnd,
 }: {
   task: TodoTask;
+  focused: boolean;
+  members: Assignee[];
   readOnly: boolean;
   language: "en" | "de";
   text: (english: string, german: string) => string;
@@ -160,13 +191,14 @@ function TodoCard({
 }) {
   const deadlineState = todoDeadlineState(task);
   return (
-    <article className={`todo-card todo-priority-${task.priority.toLowerCase()}`} draggable={!readOnly} onDragStart={(event) => onDragStart(event, task.id)} onDragEnd={onDragEnd}>
+    <article id={`todo-task-${task.id}`} tabIndex={focused ? -1 : undefined} data-focused={focused} className={`todo-card todo-priority-${task.priority.toLowerCase()}`} draggable={!readOnly} onDragStart={(event) => onDragStart(event, task.id)} onDragEnd={onDragEnd}>
       <header>
         <span className="todo-drag-handle" aria-hidden="true"><GripVertical size={15} /></span>
         <span className="todo-priority-badge"><Flag size={12} />{priorityLabel(task.priority, text)}</span>
         {!readOnly && <div className="todo-card-actions"><button className="todo-edit-button" type="button" onClick={() => onEdit(task)} title={text("Edit task", "Aufgabe bearbeiten")} aria-label={text("Edit task", "Aufgabe bearbeiten")}><Pencil size={14} /></button><button className="todo-delete-button" type="button" onClick={() => onDelete(task.id)} title={text("Delete task", "Aufgabe löschen")} aria-label={text("Delete task", "Aufgabe löschen")}><Trash2 size={14} /></button></div>}
       </header>
       <strong className="todo-task-title">{task.title}</strong>
+      <p className="todo-task-assignees"><Users size={12} /> {task.assigneeIds.length ? task.assigneeIds.map((id) => members.find((member) => member.id === id)?.name || text("Assigned member", "Zugewiesenes Mitglied")).join(", ") : text("Unassigned", "Nicht zugewiesen")}</p>
       {task.description && <div className="todo-card-description"><TodoMarkdown description={task.description} readOnly={readOnly} text={text} onChecklistChange={(index, checked) => onUpdate(task.id, { description: setTodoChecklistItemChecked(task.description, index, checked) })} /></div>}
       {blockers.length > 0 && <p className="todo-task-blocked"><CircleAlert size={14} />{completionBlocked ? text("Complete these tasks first:", "Erledige zuerst diese Aufgaben:") : text("Waiting for:", "Wartet auf:")} {blockers.map((blocker) => blocker.title).join(", ")}</p>}
       <div className="todo-card-fields">
@@ -185,6 +217,8 @@ function TodoTaskDialog({
   existing,
   tasks,
   document,
+  members,
+  currentUserId,
   error,
   text,
   onClose,
@@ -193,10 +227,12 @@ function TodoTaskDialog({
   existing: TodoTask | null;
   tasks: TodoTask[];
   document: Y.Doc;
+  members: Assignee[];
+  currentUserId?: string;
   error: string | null;
   text: (english: string, german: string) => string;
   onClose: () => void;
-  onSave: (input: { title: string; description: string; column: TodoColumn; priority: TodoPriority; deadline: string | null; blockedBy: string[] }) => void;
+  onSave: (input: { title: string; description: string; column: TodoColumn; priority: TodoPriority; deadline: string | null; blockedBy: string[]; assigneeIds: string[] }) => void;
 }) {
   const [title, setTitle] = useState(existing?.title || "");
   const [description, setDescription] = useState(existing?.description || "");
@@ -204,6 +240,7 @@ function TodoTaskDialog({
   const [priority, setPriority] = useState<TodoPriority>(existing?.priority || "MEDIUM");
   const [deadline, setDeadline] = useState(existing?.deadline || "");
   const [blockedBy, setBlockedBy] = useState<string[]>(existing?.blockedBy || []);
+  const [assigneeIds, setAssigneeIds] = useState<string[]>(existing?.assigneeIds || (currentUserId ? [currentUserId] : []));
   const [dependencyQuery, setDependencyQuery] = useState("");
   const [hideCompletedDependencies, setHideCompletedDependencies] = useState(false);
   const editMode = Boolean(existing);
@@ -218,7 +255,7 @@ function TodoTaskDialog({
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!title.trim()) return;
-    onSave({ title, description, column, priority, deadline: deadline || null, blockedBy });
+    onSave({ title, description, column, priority, deadline: deadline || null, blockedBy, assigneeIds });
   }
 
   return <div className="modal-backdrop todo-task-dialog-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
@@ -236,6 +273,7 @@ function TodoTaskDialog({
           <label><span>{text("Priority", "Priorität")}</span><select value={priority} onChange={(event) => setPriority(event.target.value as TodoPriority)}>{TODO_PRIORITIES.map((item) => <option key={item} value={item}>{priorityLabel(item, text)}</option>)}</select></label>
           <label><span>{text("Deadline", "Frist")}</span><input type="date" value={deadline} onChange={(event) => setDeadline(event.target.value)} /></label>
         </div>
+        <fieldset className="todo-dialog-dependencies"><legend>{text("Assigned to", "Zuständig")}</legend><div className="todo-assignee-list">{members.map((member) => <label key={member.id}><input type="checkbox" checked={assigneeIds.includes(member.id)} onChange={(event) => setAssigneeIds(event.target.checked ? [...assigneeIds, member.id] : assigneeIds.filter((id) => id !== member.id))} />{member.name || member.email}</label>)}<button className="button compact secondary-button" type="button" onClick={() => setAssigneeIds([])}>{text("Unassign all", "Zuweisungen entfernen")}</button></div></fieldset>
         <fieldset className="todo-dialog-dependencies">
           <legend>{text("Must be completed first", "Muss zuerst erledigt werden")}</legend>
           <p>{text("The task cannot be completed until every selected task is completed.", "Diese Aufgabe kann erst erledigt werden, wenn alle ausgewählten Aufgaben erledigt sind.")}</p>
