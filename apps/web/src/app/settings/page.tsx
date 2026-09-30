@@ -52,6 +52,7 @@ export default async function Settings() {
           name: user.name || user.email,
           email: user.email,
           role: user.role,
+          metricsAccess: user.metricsAccess,
           hasAvatar: Boolean(user.avatarMime),
           avatarVersion: user.updatedAt.getTime(),
           canChangePassword: Boolean(user.passwordHash),

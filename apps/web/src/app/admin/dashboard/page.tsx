@@ -4,12 +4,13 @@ import { AdminDashboard } from "@/components/admin-dashboard";
 import { PreferencesProvider } from "@/components/preferences-provider";
 import { collectInstanceMetrics, hasPrometheusMetricsToken } from "@/lib/instance-metrics";
 import { normalizePreferences } from "@/lib/preferences";
+import { canViewInstanceMetrics } from "@/lib/metrics-access";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminDashboardPage() {
   const user = await requireUser();
-  if (user.role !== "ADMIN") redirect("/");
+  if (!canViewInstanceMetrics(user)) redirect("/");
   const metrics = await collectInstanceMetrics();
   const preferences = normalizePreferences({
     language: user.language,
@@ -30,6 +31,7 @@ export default async function AdminDashboardPage() {
         metrics={metrics}
         language={preferences.language}
         metricsEnabled={hasPrometheusMetricsToken()}
+        canManageUsers={user.role === "ADMIN"}
       />
     </PreferencesProvider>
   );

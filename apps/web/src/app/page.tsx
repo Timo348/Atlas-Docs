@@ -114,6 +114,7 @@ export default async function Home(props: { searchParams: Promise<{ page?: strin
           name: user.name || user.email,
           email: user.email,
           role: user.role,
+          metricsAccess: user.metricsAccess,
           avatarVersion: user.updatedAt.getTime(),
           hasAvatar: Boolean(user.avatarMime),
         }}

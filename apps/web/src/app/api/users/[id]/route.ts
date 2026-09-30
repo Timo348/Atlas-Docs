@@ -1,22 +1,16 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { requireApiUser } from "@/lib/access";
 import { apiErrorResponse, readJsonBody } from "@/lib/api-errors";
 import { db } from "@/lib/db";
-
-const schema = z.object({
-  active: z.boolean().optional(),
-  role: z.enum(["ADMIN", "MEMBER"]).optional(),
-  password: z.string().min(12).max(128).optional(),
-}).refine((value) => value.active !== undefined || value.role !== undefined || value.password !== undefined);
+import { updateUserSchema } from "@/lib/user-administration";
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const admin = await requireApiUser();
   if (!admin) return apiErrorResponse("AUTH_REQUIRED", 401);
   if (admin.role !== "ADMIN") return apiErrorResponse("ADMIN_REQUIRED", 403);
   const { id } = await context.params;
-  const parsed = schema.safeParse(await readJsonBody(request));
+  const parsed = updateUserSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) return apiErrorResponse("INVALID_INPUT", 400);
   if (id === admin.id && (parsed.data.active === false || parsed.data.role === "MEMBER")) {
     return apiErrorResponse("OWN_ADMIN_ACCOUNT_REQUIRED", 400);
@@ -34,9 +28,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     data: {
       active: parsed.data.active,
       role: parsed.data.role,
+      metricsAccess: parsed.data.metricsAccess,
       passwordHash: parsed.data.password ? await bcrypt.hash(parsed.data.password, 12) : undefined,
     },
-    select: { id: true, name: true, email: true, role: true, active: true },
+    select: { id: true, name: true, email: true, role: true, active: true, metricsAccess: true },
   });
   return NextResponse.json(user);
 }

@@ -121,7 +121,7 @@ or a straightforward Docker-based operating model.
 
 - Local accounts, generic OpenID Connect, or both authentication methods at once.
 - Administrator interfaces for users and teams.
-- Administrator instance dashboard plus a bearer-protected Prometheus endpoint for Grafana dashboards.
+- Instance dashboard for administrators and explicitly granted members, plus a protected Prometheus endpoint for Grafana dashboards.
 - English and German interfaces.
 - Central account, design, and preference settings: profile image, local-password changes,
   theme, interface/editor fonts, text size, compact navigation, start space, and per-file
@@ -167,9 +167,11 @@ content can still be requested by the reader's browser.
 - Atlas application containers run as a non-root user. Compose drops Linux
   capabilities and enables `no-new-privileges` for the web, collaboration, and
   migration services.
-- The optional `/api/metrics` endpoint is disabled until a separate
-  `PROMETHEUS_METRICS_TOKEN` is configured. It exposes aggregate operational
-  counts only and requires `Authorization: Bearer <token>` on every scrape.
+- `/api/metrics` exposes aggregate operational counts to active administrators
+  and members with an explicit metrics grant. Automated Prometheus scrapes
+  require a separate `PROMETHEUS_METRICS_TOKEN` and `Authorization: Bearer <token>`.
+  Leaving the token empty disables bearer access; it does not disable authorized
+  browser sessions. Administrators manage grants in User management.
 - Permissions can be granted directly or through teams; the strongest active
   grant applies, and expired team memberships provide no access.
 
@@ -222,7 +224,7 @@ Compose plugin. Read the [complete setup guide](SETUP.md) before starting; it
 lists the required secrets, network settings, and production checks.
 
 ```bash
-ATLAS_RELEASE=v3.1.3 # Replace with the published tag you intend to deploy.
+ATLAS_RELEASE=v3.2.0 # Replace with the published tag you intend to deploy.
 git clone --branch "$ATLAS_RELEASE" --depth 1 https://github.com/Timo348/Atlas-Docs.git
 cd Atlas-Docs
 cp .env.example .env

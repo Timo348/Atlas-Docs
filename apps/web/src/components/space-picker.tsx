@@ -65,6 +65,7 @@ export function SpacePicker({
   onClose,
   onSelect,
   onCreate,
+  showTrigger = true,
 }: {
   spaces: SpacePickerSpace[];
   activeSpace: SpacePickerSpace | null;
@@ -74,6 +75,7 @@ export function SpacePicker({
   onClose: () => void;
   onSelect: (spaceId: string) => void;
   onCreate: () => void;
+  showTrigger?: boolean;
 }) {
   const { preferences, text } = usePreferences();
   const [query, setQuery] = useState("");
@@ -155,7 +157,7 @@ export function SpacePicker({
 
   return (
     <>
-      <Link
+      {showTrigger && <Link
         href={activeSpace ? spaceNavigationHref(activeSpace) : "/"}
         className={styles.trigger}
         onClick={(event) => handlePickerLink(event, onOpen)}
@@ -171,7 +173,7 @@ export function SpacePicker({
           <strong>{activeSpace?.name || text("No space selected", "Kein Bereich ausgewählt")}</strong>
         </span>
         <ChevronsUpDown className={styles.triggerChevron} size={17} aria-hidden="true" />
-      </Link>
+      </Link>}
 
       {open && (
         <div className={styles.backdrop} onMouseDown={(event) => event.target === event.currentTarget && close()}>

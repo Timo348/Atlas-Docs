@@ -357,6 +357,8 @@ export function distinctCollaborativeUsers(
  * against unseen remote state. Call sync() after rendering a live update.
  */
 export class CollaborativeTextBinding {
+  /** A binding-specific origin keeps this editor's undo stack local. */
+  readonly localOrigin = {};
   readonly #liveDocument: Y.Doc;
   readonly #liveText: Y.Text;
   readonly #viewDocument: Y.Doc;
@@ -393,6 +395,14 @@ export class CollaborativeTextBinding {
   get viewText() {
     this.#assertActive();
     return this.#viewText;
+  }
+
+  createUndoManager() {
+    this.#assertActive();
+    return new Y.UndoManager(this.#liveText, {
+      trackedOrigins: new Set([this.localOrigin]),
+      captureTimeout: 500,
+    });
   }
 
   /**

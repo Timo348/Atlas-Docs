@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, KeyRound, Plus, ShieldCheck, UserCheck, UserX, X } from "lucide-react";
+import { ArrowLeft, ChartNoAxesCombined, KeyRound, Plus, ShieldCheck, UserCheck, UserX, X } from "lucide-react";
 import { usePreferences } from "@/components/preferences-provider";
 import { useDialogEscape } from "@/components/use-dialog-escape";
 import { apiErrorMessage } from "@/lib/api-errors";
@@ -13,6 +13,7 @@ type UserRow = {
   email: string;
   role: "ADMIN" | "MEMBER";
   active: boolean;
+  metricsAccess: boolean;
   createdAt: string;
   accounts: { provider: string }[];
 };
@@ -44,6 +45,7 @@ export function UsersAdmin({ initialUsers, currentUserId }: { initialUsers: User
   const [resetUserId, setResetUserId] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [resetBusy, setResetBusy] = useState(false);
+  const [updatingUserIds, setUpdatingUserIds] = useState<string[]>([]);
 
   function closeResetDialog() {
     setResetUserId(null);
@@ -79,23 +81,31 @@ export function UsersAdmin({ initialUsers, currentUserId }: { initialUsers: User
     setShowForm(false);
   }
 
-  async function updateUser(id: string, patch: { active?: boolean; role?: "ADMIN" | "MEMBER"; password?: string }) {
+  async function updateUser(id: string, patch: { active?: boolean; role?: "ADMIN" | "MEMBER"; password?: string; metricsAccess?: boolean }) {
     setError("");
-    const response = await fetch(`/api/users/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patch),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      setError(apiErrorMessage(data, text, {
-        en: "The change could not be saved.",
-        de: "Die Änderung konnte nicht gespeichert werden.",
-      }));
+    setUpdatingUserIds((current) => [...current, id]);
+    try {
+      const response = await fetch(`/api/users/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setError(apiErrorMessage(data, text, {
+          en: "The change could not be saved.",
+          de: "Die Änderung konnte nicht gespeichert werden.",
+        }));
+        return false;
+      }
+      setUsers((current) => current.map((user) => user.id === id ? { ...user, ...data } : user));
+      return true;
+    } catch {
+      setError(text("The change could not be saved.", "Die Änderung konnte nicht gespeichert werden."));
       return false;
+    } finally {
+      setUpdatingUserIds((current) => current.filter((userId) => userId !== id));
     }
-    setUsers((current) => current.map((user) => user.id === id ? { ...user, ...data } : user));
-    return true;
   }
 
   async function resetPassword() {
@@ -117,7 +127,7 @@ export function UsersAdmin({ initialUsers, currentUserId }: { initialUsers: User
       <div className="users-toolbar">
         <div>
           <strong>{users.length === 1 ? text("1 account", "1 Konto") : text(`${users.length} accounts`, `${users.length} Konten`)}</strong>
-          <span>{text("Local users and users connected through OIDC", "Lokale und über OIDC verbundene Benutzer")}</span>
+          <span>{text("Use the chart button to grant or revoke instance dashboard and metrics access.", "Über die Diagramm-Schaltfläche gibst du Instanz-Dashboard und Metriken frei oder entziehst den Zugriff.")}</span>
         </div>
         <button className="button primary-button compact" onClick={() => setShowForm((value) => !value)}>
           <Plus size={17} /> {text("Create user", "Benutzer anlegen")}
@@ -151,11 +161,12 @@ export function UsersAdmin({ initialUsers, currentUserId }: { initialUsers: User
                 {user.id === currentUserId && <em>{text("You", "Du")}</em>}
               </strong>
               <small>{user.email}</small>
+              {user.role === "MEMBER" && user.metricsAccess && <small>{text("Dashboard access granted", "Dashboard freigegeben")}</small>}
             </div>
             <span>{user.accounts.length ? user.accounts.map((account) => account.provider).join(", ") : text("Local", "Lokal")}</span>
             <select
               value={user.role}
-              disabled={user.id === currentUserId}
+              disabled={user.id === currentUserId || updatingUserIds.includes(user.id)}
               onChange={(event) => updateUser(user.id, { role: event.target.value as "ADMIN" | "MEMBER" })}
               aria-label={text(`Role for ${user.name || user.email}`, `Rolle für ${user.name || user.email}`)}
             >
@@ -166,7 +177,24 @@ export function UsersAdmin({ initialUsers, currentUserId }: { initialUsers: User
             </span>
             <div className="row-actions">
               <button
+                className={`icon-button bordered${user.metricsAccess || user.role === "ADMIN" ? " metrics-granted" : ""}`}
+                disabled={user.role === "ADMIN" || updatingUserIds.includes(user.id)}
+                onClick={() => updateUser(user.id, { metricsAccess: !user.metricsAccess })}
+                aria-pressed={user.role === "ADMIN" || user.metricsAccess}
+                title={user.role === "ADMIN"
+                  ? text("Administrators always have dashboard access", "Administratoren haben immer Dashboard-Zugriff")
+                  : user.metricsAccess ? text("Revoke dashboard access", "Dashboard-Zugriff entziehen") : text("Grant dashboard access", "Dashboard-Zugriff freigeben")}
+                aria-label={user.role === "ADMIN"
+                  ? text(`Dashboard access is included for administrator ${user.name || user.email}`, `Dashboard-Zugriff ist für Administrator ${user.name || user.email} enthalten`)
+                  : user.metricsAccess
+                    ? text(`Revoke dashboard access for ${user.name || user.email}`, `Dashboard-Zugriff für ${user.name || user.email} entziehen`)
+                    : text(`Grant dashboard access for ${user.name || user.email}`, `Dashboard-Zugriff für ${user.name || user.email} freigeben`)}
+              >
+                <ChartNoAxesCombined size={16} />
+              </button>
+              <button
                 className="icon-button bordered"
+                disabled={updatingUserIds.includes(user.id)}
                 onClick={() => setResetUserId(user.id)}
                 title={text("Set local password", "Lokales Passwort setzen")}
                 aria-label={text(`Set local password for ${user.name || user.email}`, `Lokales Passwort für ${user.name || user.email} setzen`)}
@@ -175,7 +203,7 @@ export function UsersAdmin({ initialUsers, currentUserId }: { initialUsers: User
               </button>
               <button
                 className="icon-button bordered"
-                disabled={user.id === currentUserId}
+                disabled={user.id === currentUserId || updatingUserIds.includes(user.id)}
                 onClick={() => updateUser(user.id, { active: !user.active })}
                 title={user.active ? text("Lock account", "Konto sperren") : text("Activate account", "Konto aktivieren")}
                 aria-label={user.active

@@ -101,6 +101,14 @@ export const DEFAULT_ATLASDOC_SNIPPETS: AtlasDocSnippet[] = [
 ];
 
 const DEFAULT_SETTINGS: AtlasDocSettings = { gridVisible: false, snapToGrid: true };
+const ATLASDOC_LOCAL_ORIGIN = Symbol("atlasdoc-local-edit");
+
+export function createAtlasDocUndoManager(document: Y.Doc) {
+  return new Y.UndoManager(document.getMap(ATLASDOC_MAP), {
+    trackedOrigins: new Set([ATLASDOC_LOCAL_ORIGIN]),
+    captureTimeout: 500,
+  });
+}
 
 export function initializeAtlasDoc(document: Y.Doc, language: "en" | "de" = "en") {
   const root = document.getMap<unknown>(ATLASDOC_MAP);
@@ -152,7 +160,7 @@ export function addAtlasDocElement(document: Y.Doc, input: AtlasDocElementInput,
     x: input.x ?? 60,
     y: input.y ?? nextElementY(current),
   }, language);
-  elements.set(element.id, element);
+  document.transact(() => elements.set(element.id, element), ATLASDOC_LOCAL_ORIGIN);
   return element.id;
 }
 
@@ -169,21 +177,26 @@ export function updateAtlasDocElement(document: Y.Doc, id: string, patch: AtlasD
     id,
     style: { ...current.style, ...patch.style },
   });
-  elements.set(id, next);
+  if (JSON.stringify(current) !== JSON.stringify(next)) {
+    document.transact(() => elements.set(id, next), ATLASDOC_LOCAL_ORIGIN);
+  }
   return true;
 }
 
 export function deleteAtlasDocElement(document: Y.Doc, id: string) {
   const elements = document.getMap<unknown>(ATLASDOC_MAP).get("elements");
   if (!(elements instanceof Y.Map) || !elements.has(id)) return false;
-  elements.delete(id);
+  document.transact(() => elements.delete(id), ATLASDOC_LOCAL_ORIGIN);
   return true;
 }
 
 export function updateAtlasDocSettings(document: Y.Doc, patch: Partial<AtlasDocSettings>) {
   const root = document.getMap<unknown>(ATLASDOC_MAP);
   const settings = normalizeSettings(root.get("settings"));
-  root.set("settings", { ...settings, ...patch });
+  const next = normalizeSettings({ ...settings, ...patch });
+  if (JSON.stringify(settings) !== JSON.stringify(next)) {
+    document.transact(() => root.set("settings", next), ATLASDOC_LOCAL_ORIGIN);
+  }
 }
 
 export function upsertAtlasDocSnippet(document: Y.Doc, snippet: Omit<AtlasDocSnippet, "id"> & { id?: string }) {
@@ -191,7 +204,9 @@ export function upsertAtlasDocSnippet(document: Y.Doc, snippet: Omit<AtlasDocSni
   const snippets = root.get("snippets");
   if (!(snippets instanceof Y.Map)) return null;
   const normalized = normalizeSnippet({ ...snippet, id: snippet.id || createId("snippet") });
-  snippets.set(normalized.id, normalized);
+  if (JSON.stringify(snippets.get(normalized.id)) !== JSON.stringify(normalized)) {
+    document.transact(() => snippets.set(normalized.id, normalized), ATLASDOC_LOCAL_ORIGIN);
+  }
   return normalized.id;
 }
 
@@ -199,7 +214,7 @@ export function deleteAtlasDocSnippet(document: Y.Doc, id: string) {
   if (DEFAULT_ATLASDOC_SNIPPETS.some((snippet) => snippet.id === id)) return false;
   const snippets = document.getMap<unknown>(ATLASDOC_MAP).get("snippets");
   if (!(snippets instanceof Y.Map) || !snippets.has(id)) return false;
-  snippets.delete(id);
+  document.transact(() => snippets.delete(id), ATLASDOC_LOCAL_ORIGIN);
   return true;
 }
 

@@ -62,6 +62,7 @@ model User {
   compactMode       Boolean       @default(false)
   role              UserRole      @default(MEMBER)
   active            Boolean       @default(true)
+  metricsAccess     Boolean       @default(false)
   accounts          Account[]
   sessions          Session[]
   memberships       Membership[]

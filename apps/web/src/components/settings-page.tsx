@@ -18,6 +18,7 @@ type SettingsUser = {
   name: string;
   email: string;
   role: "ADMIN" | "MEMBER";
+  metricsAccess: boolean;
   hasAvatar: boolean;
   avatarVersion: number;
   canChangePassword: boolean;
@@ -237,6 +238,7 @@ export function SettingsPage({
           </SettingsNavGroup>
           <SettingsNavGroup label={text("Data", "Daten")}>
             <SettingsNavButton active={section === "export"} icon={<Download size={17} />} onClick={() => activate("export")}>{text("Data & export", "Daten & Export")}</SettingsNavButton>
+            {user.role !== "ADMIN" && user.metricsAccess && <SettingsNavLink href="/admin/dashboard" icon={<ChartNoAxesCombined size={17} />}>{text("Instance dashboard", "Instanz-Dashboard")}</SettingsNavLink>}
           </SettingsNavGroup>
           {user.role === "ADMIN" && (
             <SettingsNavGroup label={text("Administration", "Administration")}>

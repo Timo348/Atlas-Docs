@@ -66,7 +66,7 @@ release archive, then enter its root. The value below is the currently published
 tag; replace it when deploying a newer release:
 
 ```bash
-ATLAS_RELEASE=v3.1.3
+ATLAS_RELEASE=v3.2.0
 git clone --branch "$ATLAS_RELEASE" --depth 1 https://github.com/Timo348/Atlas-Docs.git
 cd Atlas-Docs
 cp .env.example .env
@@ -124,7 +124,7 @@ At minimum, review every variable in this table:
 | `ATLAS_UPLOAD_MAX_MB` | Positive whole-MB upload limit shared by profile/space images, imported files, and PDF attachments. Defaults to `25` when omitted. |
 | `AUTH_MODE` | `local`, `oidc`, or `both`. See [OIDC](#optional-openid-connect). |
 | `AUTH_SECRET` | Random value of at least 32 characters. Keep it stable across restarts. |
-| `PROMETHEUS_METRICS_TOKEN` | Optional, separate random bearer token of at least 32 characters. Enables the protected `/api/metrics` Prometheus endpoint; leave it empty to keep that endpoint disabled. |
+| `PROMETHEUS_METRICS_TOKEN` | Optional, separate random bearer token of at least 32 characters. Enables automated `/api/metrics` scrapes; leave empty to disable bearer access. Active admins and members with an explicit metrics grant can still use their browser session. |
 | `ADMIN_NAME` | Display name used only when the initial administrator is created. |
 | `ADMIN_EMAIL` | Email address of the initial administrator. |
 | `ADMIN_PASSWORD` | Password used only when that administrator does not already exist; minimum 12 characters. |
@@ -405,9 +405,10 @@ docker compose up -d web collab
 
 ## Prometheus and Grafana
 
-Atlas exposes aggregate instance metrics at `/api/metrics` only when
-`PROMETHEUS_METRICS_TOKEN` is configured. The endpoint does not use a browser
-session and never returns the token, user names, email addresses, page titles,
+Atlas exposes aggregate instance metrics at `/api/metrics` to active admins
+and explicitly granted members through their browser session. Automated scrapes
+use a separate `PROMETHEUS_METRICS_TOKEN`. The endpoint never returns the token,
+user names, email addresses, page titles,
 or share URLs. It reports account, space, page-format, collaboration, sharing,
 and storage counts as Prometheus gauges.
 
@@ -443,9 +444,12 @@ curl --fail --show-error --silent \
   http://127.0.0.1:30002/api/metrics
 ```
 
-The administrator dashboard at `/admin/dashboard` shows the same aggregate
-numbers and only reports whether the metrics token is configured. It never
-displays the secret.
+The instance dashboard at `/admin/dashboard` shows the same aggregate numbers
+and only reports whether the metrics token is configured. It never displays the
+secret. Admins can grant or revoke **Metrics access** for members in User
+management. The permission grants only the dashboard and metrics endpoint;
+user and team administration remain restricted to admins. Revocation and account
+deactivation take effect on the next request, including existing browser sessions.
 
 `restart` does not pull new images or run a release upgrade. Use the complete
 upgrade procedure below for that.
@@ -456,6 +460,28 @@ Read the target release notes and compare its `.env.example`, `compose.yml`, and
 Compose overlays with the installed copies. Preserve `.env` separately, merge
 new variables deliberately, and keep a record of the currently deployed
 `ATLAS_VERSION`.
+
+### Upgrade to 3.2.0
+
+Create the usual `upgrade` backup and use the release deployment files from
+`v3.2.0`. Preserve your secret `.env` and merge deployment-file changes; set
+`ATLAS_VERSION=3.2.0` for the matching web, collab, and migrate services.
+No environment variables or Compose services are added or removed. The version
+defaults in `compose.yml` and `.env.example` now match this release.
+
+The additive migration adds `User.metricsAccess`, a boolean defaulting to
+`false`. Existing members have no metrics permission until an admin grants it;
+admins keep access. For rollback, keep the additional column while running the
+previous application version. Drop it only after backing up its grants and
+stopping all newer application services.
+
+```bash
+docker compose config --quiet
+docker compose pull
+docker compose up -d --no-build
+docker compose ps -a
+docker compose logs --no-color migrate
+```
 
 ### Upgrade to 3.1.3
 

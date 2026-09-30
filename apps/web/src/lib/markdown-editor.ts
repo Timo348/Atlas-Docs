@@ -738,10 +738,11 @@ function tableCellSourceRanges(line: string) {
 
 function encodedOffsetAt(value: string, decodedOffset: number) {
   const target = clampOffset(decodedOffset, decodeTableCell(value).length);
+  const codeSpans = tableCellCodeSpans(value);
   let encoded = 0;
   let decoded = 0;
   while (encoded < value.length && decoded < target) {
-    encoded += isTableCellEscape(value, encoded) ? 2 : 1;
+    encoded += tableCellToken(value, encoded, codeSpans).width;
     decoded += 1;
   }
   return encoded;
@@ -749,10 +750,11 @@ function encodedOffsetAt(value: string, decodedOffset: number) {
 
 function decodedOffsetAt(value: string, encodedOffset: number) {
   const target = clampOffset(encodedOffset, value.length);
+  const codeSpans = tableCellCodeSpans(value);
   let encoded = 0;
   let decoded = 0;
   while (encoded < target) {
-    const width = isTableCellEscape(value, encoded) ? 2 : 1;
+    const width = tableCellToken(value, encoded, codeSpans).width;
     if (encoded + width > target) break;
     encoded += width;
     decoded += 1;
@@ -764,6 +766,32 @@ function isTableCellEscape(value: string, offset: number) {
   return value[offset] === "\\" && (value[offset + 1] === "\\" || value[offset + 1] === "|");
 }
 
+function tableCellCodeSpans(value: string) {
+  const delimiters = Array.from(value.matchAll(/`+/g));
+  const spans: Array<{ start: number; end: number }> = [];
+  for (let index = 0; index < delimiters.length; index++) {
+    const opener = delimiters[index];
+    const closingIndex = delimiters.findIndex((candidate, candidateIndex) => candidateIndex > index && candidate[0].length === opener[0].length);
+    if (closingIndex < 0) continue;
+    const closer = delimiters[closingIndex];
+    spans.push({ start: opener.index, end: closer.index + closer[0].length });
+    index = closingIndex;
+  }
+  return spans;
+}
+
+function tableCellToken(value: string, offset: number, codeSpans: Array<{ start: number; end: number }>) {
+  if (isTableCellEscape(value, offset)) return { width: 2, value: value[offset + 1] };
+  // GFM trims source padding around cells. Encode actual boundary whitespace
+  // as entities so a typed space survives the next controlled-input render.
+  // Decode in a single pass: &amp;#32; is the literal text "&#32;", not a space.
+  const entity = codeSpans.some((span) => offset >= span.start && offset < span.end)
+    ? null
+    : value.slice(offset).match(/^&(?:#32;|#9;|amp;)/)?.[0];
+  if (entity) return { width: entity.length, value: entity === "&#32;" ? " " : entity === "&#9;" ? "\t" : "&" };
+  return { width: 1, value: value[offset] };
+}
+
 function clampOffset(offset: number, maximum: number) {
   if (offset === Number.POSITIVE_INFINITY) return maximum;
   if (!Number.isFinite(offset)) return 0;
@@ -772,24 +800,25 @@ function clampOffset(offset: number, maximum: number) {
 
 function decodeTableCell(value: string) {
   let decoded = "";
-  for (let index = 0; index < value.length; index++) {
-    const character = value[index];
-    const next = value[index + 1];
-    if (character === "\\" && (next === "\\" || next === "|")) {
-      decoded += next;
-      index++;
-    } else {
-      decoded += character;
-    }
+  const codeSpans = tableCellCodeSpans(value);
+  for (let index = 0; index < value.length;) {
+    const token = tableCellToken(value, index, codeSpans);
+    decoded += token.value;
+    index += token.width;
   }
   return decoded;
 }
 
 function encodeTableCell(value: string) {
+  const codeSpans = tableCellCodeSpans(value);
   return value
+    .replace(/&(?=(?:#32;|#9;|amp;))/g, (ampersand, offset: number) => (
+      codeSpans.some((span) => offset >= span.start && offset < span.end) ? ampersand : "&amp;"
+    ))
     .replace(/\\/g, "\\\\")
     .replace(/\|/g, "\\|")
-    .replace(/\r?\n/g, " ");
+    .replace(/\r\n?|\n/g, " ")
+    .replace(/^[ \t]+|[ \t]+$/g, (spaces) => spaces.replace(/ /g, "&#32;").replace(/\t/g, "&#9;"));
 }
 
 function normalizeTableRow(row: string[], columns: number) {

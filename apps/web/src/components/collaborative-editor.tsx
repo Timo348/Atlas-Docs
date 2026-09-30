@@ -3,7 +3,7 @@
 import { HocuspocusProvider } from "@hocuspocus/provider";
 import {
   Bold, Code2, Download, Eye, FileText, History, ImagePlus, Italic, Link2, LoaderCircle, Maximize2, Minimize2, Minus, Palette,
-  Paperclip, Pencil, Plus, Printer, RotateCcw, Save as SaveIcon, Share2, Strikethrough, Table2, Users, X,
+  Paperclip, Pencil, Plus, Printer, Redo2, RotateCcw, Save as SaveIcon, Share2, Strikethrough, Table2, Undo2, Users, X,
 } from "lucide-react";
 import {
   type ClipboardEvent, type KeyboardEvent, type ReactNode, type RefObject,
@@ -58,6 +58,7 @@ import { createVisibleSnapshot, restoreVisibleSnapshot } from "@/lib/version-sna
 import { sharedPageImageUrl } from "@/lib/shared-page-images";
 import { downloadableFileName } from "@/lib/page-file";
 import { initialEditorTab, type InitialEditorTab } from "@/lib/file-opening-view";
+import { editorHistoryAction } from "@/lib/editor-history-shortcuts";
 import { serializeTodoBoard } from "@/lib/todo-board";
 import { sharedPageAttachmentUrl } from "@/lib/shared-page-attachments";
 import type { PublicShareAccess } from "@/lib/public-share";
@@ -117,6 +118,8 @@ type EditorProps = {
 // lets the second setup cancel destruction of the same memoized documents while
 // still disposing superseded page documents deterministically after unmount.
 const collaborationResourceOwners = new WeakMap<Y.Doc, object>();
+const HISTORY_BEFORE_CURSOR = "atlas-before-cursor";
+const HISTORY_AFTER_CURSOR = "atlas-after-cursor";
 
 const SLASH_COMMANDS: { id: SlashCommandId; title: [string, string]; description: [string, string] }[] = [
   { id: "table", title: ["Table", "Tabelle"], description: ["Insert an expandable table", "Erweiterbare Tabelle einfügen"] },
@@ -200,6 +203,7 @@ function CollaborativeDocumentEditor({
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [tableSourceMode, setTableSourceMode] = useState(false);
   const [colorPaletteOpen, setColorPaletteOpen] = useState(false);
+  const [historyState, setHistoryState] = useState({ canUndo: false, canRedo: false });
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const editorStageRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -209,6 +213,28 @@ function CollaborativeDocumentEditor({
   const localCursorRef = useRef<CollaborativeCursor | null>(null);
   const restoreEditorFocusRef = useRef(false);
   const savedTitleRef = useRef(page.title);
+  const undoManagerRef = useRef<Y.UndoManager | null>(null);
+
+  useEffect(() => {
+    const manager = textBinding.createUndoManager();
+    undoManagerRef.current = manager;
+    const update = () => setHistoryState({ canUndo: manager.canUndo(), canRedo: manager.canRedo() });
+    const capture = ({ stackItem, origin }: { stackItem: { meta: Map<unknown, unknown> }; origin: unknown }) => {
+      if (origin === textBinding.localOrigin && !stackItem.meta.has(HISTORY_BEFORE_CURSOR)) {
+        stackItem.meta.set(HISTORY_BEFORE_CURSOR, localCursorRef.current);
+      }
+      update();
+    };
+    manager.on("stack-item-added", capture);
+    manager.on("stack-item-updated", capture);
+    manager.on("stack-item-popped", update);
+    manager.on("stack-cleared", update);
+    update();
+    return () => {
+      undoManagerRef.current = null;
+      manager.destroy();
+    };
+  }, [textBinding]);
 
   useEffect(() => {
     setTableSourceMode(false);
@@ -499,6 +525,64 @@ function CollaborativeDocumentEditor({
     });
   }
 
+  function rememberHistoryCursor() {
+    const manager = undoManagerRef.current;
+    manager?.undoStack.at(-1)?.meta.set(HISTORY_AFTER_CURSOR, localCursorRef.current);
+  }
+
+  function changeHistory(action: "undo" | "redo") {
+    if (readOnly) return;
+    const manager = undoManagerRef.current;
+    if (!manager) return;
+    manager.stopCapturing();
+    const item = action === "undo" ? manager.undo() : manager.redo();
+    setHistoryState({ canUndo: manager.canUndo(), canRedo: manager.canRedo() });
+    if (!item) return;
+    // The inverse stack item is created by Yjs during undo/redo. Carry the
+    // original selections with it so repeated cycles restore the same cell.
+    const inverse = (action === "undo" ? manager.redoStack : manager.undoStack).at(-1);
+    for (const key of [HISTORY_BEFORE_CURSOR, HISTORY_AFTER_CURSOR]) {
+      if (item.meta.has(key)) inverse?.meta.set(key, item.meta.get(key));
+    }
+    const cursor = item.meta.get(action === "undo" ? HISTORY_BEFORE_CURSOR : HISTORY_AFTER_CURSOR) as CollaborativeCursor | null | undefined;
+    textBinding.sync();
+    if (cursor) {
+      // Yjs redone-item links live in the UndoManager's document and are not
+      // serialized into the view replica. Resolve there, then create fresh
+      // view-relative positions for the focused editor.
+      const resolved = resolveCollaborativeCursor(cursor, ydoc, "markdown");
+      if (resolved) publishAbsoluteCursor(resolved.anchor, resolved.head, resolved.surface);
+    }
+    restoreEditorFocusRef.current = true;
+    setLocalCursorMarkerVisible(true);
+    setDocumentState((current) => ({ markdown: textBinding.value, revision: current.revision + 1 }));
+  }
+
+  function handleHistoryKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (readOnly || !["MARKDOWN", "TEXT", "LATEX"].includes(page.format)) return;
+    const target = event.target;
+    // Titles and dialogs retain their native input history.
+    if (!(target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement)
+      || !editorStageRef.current?.contains(target)) return;
+    const action = editorHistoryAction(event);
+    if (!action) return;
+    event.preventDefault();
+    changeHistory(action);
+  }
+
+  useEffect(() => {
+    const stage = editorStageRef.current;
+    if (!stage || readOnly || !["MARKDOWN", "TEXT", "LATEX"].includes(page.format)) return;
+    const handleNativeHistory = (event: InputEvent) => {
+      const action = event.inputType === "historyUndo" ? "undo" : event.inputType === "historyRedo" ? "redo" : null;
+      if (!action || event.isComposing || !event.cancelable) return;
+      event.preventDefault();
+      changeHistory(action);
+    };
+    stage.addEventListener("beforeinput", handleNativeHistory);
+    return () => stage.removeEventListener("beforeinput", handleNativeHistory);
+  }, [page.format, readOnly, tab, textBinding]);
+
   function changeMarkdown(
     next: string,
     cursorIndex: number,
@@ -506,8 +590,9 @@ function CollaborativeDocumentEditor({
     surface?: LocalCursorSurface,
   ) {
     if (readOnly) return;
-    textBinding.apply(next, "markdown-input");
+    const update = textBinding.apply(next, textBinding.localOrigin);
     publishAbsoluteCursor(anchor, cursorIndex, surface);
+    if (update) rememberHistoryCursor();
   }
 
   function publishCursor(textarea: HTMLTextAreaElement, offset = 0) {
@@ -515,7 +600,15 @@ function CollaborativeDocumentEditor({
     const end = offset + textarea.selectionEnd;
     const anchor = textarea.selectionDirection === "backward" ? end : start;
     const head = textarea.selectionDirection === "backward" ? start : end;
+    stopHistoryAtSelectionChange(anchor, head);
     publishAbsoluteCursor(anchor, head, { kind: "text" });
+  }
+
+  function stopHistoryAtSelectionChange(anchor: number, head: number) {
+    const previous = localCursorRef.current
+      ? resolveCollaborativeCursor(localCursorRef.current, textBinding.viewDocument, "markdown")
+      : null;
+    if (!previous || previous.anchor !== anchor || previous.head !== head) undoManagerRef.current?.stopCapturing();
   }
 
   const activeSlash = page.format === "MARKDOWN" && !readOnly ? slashMatchAt(markdown, cursorIndex) : null;
@@ -560,12 +653,15 @@ function CollaborativeDocumentEditor({
 
   function applyEdit(edit: TextEdit) {
     if (readOnly) return;
+    undoManagerRef.current?.stopCapturing();
     if (edit.changes?.length) {
-      textBinding.applyChanges(edit.changes, "markdown-structural-edit");
+      textBinding.applyChanges(edit.changes, textBinding.localOrigin);
       publishAbsoluteCursor(edit.cursor);
+      rememberHistoryCursor();
     } else {
       changeMarkdown(edit.text, edit.cursor);
     }
+    undoManagerRef.current?.stopCapturing();
     focusMarkdownCursor(edit.cursor);
   }
 
@@ -629,7 +725,7 @@ function CollaborativeDocumentEditor({
   }
 
   function handleEditorKeyDown(event: KeyboardEvent<HTMLTextAreaElement>, offset = 0) {
-    if (event.nativeEvent.isComposing) return;
+    if (event.defaultPrevented || event.nativeEvent.isComposing) return;
     const localSelectionStart = event.currentTarget.selectionStart;
     const localSelectionEnd = event.currentTarget.selectionEnd;
     const selectionStart = offset + localSelectionStart;
@@ -683,11 +779,12 @@ function CollaborativeDocumentEditor({
         changeHybridText(emptyHybridSegment, edit.text, offset + edit.selectionEnd);
         return;
       }
+      undoManagerRef.current?.stopCapturing();
       textBinding.applyChanges(edit.changes.map((change) => ({
         ...change,
         start: offset + change.start,
         end: offset + change.end,
-      })), "markdown-indentation");
+      })), textBinding.localOrigin);
       const nextStart = offset + edit.selectionStart;
       const nextEnd = offset + edit.selectionEnd;
       const backwards = event.currentTarget.selectionDirection === "backward";
@@ -696,6 +793,8 @@ function CollaborativeDocumentEditor({
         backwards ? nextStart : nextEnd,
         { kind: "text" },
       );
+      rememberHistoryCursor();
+      undoManagerRef.current?.stopCapturing();
       return;
     }
 
@@ -759,6 +858,7 @@ function CollaborativeDocumentEditor({
     if (start === null || end === null) return;
     const anchor = input.selectionDirection === "backward" ? end : start;
     const head = input.selectionDirection === "backward" ? start : end;
+    stopHistoryAtSelectionChange(anchor, head);
     publishAbsoluteCursor(anchor, head, { kind: "table-cell", tableStart: table.start, row, column });
   }
 
@@ -795,12 +895,15 @@ function CollaborativeDocumentEditor({
       const prefix = insertionStart > 0 && currentMarkdown[insertionStart - 1] !== "\n" ? "\n" : "";
       const suffix = currentMarkdown[insertionEnd] && currentMarkdown[insertionEnd] !== "\n" ? "\n" : "";
       const markdownImage = `${prefix}![${alt.replace(/[\[\]]/g, "")}](${result.url})${suffix}`;
+      undoManagerRef.current?.stopCapturing();
       textBinding.apply(
         currentMarkdown.slice(0, insertionStart) + markdownImage + currentMarkdown.slice(insertionEnd),
-        "image-upload",
+        textBinding.localOrigin,
       );
       const nextCursor = insertionStart + markdownImage.length;
       publishAbsoluteCursor(nextCursor);
+      rememberHistoryCursor();
+      undoManagerRef.current?.stopCapturing();
       focusMarkdownCursor(nextCursor);
       setEditorNotice(text("Image inserted.", "Bild eingefügt."));
     } catch (error) {
@@ -840,12 +943,15 @@ function CollaborativeDocumentEditor({
       const prefix = position > 0 && currentMarkdown[position - 1] !== "\n" ? "\n" : "";
       const suffix = currentMarkdown[position] && currentMarkdown[position] !== "\n" ? "\n" : "";
       const link = `${prefix}[${label}](${result.url})${suffix}`;
+      undoManagerRef.current?.stopCapturing();
       textBinding.apply(
         currentMarkdown.slice(0, position) + link + currentMarkdown.slice(position),
-        "attachment-upload",
+        textBinding.localOrigin,
       );
       const nextCursor = position + link.length;
       publishAbsoluteCursor(nextCursor);
+      rememberHistoryCursor();
+      undoManagerRef.current?.stopCapturing();
       focusMarkdownCursor(nextCursor);
       setEditorNotice(text("PDF attachment inserted.", "PDF-Anhang eingefügt."));
     } catch (error) {
@@ -960,6 +1066,9 @@ function CollaborativeDocumentEditor({
         }));
       }
       restoreVisibleSnapshot(ydoc, base64ToBytes(result.snapshot), page.format);
+      // A restored version starts a new editing session. Old stack items refer
+      // to deleted content and must not resurrect it inside the new snapshot.
+      undoManagerRef.current?.clear();
       setTitle(result.title);
       setVersionBusy(false);
       await saveVersion(result.version, result.title);
@@ -1046,7 +1155,7 @@ function CollaborativeDocumentEditor({
   }), [page.id, publicShare]);
 
   return (
-    <div className={`editor-shell ${headerCenter ? "editor-shell-with-center" : ""} ${fullscreen ? "editor-shell-fullscreen" : ""} ${page.format === "CANVAS" || page.format === "GANTT" || page.format === "TODO" ? "canvas-file-editor" : ""} ${page.format === "TEXT" ? "text-file-editor" : ""}`}>
+    <div className={`editor-shell ${headerCenter ? "editor-shell-with-center" : ""} ${fullscreen ? "editor-shell-fullscreen" : ""} ${page.format === "CANVAS" || page.format === "GANTT" || page.format === "TODO" ? "canvas-file-editor" : ""} ${page.format === "TEXT" ? "text-file-editor" : ""}`} onKeyDownCapture={handleHistoryKeyDown}>
       <header className={`editor-header ${headerCenter ? "editor-header-with-center" : ""}`}>
         <div className="title-wrap">
           <input
@@ -1182,6 +1291,12 @@ function CollaborativeDocumentEditor({
                   text={text}
                   onToggle={() => setTableSourceMode((value) => !value)}
                 />
+              )}
+              {!readOnly && (
+                <div className="markdown-format-toolbar" role="toolbar" aria-label={text("Undo and redo", "Rückgängig und Wiederholen")}>
+                  <button type="button" disabled={!historyState.canUndo} onMouseDown={(event) => event.preventDefault()} onClick={() => changeHistory("undo")} title={text("Undo (Ctrl/Cmd+Z)", "Rückgängig (Strg/Cmd+Z)")} aria-label={text("Undo", "Rückgängig")}><Undo2 size={14} /></button>
+                  <button type="button" disabled={!historyState.canRedo} onMouseDown={(event) => event.preventDefault()} onClick={() => changeHistory("redo")} title={text("Redo (Ctrl/Cmd+Shift+Z / Ctrl+Y)", "Wiederholen (Strg/Cmd+Umschalt+Z / Strg+Y)")} aria-label={text("Redo", "Wiederholen")}><Redo2 size={14} /></button>
+                </div>
               )}
               {page.format === "MARKDOWN" && !readOnly && (
                 <div className="markdown-format-toolbar" role="toolbar" aria-label={text("Text formatting", "Textformatierung")}>

@@ -15,6 +15,7 @@ export default async function UsersPage() {
       email: true,
       role: true,
       active: true,
+      metricsAccess: true,
       createdAt: true,
       accounts: { select: { provider: true } },
     },

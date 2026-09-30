@@ -70,7 +70,7 @@ export function WorkspaceShell({
   spaces: Space[];
   selectedSpaceId: string | null;
   selectedPage: PageItem | null;
-  user: { id: string; name: string; email: string; role: "ADMIN" | "MEMBER"; hasAvatar: boolean; avatarVersion: number };
+  user: { id: string; name: string; email: string; role: "ADMIN" | "MEMBER"; metricsAccess: boolean; hasAvatar: boolean; avatarVersion: number };
   uploadLimitMb: number;
 }) {
   const { preferences, text } = usePreferences();
@@ -362,6 +362,7 @@ export function WorkspaceShell({
         if (space) selectSpace(space);
       }}
       onCreate={createSpace}
+      showTrigger={false}
     />
   );
 
@@ -513,7 +514,7 @@ export function WorkspaceShell({
         )}
 
         <div className="sidebar-footer">
-          {user.role === "ADMIN" && <Link className="footer-link" href="/admin/dashboard"><ChartNoAxesCombined size={17} /> {text("Instance dashboard", "Instanz-Dashboard")}</Link>}
+          {(user.role === "ADMIN" || user.metricsAccess) && <Link className="footer-link" href="/admin/dashboard"><ChartNoAxesCombined size={17} /> {text("Instance dashboard", "Instanz-Dashboard")}</Link>}
           {user.role === "ADMIN" && <Link className="footer-link" href="/admin/users"><ShieldCheck size={17} /> {text("User management", "Benutzerverwaltung")}</Link>}
           {user.role === "ADMIN" && <Link className="footer-link" href="/admin/teams"><Users size={17} /> {text("Team management", "Teamverwaltung")}</Link>}
           <button className="footer-link" onClick={() => signOut({ callbackUrl: "/signin" })}><LogOut size={17} /> {text("Sign out", "Abmelden")}</button>
@@ -539,7 +540,6 @@ export function WorkspaceShell({
             <PdfDocument
               key={selectedPage.id}
               page={selectedPage}
-              headerCenter={spacePicker}
               canWrite={Boolean(canWrite)}
               canManageShares={Boolean(canManageShares)}
               onFullscreenChange={setFullscreen}
@@ -549,16 +549,12 @@ export function WorkspaceShell({
               key={selectedPage.id}
               page={selectedPage}
               user={user}
-              headerCenter={spacePicker}
               canManageShares={Boolean(canManageShares)}
               onFullscreenChange={setFullscreen}
             />
           )
         ) : (
-          <div style={{ display: "grid", gridTemplateRows: "70px minmax(0, 1fr)", height: "100%" }}>
-            <header style={{ alignItems: "center", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "center", padding: "0 28px" }}>
-              {spacePicker}
-            </header>
+          <div style={{ height: "100%" }}>
             <div className="empty-state">
               <span>{activeSpace ? <Folder size={28} /> : <BookOpen size={28} />}</span>
               <h1>{activeSpace ? activeSpace.name : text("Your knowledge space is ready.", "Dein Wissensbereich ist bereit.")}</h1>
@@ -572,6 +568,7 @@ export function WorkspaceShell({
           </div>
         )}
       </section>
+      {spacePicker}
       {permissionsOpen && activeSpace && (
         <SpacePermissionsDialog
           spaceId={activeSpace.id}

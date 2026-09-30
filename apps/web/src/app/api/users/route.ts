@@ -1,16 +1,9 @@
 import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { requireApiUser } from "@/lib/access";
 import { apiErrorResponse, readJsonBody } from "@/lib/api-errors";
 import { db } from "@/lib/db";
-
-const createSchema = z.object({
-  name: z.string().trim().min(2).max(100),
-  email: z.string().trim().email().max(254).transform((value) => value.toLowerCase()),
-  password: z.string().min(12).max(128),
-  role: z.enum(["ADMIN", "MEMBER"]).default("MEMBER"),
-});
+import { createUserSchema } from "@/lib/user-administration";
 
 export async function GET() {
   const user = await requireApiUser();
@@ -23,6 +16,7 @@ export async function GET() {
       email: true,
       role: true,
       active: true,
+      metricsAccess: true,
       createdAt: true,
       accounts: { select: { provider: true } },
     },
@@ -35,7 +29,7 @@ export async function POST(request: Request) {
   const admin = await requireApiUser();
   if (!admin) return apiErrorResponse("AUTH_REQUIRED", 401);
   if (admin.role !== "ADMIN") return apiErrorResponse("ADMIN_REQUIRED", 403);
-  const parsed = createSchema.safeParse(await readJsonBody(request));
+  const parsed = createUserSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) {
     return apiErrorResponse("USER_CREATE_INPUT_INVALID", 400);
   }
@@ -48,9 +42,10 @@ export async function POST(request: Request) {
       email: parsed.data.email,
       passwordHash: await bcrypt.hash(parsed.data.password, 12),
       role: parsed.data.role,
+      metricsAccess: parsed.data.metricsAccess,
       memberships: start ? { create: { spaceId: start.id, role: "EDITOR" } } : undefined,
     },
-    select: { id: true, name: true, email: true, role: true, active: true },
+    select: { id: true, name: true, email: true, role: true, active: true, metricsAccess: true },
   });
   return NextResponse.json(user, { status: 201 });
 }

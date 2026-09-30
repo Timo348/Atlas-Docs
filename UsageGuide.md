@@ -8,7 +8,7 @@ Installation, Konfiguration und Datensicherung stehen in der
 
 1. Melde dich mit deinem lokalen Konto oder dem eingerichteten
    Single-Sign-on-Anbieter an.
-2. Wähle oben den gewünschten **Bereich (Space)** aus.
+2. Wähle in der Navigation den gewünschten **Bereich (Space)** aus.
 3. Erstelle links über **Datei** ein Dokument, Diagramm, Gantt-Plan, Todo-Board,
    Textdatei oder Canvas. Über den Reiter **Importieren** kannst du vorhandene
    Dateien übernehmen; Atlas öffnet unterstützte Formate im passenden Editor
@@ -25,7 +25,7 @@ Ein Bereich bündelt zusammengehörige Ordner, Dateien und Zugriffsrechte. Die
 Suche in der Seitenleiste durchsucht Datei- und Ordnernamen, nicht den Inhalt
 der Dokumente.
 
-- **Bereich wechseln:** Öffne die Bereichsauswahl oben oder nutze
+- **Bereich wechseln:** Öffne die Bereichsauswahl in der Navigation oder nutze
   `Strg/Cmd + Umschalt + K`.
 - **Neue Datei:** Klicke links auf **Datei** oder nutze
   `Strg/Cmd + Umschalt + N`.
@@ -58,6 +58,18 @@ Atlas Docs kennt folgende Dateitypen:
 | Weitere Uploads | Bilder, Audio, Video und sonstige Dateien | Originaldatei |
 
 ## 3. Markdown verwenden
+
+Für Markdown, Text, LaTeX und AtlasDoc stehen **Rückgängig** und **Wiederholen**
+bereit. Nutze `Strg/Cmd + Z` für Rückgängig, `Strg/Cmd + Umschalt + Z` oder
+`Strg + Y` für Wiederholen. Die Historie gilt für deine Änderungen im aktuell
+geöffneten Editor; Änderungen anderer Personen werden nicht zurückgenommen.
+Nach einem Neuladen beginnt eine neue Historie. Gespeicherte Versionen bleiben
+für die längerfristige Wiederherstellung verfügbar.
+
+Administratoren können in der **Benutzerverwaltung** den **Metrics-Zugriff**
+für andere Konten freigeben und widerrufen. Freigegebene Personen finden das
+**Instanz-Dashboard** in der Navigation und den Einstellungen und können dort
+aggregierte Kennzahlen sowie Prometheus-Daten abrufen.
 
 In **Schreiben** bearbeitest du den Inhalt, unter **Vorschau** siehst du das
 gerenderte Ergebnis. Die Formatierungsleiste bietet Fett, Kursiv,

@@ -586,3 +586,105 @@ test("destroy is idempotent and prevents accidental reuse", () => {
   assert.throws(() => binding.value, /destroyed/);
   live.destroy();
 });
+
+test("text history undoes local typing while preserving a collaborator's insert", () => {
+  const live = docWithText("abc", 410);
+  const remote = cloneDocument(live, 411);
+  const binding = new CollaborativeTextBinding(live, TEXT_NAME);
+  const history = binding.createUndoManager();
+  binding.apply("abc local", binding.localOrigin);
+  assert.equal(history.canUndo(), true);
+  remote.getText(TEXT_NAME).insert(0, "remote ");
+  syncOneWay(remote, live);
+  binding.sync();
+  assert.equal(binding.value, "remote abc local");
+  history.undo();
+  binding.sync();
+  assert.equal(binding.value, "remote abc");
+  assert.equal(history.canRedo(), true);
+  history.redo();
+  binding.sync();
+  assert.equal(binding.value, "remote abc local");
+  history.destroy();
+  binding.destroy();
+  remote.destroy();
+  live.destroy();
+});
+
+test("text history ignores remote-only and imported changes, and groups structural ranges atomically", () => {
+  const live = docWithText("A|B\n---|---\nx|y", 420);
+  const binding = new CollaborativeTextBinding(live, TEXT_NAME);
+  const history = binding.createUndoManager();
+  live.getText(TEXT_NAME).insert(0, "intro\n");
+  binding.sync();
+  assert.equal(history.canUndo(), false);
+  const before = binding.value;
+  binding.applyChanges([
+    { start: 7, end: 7, value: "|C" },
+    { start: 15, end: 15, value: "|---" },
+    { start: before.length, end: before.length, value: "|z" },
+  ], binding.localOrigin);
+  history.stopCapturing();
+  assert.equal(history.undoStack.length, 1);
+  const structural = binding.value;
+  binding.apply(structural + " next", binding.localOrigin);
+  assert.equal(history.undoStack.length, 2);
+  history.undo();
+  binding.sync();
+  assert.equal(binding.value, structural);
+  history.undo();
+  binding.sync();
+  assert.equal(binding.value, before);
+  history.destroy();
+  binding.destroy();
+  live.destroy();
+});
+
+test("saved relative selections follow undo and redo in the history document", () => {
+  const live = docWithText("before selection after", 430);
+  const binding = new CollaborativeTextBinding(live, TEXT_NAME);
+  const history = binding.createUndoManager();
+  const before = createCollaborativeTextCursor(binding.viewDocument, TEXT_NAME, 7, 16);
+  binding.apply("before changed after", binding.localOrigin);
+  const after = createCollaborativeTextCursor(binding.viewDocument, TEXT_NAME, 14);
+  history.undo();
+  binding.sync();
+  assert.equal(binding.value, "before selection after");
+  assert.deepEqual(resolveCollaborativeCursor(before, live, TEXT_NAME), {
+    anchor: 7, head: 16, index: 16, surface: { kind: "text" },
+  });
+  history.redo();
+  binding.sync();
+  assert.equal(binding.value, "before changed after");
+  assert.deepEqual(resolveCollaborativeCursor(after, live, TEXT_NAME), {
+    anchor: 14, head: 14, index: 14, surface: { kind: "text" },
+  });
+  history.destroy();
+  binding.destroy();
+  live.destroy();
+});
+
+test("clearing session history at a version restore prevents old text resurrection", () => {
+  const live = docWithText("initial", 440);
+  const binding = new CollaborativeTextBinding(live, TEXT_NAME);
+  const history = binding.createUndoManager();
+  binding.apply("edited", binding.localOrigin);
+  live.transact(() => {
+    const content = live.getText(TEXT_NAME);
+    content.delete(0, content.length);
+    content.insert(0, "restored snapshot");
+  }, "version-restore");
+  history.clear();
+  binding.sync();
+  assert.equal(history.canUndo(), false);
+  assert.equal(history.canRedo(), false);
+  assert.equal(history.undo(), null);
+  assert.equal(binding.value, "restored snapshot");
+  binding.apply("restored snapshot new edit", binding.localOrigin);
+  history.undo();
+  binding.sync();
+  assert.equal(binding.value, "restored snapshot");
+  history.destroy();
+  binding.destroy();
+  live.destroy();
+});

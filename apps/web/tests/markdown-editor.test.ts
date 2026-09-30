@@ -141,6 +141,82 @@ test("cell edits preserve every byte outside the target raw value", () => {
   assert.equal(segment?.type === "table" && segment.table.rows[1][1], String.raw`path\tail`);
 });
 
+test("visual table cells preserve spaces after every keystroke and after reopening", () => {
+  let source = "| A | B |\n| --- | --- |\n|  | neighbour |";
+  let value = "";
+  for (const character of "  hello  world ") {
+    value += character;
+    const edit = updateTableCell(source, 0, 1, 0, value);
+    assert.ok(edit);
+    source = edit.text;
+    assert.equal(editableTableAt(source, 0)?.rows[1][0], value);
+    assert.equal(editableTableAt(source, 0)?.rows[1][1], "neighbour");
+    const caret = tableCellCursor(source, 0, 1, 0, value.length);
+    assert.ok(caret !== null);
+    assert.equal(tableCellValueOffset(source, caret, 1, 0), value.length);
+  }
+  assert.equal(editableTableAt(JSON.parse(JSON.stringify(source)), 0)?.rows[1][0], value);
+  assert.equal(source.includes("\u00a0"), false, "ordinary spaces remain ordinary input characters");
+});
+
+test("table cell paste and selections round-trip boundary whitespace, escapes and literal entities", () => {
+  const source = "A|B\n---|---\nx|y";
+  for (const value of [" ", "   ", "\ttext\t", String.raw` a | b\c &#32; &amp; `, " `&#32; &amp;` ", " ``a ` &#32;`` "]) {
+    const edit = updateTableCell(source, 0, 1, 0, value);
+    assert.ok(edit);
+    assert.equal(editableTableAt(edit.text, 0)?.rows[1][0], value);
+    assert.equal(editableTableAt(edit.text, 0)?.rows[1][1], "y");
+    for (let offset = 0; offset <= value.length; offset++) {
+      const caret = tableCellCursor(edit.text, 0, 1, 0, offset);
+      assert.ok(caret !== null);
+      assert.equal(tableCellValueOffset(edit.text, caret, 1, 0), offset, `selection offset ${offset} in ${value}`);
+    }
+  }
+});
+
+test("entities inside inline table code retain their Markdown rendering semantics", () => {
+  const source = "| A |\n| --- |\n| old |";
+  const edit = updateTableCell(source, 0, 1, 0, " `&#32; &amp;` ");
+  assert.ok(edit);
+  assert.equal(edit.text, "| A |\n| --- |\n| &#32;`&#32; &amp;`&#32; |");
+});
+
+test("table history restores whitespace and caret offsets across remote document shifts", () => {
+  const source = "| A | B |\n| --- | --- |\n| original | neighbour |";
+  const live = new Y.Doc();
+  live.getText("markdown").insert(0, source);
+  const binding = new CollaborativeTextBinding(live, "markdown");
+  const history = binding.createUndoManager();
+  const beforeOffset = tableCellCursor(binding.value, 0, 1, 0, 2)!;
+  const beforeCursor = createCollaborativeTableCursor(binding.viewDocument, "markdown", 0, 1, 0, beforeOffset);
+  const value = "new | text ";
+  const edit = updateTableCell(binding.value, 0, 1, 0, value);
+  assert.ok(edit);
+  binding.apply(edit.text, binding.localOrigin);
+  const afterOffset = tableCellCursor(binding.value, 0, 1, 0, value.length)!;
+  const afterCursor = createCollaborativeTableCursor(binding.viewDocument, "markdown", 0, 1, 0, afterOffset);
+  live.getText("markdown").insert(0, "remote intro\n");
+  for (let cycle = 0; cycle < 3; cycle++) {
+    history.undo();
+    binding.sync();
+    const before = resolveCollaborativeCursor(beforeCursor, live, "markdown");
+    assert.ok(before);
+    assert.equal(editableTableAt(binding.value, before.head)?.rows[1][0], "original");
+    assert.equal(tableCellValueOffset(binding.value, before.head, 1, 0), 2);
+    assert.ok(binding.value.startsWith("remote intro\n"));
+    history.redo();
+    binding.sync();
+    const after = resolveCollaborativeCursor(afterCursor, live, "markdown");
+    assert.ok(after);
+    assert.equal(editableTableAt(binding.value, after.head)?.rows[1][0], value);
+    assert.equal(tableCellValueOffset(binding.value, after.head, 1, 0), value.length);
+    assert.equal(editableTableAt(binding.value, after.head)?.rows[1][1], "neighbour");
+  }
+  history.destroy();
+  binding.destroy();
+  live.destroy();
+});
+
 test("short GFM rows expose read-only placeholders instead of unsafe edits", () => {
   const source = "A|B|C\n---|---|---\nleft |\ntail|middle";
   const segment = markdownDocumentSegments(source).find((entry) => entry.type === "table");

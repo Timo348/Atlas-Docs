@@ -86,7 +86,8 @@ export async function collectInstanceMetrics(client: MetricsDatabase = db): Prom
     client.pageShare.findMany({ select: { permission: true, revokedAt: true, expiresAt: true } }),
     client.$queryRaw<StorageRow[]>`
       SELECT
-        COALESCE((SELECT SUM(octet_length("fileData")) FROM "Page" WHERE "fileData" IS NOT NULL), 0)::bigint AS "uploadedFiles",
+        (COALESCE((SELECT SUM(octet_length("fileData")) FROM "Page" WHERE "fileData" IS NOT NULL), 0)
+          + COALESCE((SELECT SUM(octet_length("data")) FROM "PageAsset"), 0))::bigint AS "uploadedFiles",
         COALESCE((SELECT SUM(octet_length("data")) FROM "PageImage"), 0)::bigint AS "pageImages",
         COALESCE((SELECT SUM(octet_length("data")) FROM "CollabDocument"), 0)::bigint AS "collaborationDocuments",
         COALESCE((SELECT SUM(octet_length("avatarData")) FROM "User" WHERE "avatarData" IS NOT NULL), 0)::bigint AS "profileImages",

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import {
-  ArrowLeft, ChartNoAxesCombined, Database, FileStack, FolderTree, Gauge, Image,
+  ArrowLeft, ChartNoAxesCombined, Database, Download, FileStack, FolderTree, Gauge, Image,
   Link2, RadioTower, Share2, Users,
 } from "lucide-react";
 import { METRICS_PATH, PAGE_FORMATS, type AtlasPageFormat, type InstanceMetrics } from "@/lib/instance-metrics";
@@ -11,10 +11,12 @@ export function AdminDashboard({
   metrics,
   language,
   metricsEnabled,
+  canManageUsers,
 }: {
   metrics: InstanceMetrics;
   language: Language;
   metricsEnabled: boolean;
+  canManageUsers: boolean;
 }) {
   const text = (english: string, german: string) => language === "de" ? german : english;
   const activeUsers = userCount(metrics, "active");
@@ -32,13 +34,15 @@ export function AdminDashboard({
     <main className="admin-page admin-dashboard-page">
       <header className="admin-header admin-dashboard-header">
         <div>
-          <p className="eyebrow dark"><Gauge size={15} /> {text("Administration", "Administration")}</p>
+          <p className="eyebrow dark"><Gauge size={15} /> {canManageUsers ? text("Administration", "Administration") : text("Instance insights", "Instanzübersicht")}</p>
           <h1>{text("Instance dashboard", "Instanz-Dashboard")}</h1>
           <p>{text("Live overview of the Atlas database. Updated", "Live-Überblick über die Atlas-Datenbank. Aktualisiert")} {collectedAt}.</p>
         </div>
         <div className="admin-header-actions">
-          <Link href="/admin/users" className="button compact secondary-button"><Users size={15} /> {text("Users", "Benutzer")}</Link>
-          <Link href="/admin/teams" className="button compact secondary-button"><Share2 size={15} /> {text("Teams", "Teams")}</Link>
+          {canManageUsers && <Link href="/admin/users" className="button compact secondary-button"><Users size={15} /> {text("Users", "Benutzer")}</Link>}
+          {canManageUsers && <Link href="/admin/teams" className="button compact secondary-button"><Share2 size={15} /> {text("Teams", "Teams")}</Link>}
+          <a href={METRICS_PATH} download="atlas-metrics.prom" className="button compact secondary-button"><Download size={15} /> {text("Download metrics", "Metriken herunterladen")}</a>
+          <a href="/admin/dashboard" className="button compact secondary-button">{text("Refresh", "Aktualisieren")}</a>
           <Link href="/" className="button secondary-button"><ArrowLeft size={16} /> {text("Back to workspace", "Zurück zum Workspace")}</Link>
         </div>
       </header>
@@ -136,14 +140,14 @@ export function AdminDashboard({
                 <h2>{text("Prometheus & Grafana", "Prometheus & Grafana")}</h2>
                 <span className={`status-pill ${metricsEnabled ? "enabled" : "disabled"}`}>{metricsEnabled ? text("Enabled", "Aktiv") : text("Not configured", "Nicht konfiguriert")}</span>
               </div>
-              <p>{text("The scrape endpoint is protected independently from Atlas sessions.", "Der Scrape-Endpunkt ist unabhängig von Atlas-Sitzungen geschützt.")}</p>
+              <p>{text("Prometheus uses a separate bearer token. Administrators and users with a dashboard grant can also read metrics in their signed-in browser.", "Prometheus nutzt ein separates Bearer-Token. Administratoren und Nutzer mit Dashboard-Freigabe können Metriken auch im angemeldeten Browser abrufen.")}</p>
             </div>
           </header>
           <div className="admin-prometheus-body">
             <p>
               {metricsEnabled
                 ? text("Prometheus can scrape the endpoint with the configured bearer token. The token is never shown in Atlas.", "Prometheus kann den Endpunkt mit dem konfigurierten Bearer-Token abrufen. Das Token wird in Atlas niemals angezeigt.")
-                : text("Set PROMETHEUS_METRICS_TOKEN to a random value with at least 32 characters and restart the web service. Until then, the endpoint returns 404.", "Setze PROMETHEUS_METRICS_TOKEN auf einen zufälligen Wert mit mindestens 32 Zeichen und starte den Web-Service neu. Bis dahin liefert der Endpunkt 404.")}
+                : text("For Prometheus scraping, set PROMETHEUS_METRICS_TOKEN to a random value with at least 32 characters and restart the web service. Browser access remains available to authorized users.", "Setze für Prometheus-Abfragen PROMETHEUS_METRICS_TOKEN auf einen zufälligen Wert mit mindestens 32 Zeichen und starte den Web-Service neu. Der Browserzugriff bleibt für berechtigte Nutzer verfügbar.")}
             </p>
             <dl className="admin-endpoint-list">
               <StatLine label={text("Metrics path", "Metrics-Pfad")} value={<code>{METRICS_PATH}</code>} />

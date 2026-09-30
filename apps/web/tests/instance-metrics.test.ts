@@ -80,7 +80,7 @@ test("renders Prometheus text with stable aggregate metric families", () => {
     users: { ADMIN: { active: 1, inactive: 0 }, MEMBER: { active: 4, inactive: 1 } },
     spaces: 3,
     folders: 6,
-    pages: { MARKDOWN: 5, LATEX: 1, CANVAS: 2, MERMAID: 3, GANTT: 1, TODO: 2, TEXT: 4, FILE: 6 },
+    pages: { MARKDOWN: 5, ATLASDOC: 0, LATEX: 1, CANVAS: 2, MERMAID: 3, GANTT: 1, TODO: 2, TEXT: 4, FILE: 6 },
     pageVersions: 8,
     pageImages: 9,
     collaborationDocuments: 12,
@@ -109,14 +109,15 @@ test("renders Prometheus text with stable aggregate metric families", () => {
   assert.ok(output.endsWith("\n"));
 });
 
-test("the dashboard and endpoint both enforce administrator or bearer access", () => {
+test("the dashboard and endpoint enforce access before collecting aggregate data", () => {
   const dashboard = readFileSync(fileURLToPath(new URL("../src/app/admin/dashboard/page.tsx", import.meta.url)), "utf8");
   const endpoint = readFileSync(fileURLToPath(new URL("../src/app/api/metrics/route.ts", import.meta.url)), "utf8");
   assert.match(dashboard, /requireUser\(\)/);
-  assert.match(dashboard, /user\.role !== "ADMIN"/);
+  assert.match(dashboard, /if \(!canViewInstanceMetrics\(user\)\) redirect/);
   assert.match(dashboard, /collectInstanceMetrics\(\)/);
   assert.match(endpoint, /configuredPrometheusMetricsToken/);
-  assert.match(endpoint, /hasPrometheusMetricsAuthorization/);
-  assert.match(endpoint, /WWW-Authenticate/);
-  assert.match(endpoint, /Cache-Control.*no-store/);
+  assert.match(endpoint, /instanceMetricsResponse/);
+  assert.match(endpoint, /currentUser: requireApiUser/);
+  const collector = readFileSync(fileURLToPath(new URL("../src/lib/instance-metrics.ts", import.meta.url)), "utf8");
+  assert.match(collector, /SUM\(octet_length\("data"\)\) FROM "PageAsset"/);
 });
